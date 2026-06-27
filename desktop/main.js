@@ -1,109 +1,59 @@
-// AgentForge desktop (Electron).
+// AgentForge desktop (Electron) — native shell over the live cloud app.
 //
-// Responsibilities:
-//   1. Start the bundled Python backend as a child process.
-//   2. Open a window that loads the app the backend serves (http://127.0.0.1:PORT).
-//   3. Live in the system tray. Closing the window HIDES it (keeps the agent +
-//      reminder notifications running in the background); Quit fully exits.
+// Why this design: you already run the backend in the cloud (Render) and the UI
+// on Vercel. The desktop app loads that same app, so accounts + data are shared
+// with the web version (nothing to bundle, nothing to sync). What the desktop
+// shell ADDS over a browser tab:
+//   • a real installed app (Start menu / dock) with a system tray
+//   • it keeps running in the tray, so the in-app reminder poller fires REAL OS
+//     notifications even when the window is closed
+//   • silent auto-update from GitHub Releases
 //
-// Background notifications: we keep the renderer alive when hidden and turn off
-// background throttling, so the in-app reminder poller keeps firing native OS
-// notifications even when the window is "closed" to the tray.
+// Set APP_URL to your Vercel URL (or pass AGENTFORGE_URL at runtime).
 
-const { app, BrowserWindow, Tray, Menu, shell } = require("electron");
-const { spawn } = require("child_process");
+const { app, BrowserWindow, Tray, Menu, shell, nativeImage } = require("electron");
 const path = require("path");
-const http = require("http");
-const fs = require("fs");
 
-const PORT = 8137; // uncommon port to avoid clashing with a dev server on 8000
-const BASE = `http://127.0.0.1:${PORT}`;
+// 👇 REPLACE with your deployed URL (or set the AGENTFORGE_URL env var).
+const APP_URL = process.env.AGENTFORGE_URL || "https://YOUR-APP.vercel.app";
 
 let mainWindow = null;
 let tray = null;
-let backend = null;
 let quitting = false;
 
-// ---- Resolve where the backend lives (dev vs packaged) ----
-function backendCommand() {
-  const dataDir = path.join(app.getPath("userData"), "data");
-  fs.mkdirSync(dataDir, { recursive: true });
-  const env = {
-    ...process.env,
-    AGENTFORGE_DATA_DIR: dataDir,
-    PORT: String(PORT),
-  };
-
-  if (app.isPackaged) {
-    // Bundled backend exe + built frontend shipped as extraResources.
-    const res = process.resourcesPath;
-    env.FRONTEND_DIST = path.join(res, "frontend");
-    const exe = path.join(res, "backend", process.platform === "win32" ? "agentforge-backend.exe" : "agentforge-backend");
-    return { cmd: exe, args: [], env };
-  }
-
-  // Dev: run uvicorn from the project's venv.
-  const root = path.join(__dirname, "..");
-  env.FRONTEND_DIST = path.join(root, "frontend", "dist");
-  const py =
-    process.platform === "win32"
-      ? path.join(root, "backend", ".venv", "Scripts", "python.exe")
-      : path.join(root, "backend", ".venv", "bin", "python");
-  return {
-    cmd: py,
-    args: ["-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", String(PORT)],
-    env,
-    cwd: path.join(root, "backend"),
-  };
-}
-
-function startBackend() {
-  const { cmd, args, env, cwd } = backendCommand();
-  backend = spawn(cmd, args, { env, cwd, stdio: "ignore" });
-  backend.on("exit", (code) => {
-    if (!quitting) console.error("Backend exited with code", code);
-  });
-}
-
-function waitForBackend(retries = 60) {
-  return new Promise((resolve, reject) => {
-    const tryOnce = (n) => {
-      http
-        .get(`${BASE}/api/health`, (res) => {
-          res.statusCode === 200 ? resolve() : retry(n);
-        })
-        .on("error", () => retry(n));
-    };
-    const retry = (n) =>
-      n <= 0 ? reject(new Error("backend did not start")) : setTimeout(() => tryOnce(n - 1), 500);
-    tryOnce(retries);
-  });
-}
+// Required on Windows so OS notifications show the app name/icon correctly.
+app.setAppUserModelId("com.agentforge.app");
 
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
+    minWidth: 900,
+    minHeight: 600,
     backgroundColor: "#000000",
     title: "AgentForge",
+    autoHideMenuBar: true,
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-      backgroundThrottling: false, // keep timers (reminder poller) alive when hidden
+      // Keep timers (the reminder poller) running when the window is hidden in
+      // the tray — this is what lets reminders fire in the background.
+      backgroundThrottling: false,
       contextIsolation: true,
+      nodeIntegration: false,
     },
   });
-  mainWindow.loadURL(BASE);
 
-  // Open external links in the real browser, not inside the app.
+  mainWindow.loadURL(APP_URL);
+
+  // Open external links (Google consent, docs) in the real browser.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (!url.startsWith(BASE)) {
+    if (!url.startsWith(APP_URL)) {
       shell.openExternal(url);
       return { action: "deny" };
     }
     return { action: "allow" };
   });
 
-  // Closing hides to tray (keeps reminders running) unless we're really quitting.
+  // Closing hides to the tray (keeps reminders running) instead of quitting.
   mainWindow.on("close", (e) => {
     if (!quitting) {
       e.preventDefault();
@@ -113,12 +63,20 @@ function createWindow() {
 }
 
 function createTray() {
-  const icon = path.join(__dirname, "icon.png");
-  tray = new Tray(icon);
+  // A 1x1 fallback so a missing icon never crashes startup; ship build/icon.png
+  // for a real tray icon.
+  let image;
+  try {
+    image = nativeImage.createFromPath(path.join(__dirname, "build", "icon.png"));
+    if (image.isEmpty()) image = nativeImage.createEmpty();
+  } catch {
+    image = nativeImage.createEmpty();
+  }
+  tray = new Tray(image);
   tray.setToolTip("AgentForge");
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: "Open AgentForge", click: () => (mainWindow ? mainWindow.show() : createWindow()) },
+      { label: "Open AgentForge", click: () => showWindow() },
       { type: "separator" },
       {
         label: "Quit",
@@ -129,21 +87,38 @@ function createTray() {
       },
     ])
   );
-  tray.on("click", () => (mainWindow ? mainWindow.show() : createWindow()));
+  tray.on("click", showWindow);
 }
 
-app.whenReady().then(async () => {
-  startBackend();
-  try {
-    await waitForBackend();
-  } catch (e) {
-    console.error(e);
+function showWindow() {
+  if (!mainWindow) createWindow();
+  else {
+    mainWindow.show();
+    mainWindow.focus();
   }
+}
+
+// Single instance — focus the existing window instead of opening a second one.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on("second-instance", showWindow);
+}
+
+app.whenReady().then(() => {
   createWindow();
   try {
     createTray();
   } catch (e) {
-    console.warn("Tray unavailable (add desktop/icon.png):", e.message);
+    console.warn("Tray unavailable:", e.message);
+  }
+
+  // Silent auto-update from GitHub Releases (no-op in dev / if unpublished).
+  try {
+    const { autoUpdater } = require("electron-updater");
+    autoUpdater.checkForUpdatesAndNotify();
+  } catch (e) {
+    console.warn("Auto-update unavailable:", e.message);
   }
 
   app.on("activate", () => {
@@ -151,23 +126,8 @@ app.whenReady().then(async () => {
   });
 });
 
-// Single instance — focus the existing window instead of opening a second.
-if (!app.requestSingleInstanceLock()) {
-  app.quit();
-} else {
-  app.on("second-instance", () => {
-    if (mainWindow) {
-      mainWindow.show();
-      mainWindow.focus();
-    }
-  });
-}
+app.on("before-quit", () => (quitting = true));
 
-app.on("before-quit", () => {
-  quitting = true;
-  if (backend) backend.kill();
-});
-
-app.on("window-all-closed", () => {
-  // Keep running in the tray (don't quit) — that's what powers background alarms.
-});
+// Keep running in the tray when all windows are closed (that's what powers
+// background reminder notifications). Use the tray's Quit to exit fully.
+app.on("window-all-closed", () => {});
