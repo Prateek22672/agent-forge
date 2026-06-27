@@ -1,5 +1,6 @@
 import React from "react";
 import Strands from "./Strands";
+import CrocsMark from "./CrocsMark";
 
 // Official home page — monochrome, SaaS-grade. The only brand mark allowed
 // beyond the wordmark is "Crocs" (our security layer). No colour, no emoji.
@@ -21,8 +22,8 @@ function Nav({ onGetStarted, onSignIn }) {
       <div className="max-w-5xl mx-auto flex items-center justify-between px-6 h-16">
         <div className="flex items-center gap-3">
           <span className="font-semibold tracking-[0.2em] text-sm">AGENTFORGE</span>
-          <span className="hidden sm:inline text-[10px] tracking-widest text-white/40 border border-white/15 px-2 py-0.5">
-            CROCS SECURED
+          <span className="hidden sm:flex items-center gap-1.5 text-[10px] tracking-widest text-white/40 border border-white/15 px-2 py-0.5">
+            <CrocsMark size={13} /> CROCS SECURED
           </span>
         </div>
         <nav className="flex items-center gap-2 text-sm">
@@ -96,8 +97,11 @@ function Crocs() {
     <section className="border-b border-white/10">
       <div className="max-w-5xl mx-auto px-6 py-20">
         <div className="text-center mb-12">
-          <div className="text-[11px] tracking-[0.25em] text-white/40 mb-3">
-            PROTECTED BY CROCS
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <CrocsMark size={26} />
+            <span className="text-[11px] tracking-[0.25em] text-white/40">
+              PROTECTED BY CROCS
+            </span>
           </div>
           <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
             Security is the product.

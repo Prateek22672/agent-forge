@@ -1,5 +1,6 @@
 import React from "react";
 import ConnectionStatus from "./ConnectionStatus";
+import CrocsMark from "./CrocsMark";
 
 // Top status strip: brand, live provider, Google connection state, settings,
 // and the signed-in user with a logout option.
@@ -22,10 +23,10 @@ export default function TopBar({
       <div className="flex items-center gap-3">
         <span className="font-semibold tracking-[0.2em] text-sm">AGENTFORGE</span>
         <span
-          className="text-[10px] border border-white/20 px-2 py-0.5 text-white/45 tracking-widest"
+          className="flex items-center gap-1.5 text-[10px] border border-white/20 px-2 py-0.5 text-white/45 tracking-widest"
           title="Protected by Crocs — see docs/CROCS_SECURITY.md"
         >
-          CROCS SECURED
+          <CrocsMark size={13} /> CROCS SECURED
         </span>
       </div>
 
