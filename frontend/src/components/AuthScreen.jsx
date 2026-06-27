@@ -20,7 +20,10 @@ export default function AuthScreen({ initialMode = "signup", onAuthed, onBack })
   const continueWithGoogle = async () => {
     setErr("");
     try {
-      const desktop = !!window.agentforge?.isDesktop;
+      // Only use the external-browser flow if the desktop bridge actually
+      // exposes openExternal (newer builds). Older installs fall back to the
+      // in-window flow so they keep working.
+      const desktop = !!(window.agentforge?.isDesktop && window.agentforge?.openExternal);
       const { auth_url } = await api.googleAuthStart(desktop);
       if (desktop) {
         // Open consent in the real browser (has your Google session → account

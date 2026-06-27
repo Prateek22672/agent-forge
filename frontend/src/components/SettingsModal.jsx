@@ -34,7 +34,7 @@ export default function SettingsModal({ onClose, onChanged }) {
 
   const connectGoogle = async () => {
     try {
-      const desktop = !!window.agentforge?.isDesktop;
+      const desktop = !!(window.agentforge?.isDesktop && window.agentforge?.openExternal);
       const { auth_url } = await api.googleStart(desktop);
       if (desktop) window.agentforge.openExternal(auth_url);
       else window.location.href = auth_url;
