@@ -16,10 +16,16 @@ agents.
 from __future__ import annotations
 
 import chromadb
+from chromadb.config import Settings as ChromaSettings
 
 from app.config import settings
 
-_client = chromadb.PersistentClient(path=str(settings.chroma_dir))
+# anonymized_telemetry=False stops Chroma's noisy (and currently buggy) telemetry
+# pinger — "Failed to send telemetry event… capture() takes 1 positional argument".
+_client = chromadb.PersistentClient(
+    path=str(settings.chroma_dir),
+    settings=ChromaSettings(anonymized_telemetry=False),
+)
 
 
 def _collection(agent_id: str):
