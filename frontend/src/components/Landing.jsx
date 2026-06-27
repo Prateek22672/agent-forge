@@ -126,34 +126,25 @@ function Download({ onGetStarted }) {
       <div className="max-w-5xl mx-auto px-6 py-20 text-center">
         <div className="text-[11px] tracking-[0.25em] text-white/40 mb-3">DOWNLOAD</div>
         <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
-          Run it as a desktop app.
+          Use it now in your browser.
         </h2>
         <p className="mt-4 text-white/50 max-w-xl mx-auto">
-          Install once — your agent stays in the background and delivers reminders
-          as real notifications, with all data on your device.
+          No install needed — sign up and start in seconds. A desktop app (for
+          background reminders and on-device data) is on the way.
         </p>
         <div className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3">
-          <a
-            href="/downloads/AgentForge-Setup.exe"
-            className="px-7 py-3 bg-white text-black font-medium hover:bg-white/85"
-          >
-            Download for Windows
-          </a>
-          <a
-            href="/downloads/SETUP.txt"
-            className="px-7 py-3 border border-white/25 hover:border-white"
-          >
-            Setup guide
-          </a>
           <button
             onClick={onGetStarted}
-            className="px-7 py-3 border border-white/15 text-white/70 hover:border-white"
+            className="px-7 py-3 bg-white text-black font-medium hover:bg-white/85"
           >
-            Use in browser instead
+            Get started in browser
           </button>
+          <span className="px-7 py-3 border border-white/15 text-white/40 cursor-default">
+            Desktop app — coming soon
+          </span>
         </div>
         <div className="mt-5 text-xs text-white/30">
-          macOS &amp; Linux builds coming soon · ~120&nbsp;MB · no account needed to try
+          Works on Mac, Windows &amp; mobile browsers · no install
         </div>
       </div>
     </section>
