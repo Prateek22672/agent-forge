@@ -14,6 +14,7 @@ export default function History({
     ["chat", "Chats"],
     ["priority", "Priority"],
     ["planner", "Planner"],
+    ["calendar", "Calendar"],
     ["brain", "Brain"],
   ];
   return (
