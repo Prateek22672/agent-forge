@@ -6,8 +6,104 @@ import { api } from "../api";
 export default function Trackers({ view, user }) {
   const firstName = (user?.name || user?.email || "Your").split(/[ @]/)[0];
   if (view === "priority") return <Priority owner={firstName} />;
+  if (view === "calendar") return <Calendar owner={firstName} />;
   if (view === "brain") return <Brain owner={firstName} />;
   return <Planner owner={firstName} />; // "planner" — reminders + notes together
+}
+
+function Calendar({ owner }) {
+  const [state, setState] = useState({ connected: true, granted: true, events: [] });
+  const [title, setTitle] = useState("");
+  const [when, setWhen] = useState("");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = () =>
+    api.listCalendar().then(setState).catch(() =>
+      setState({ connected: false, granted: false, events: [] })
+    );
+  useEffect(() => {
+    load();
+  }, []);
+
+  const add = async () => {
+    if (!title.trim() || !when.trim()) return;
+    setBusy(true);
+    setMsg("");
+    try {
+      await api.createCalendarEvent({ title: title.trim(), when: when.trim() });
+      setTitle("");
+      setWhen("");
+      setMsg("Event added.");
+      load();
+    } catch (e) {
+      setMsg("Couldn't add — check the time and that Calendar is connected.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const fmt = (iso, allDay) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return allDay ? d.toLocaleDateString() : d.toLocaleString();
+  };
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      <Header title={`${owner}'s Calendar`} />
+      <div className="px-4 md:px-6 py-4 flex flex-wrap items-center gap-2 border-b border-white/10">
+        <input
+          className="flex-1 min-w-[160px] bg-black border border-white/30 px-3 py-2 focus:border-white outline-none"
+          placeholder="Event title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+        />
+        <input
+          className="w-48 bg-black border border-white/30 px-3 py-2 focus:border-white outline-none"
+          placeholder="when (e.g. tomorrow 10:30am)"
+          value={when}
+          onChange={(e) => setWhen(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+        />
+        <button
+          onClick={add}
+          disabled={busy}
+          className="bg-white text-black px-5 py-2 font-semibold hover:bg-white/85 disabled:opacity-50"
+        >
+          Add
+        </button>
+        {msg && <div className="w-full text-[11px] text-white/50">{msg}</div>}
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 space-y-2">
+        {!state.connected && (
+          <Empty text="Connect Google in Settings to see your calendar." />
+        )}
+        {state.connected && !state.granted && (
+          <Empty text="Calendar permission not granted — reconnect Google in Settings to allow Calendar." />
+        )}
+        {state.connected && state.granted && state.events.length === 0 && (
+          <Empty text="No upcoming events. Add one above or ask the Assistant." />
+        )}
+        {state.events.map((e) => (
+          <a
+            key={e.id}
+            href={e.link || "#"}
+            target="_blank"
+            rel="noreferrer"
+            className="block border border-white/15 p-4 hover:border-white/40"
+          >
+            <div className="text-xs text-white/45">{fmt(e.start, e.all_day)}</div>
+            <div className="font-medium text-sm">{e.summary}</div>
+            {e.location && (
+              <div className="text-xs text-white/40">@ {e.location}</div>
+            )}
+          </a>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // Reminders and Notes merged into one scrollable page with two clear sections.

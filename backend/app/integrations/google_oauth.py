@@ -211,14 +211,65 @@ def create_event(
     from googleapiclient.discovery import build
 
     service = build("calendar", "v3", credentials=creds)
+
+    # parse_when returns naive-UTC ISO; tag it as UTC ('Z') so Google places the
+    # event at the right wall-clock time regardless of the calendar's timezone.
+    def _utc(dt: str) -> str:
+        return dt if dt.endswith("Z") or "+" in dt[10:] else dt + "Z"
+
     body = {
         "summary": summary,
         "location": location,
-        "start": {"dateTime": start_iso},
-        "end": {"dateTime": end_iso},
+        "start": {"dateTime": _utc(start_iso)},
+        "end": {"dateTime": _utc(end_iso)},
     }
     ev = service.events().insert(calendarId="primary", body=body).execute()
     return ev.get("htmlLink", "created")
+
+
+def list_events(user_id: str, max_results: int = 10) -> list[dict]:
+    """Upcoming events from the user's primary calendar. Returns dicts with
+    summary/start/end/location/link. Raises RuntimeError if scope missing."""
+    creds = _load_credentials(user_id)
+    if not creds:
+        raise RuntimeError("Google account is not connected.")
+    if "https://www.googleapis.com/auth/calendar.events" not in (creds.scopes or []):
+        raise RuntimeError(
+            "Calendar permission not granted — reconnect Google to allow Calendar."
+        )
+    from datetime import datetime
+
+    from googleapiclient.discovery import build
+
+    service = build("calendar", "v3", credentials=creds)
+    now = datetime.utcnow().isoformat() + "Z"
+    result = (
+        service.events()
+        .list(
+            calendarId="primary",
+            timeMin=now,
+            maxResults=max_results,
+            singleEvents=True,
+            orderBy="startTime",
+        )
+        .execute()
+    )
+    out = []
+    for ev in result.get("items", []):
+        start = ev.get("start", {})
+        end = ev.get("end", {})
+        out.append(
+            {
+                "id": ev.get("id", ""),
+                "summary": ev.get("summary", "(no title)"),
+                "start": start.get("dateTime") or start.get("date") or "",
+                "end": end.get("dateTime") or end.get("date") or "",
+                "all_day": "date" in start,
+                "location": ev.get("location", ""),
+                "link": ev.get("htmlLink", ""),
+            }
+        )
+    return out
 
 
 def fetch_recent(count: int, user_id: str) -> list[dict]:

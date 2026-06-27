@@ -18,6 +18,7 @@ from app.api import (
     admin,
     agents,
     auth_api,
+    calendar_api,
     chat,
     connections,
     emails,
@@ -85,6 +86,7 @@ app.include_router(emails.router)
 app.include_router(admin.router)
 app.include_router(push_api.router)
 app.include_router(priority_api.router)
+app.include_router(calendar_api.router)
 
 
 @app.get("/api/health")

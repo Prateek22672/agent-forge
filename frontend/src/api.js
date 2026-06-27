@@ -104,6 +104,10 @@ export const api = {
   deleteNote: (id) => http("DELETE", `/notes/${id}`),
   markReminderNotified: (id) => http("POST", `/reminders/${id}/notified`),
 
+  // Calendar
+  listCalendar: () => http("GET", "/calendar/events"),
+  createCalendarEvent: (data) => http("POST", "/calendar/events", data),
+
   // Priority inbox
   listPriority: () => http("GET", "/priority"),
   scanPriority: () => http("POST", "/priority/scan"),

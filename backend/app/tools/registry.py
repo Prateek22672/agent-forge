@@ -14,7 +14,7 @@ from __future__ import annotations
 from langchain_core.tools import StructuredTool, tool
 
 from app.memory import vector_store
-from app.tools.calendar_tool import make_calendar_tool
+from app.tools.calendar_tool import make_calendar_tool, make_list_events_tool
 from app.tools.email_tool import make_email_tool, make_send_email_tool
 from app.tools.tasks import make_task_tools
 from app.tools.files import list_files, read_file, write_file
@@ -39,6 +39,7 @@ USER_TOOLS = {
     "fetch_recent_emails": "Read recent inbox emails (your connected Gmail)",
     "draft_email": "Draft an email to send (you confirm before it sends)",
     "add_calendar_event": "Add an event to your Google Calendar",
+    "list_upcoming_events": "List your upcoming Google Calendar events",
 }
 
 # Per-user task tools (reminders & notes), built dynamically too.
@@ -123,6 +124,8 @@ def build_tools(names: list[str], agent_id: str, user_id: str) -> list:
             tools.append(make_send_email_tool(user_id))
         elif name == "add_calendar_event":
             tools.append(make_calendar_tool(user_id))
+        elif name == "list_upcoming_events":
+            tools.append(make_list_events_tool(user_id))
         elif name in TASK_TOOLS and name in task_tools:
             tools.append(task_tools[name])
             added.add(name)

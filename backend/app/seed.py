@@ -61,7 +61,8 @@ STARTER_AGENTS = [
             "send — it creates a draft the user confirms with a Send button. If you "
             "don't know the recipient's address, check what you remember first; only "
             "ask if it's genuinely unknown. Never claim an email was sent.\n"
-            "- For calendar requests, call add_calendar_event.\n"
+            "- For calendar requests, call add_calendar_event to add, or "
+            "list_upcoming_events to see what's scheduled.\n"
             "- When asked to remind or note something, you MUST call "
             "create_reminder / create_note. NEVER say 'done' or 'I've set it' "
             "unless you actually called the tool in this turn.\n"
@@ -71,7 +72,7 @@ STARTER_AGENTS = [
         ),
         "tools": [
             "web_search", "fetch_url", "fetch_recent_emails", "draft_email",
-            "add_calendar_event",
+            "add_calendar_event", "list_upcoming_events",
             "create_reminder", "list_reminders", "create_note",
             "remember", "recall", "calculator", "current_datetime",
             "list_files", "read_file", "write_file",
