@@ -69,6 +69,11 @@ export default function ChatApp({ user, onLogout }) {
     loadHistory();
     loadMeta();
     loadPending();
+    // Keep the user's timezone current so chat-set reminders fire at their local
+    // time (the cloud server runs in UTC).
+    api
+      .updateProfile({ tz_offset_min: new Date().getTimezoneOffset() })
+      .catch(() => {});
     // Returning from Google OAuth.
     const p = new URLSearchParams(window.location.search);
     if (p.get("google")) {
@@ -99,7 +104,7 @@ export default function ChatApp({ user, onLogout }) {
           !r.notified &&
           !fired.has(r.id) &&
           r.due_at &&
-          new Date(r.due_at).getTime() <= now
+          new Date(r.due_at.endsWith("Z") ? r.due_at : r.due_at + "Z").getTime() <= now
         ) {
           fired.add(r.id);
           try {

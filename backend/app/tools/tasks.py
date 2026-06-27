@@ -17,12 +17,14 @@ def make_task_tools(user_id: str) -> list:
         `when` is the human-readable time (e.g. 'today 9:14 PM'). Use this when
         the user asks to be reminded of something."""
         from app.database import SessionLocal
-        from app.models import Reminder
+        from app.models import Reminder, User
         from app.util.timeparse import parse_when
 
-        due = parse_when(when)
         db = SessionLocal()
         try:
+            u = db.get(User, user_id)
+            tz = getattr(u, "tz_offset_min", 0) or 0
+            due = parse_when(when, tz_offset_min=tz)
             db.add(
                 Reminder(
                     user_id=user_id,

@@ -72,7 +72,7 @@ def fire_reminders(
     if not settings.cron_secret or secret != settings.cron_secret:
         raise HTTPException(403, "Forbidden")
 
-    now = datetime.now().isoformat()
+    now = datetime.utcnow().isoformat()  # due_at is stored as naive-UTC ISO
     due = (
         db.query(Reminder)
         .filter(
