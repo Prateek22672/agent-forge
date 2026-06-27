@@ -6,8 +6,8 @@ import CrocsMark from "./CrocsMark";
 export default function PrivacyNote({ variant = "app", onClose }) {
   const points = [
     ["Processed once", "Each message is sent to the model only to answer it — never retained for training."],
-    ["On your device", "Your chats, agents and memories live in a local database on your machine."],
-    ["Keys stay safe", "API keys and your Gmail token are kept in your OS keychain, not in plain files."],
+    ["Private to you", "Your chats, agents and memories live in your own isolated account — no other user can see them."],
+    ["Secrets encrypted", "Your Gmail token and API keys are encrypted at rest — even a database dump can't read them."],
     ["No silent emails", "The AI can only draft email — sending always needs your explicit confirmation."],
     ["Hardened", "Sanitised output, rate limits, and admin-only key access guard against abuse."],
   ];
