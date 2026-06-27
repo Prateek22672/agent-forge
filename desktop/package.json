@@ -1,0 +1,54 @@
+{
+  "name": "agentforge-desktop",
+  "version": "0.1.0",
+  "description": "AgentForge desktop app",
+  "main": "main.js",
+  "author": "AgentForge",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "publish": "electron-builder --publish always"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "build": {
+    "appId": "com.agentforge.app",
+    "productName": "AgentForge",
+    "files": ["main.js", "preload.js", "build/**/*"],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Prateek22672",
+        "repo": "agent-forge"
+      }
+    ],
+    "win": {
+      "target": ["nsis"],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "artifactName": "AgentForge-Setup-${version}.${ext}"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "icon": "build/icon.icns",
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "icon": "build/icon.png",
+      "category": "Utility"
+    }
+  }
+}
