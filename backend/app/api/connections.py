@@ -69,8 +69,9 @@ def google_start(desktop: bool = False, user: User = Depends(get_current_user)):
             "GOOGLE_CLIENT_SECRET to .env (see docs/CONNECT_GOOGLE.md).",
         )
     # Sign the user id into state so the callback knows who is connecting.
+    # This is the CONNECT flow → request the Gmail/Calendar (data) scopes.
     state = sign_oauth_state({"uid": user.id, "desktop": desktop})
-    return {"auth_url": google_oauth.build_auth_url(state)}
+    return {"auth_url": google_oauth.build_auth_url(state, include_data=True)}
 
 
 def _upsert_google_connection(db: Session, user_id: str, info: dict) -> None:

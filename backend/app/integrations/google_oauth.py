@@ -48,14 +48,19 @@ DATA_SCOPES = [
 ]
 
 
-def get_scopes() -> list[str]:
-    """Active scopes. With GOOGLE_DATA_SCOPES=false (public beta) we request only
-    login scopes, so there's no verification needed and no warning."""
-    return LOGIN_SCOPES + (DATA_SCOPES if settings.google_data_scopes else [])
+def get_scopes(include_data: bool = False) -> list[str]:
+    """Active scopes for a flow.
+
+    Login-first incremental consent: sign-in requests ONLY the non-sensitive
+    login scopes (no 'unverified app' warning — everyone signs in cleanly), and
+    the Gmail/Calendar scopes are requested later, ONLY when the user actually
+    connects those features (`include_data=True`)."""
+    return LOGIN_SCOPES + (DATA_SCOPES if include_data else [])
 
 
-# Kept for backward-compat where a module constant is referenced.
-SCOPES = get_scopes()
+# Broad set used when EXCHANGING the code — accepts whichever tier Google grants
+# (OAUTHLIB_RELAX_TOKEN_SCOPE makes the mismatch a no-op).
+SCOPES = get_scopes(True)
 
 def _token_key(user_id: str) -> str:
     # One token per user, stored separately in the OS keychain.
@@ -78,17 +83,25 @@ def _client_config() -> dict:
     }
 
 
-def build_auth_url(state: str) -> str:
-    """Return the Google consent-screen URL to redirect the user to."""
+def build_auth_url(state: str, include_data: bool = False) -> str:
+    """Return the Google consent-screen URL.
+
+    `include_data=False` (sign-in) requests only login scopes → no warning.
+    `include_data=True` (connect Gmail/Calendar) adds the sensitive scopes, and
+    `include_granted_scopes` makes it incremental (keeps the login grant)."""
     from google_auth_oauthlib.flow import Flow
 
     flow = Flow.from_client_config(
-        _client_config(), scopes=get_scopes(), redirect_uri=settings.oauth_redirect_uri
+        _client_config(),
+        scopes=get_scopes(include_data),
+        redirect_uri=settings.oauth_redirect_uri,
     )
     auth_url, _ = flow.authorization_url(
         access_type="offline",       # so we get a refresh token
         include_granted_scopes="true",
-        prompt="consent",
+        # Only force the consent screen when asking for the sensitive scopes;
+        # plain sign-in just picks an account.
+        prompt="consent" if include_data else "select_account",
         state=state,
     )
     return auth_url
@@ -96,11 +109,13 @@ def build_auth_url(state: str) -> str:
 
 def complete_flow(code: str):
     """Exchange the auth code for OAuth credentials (does NOT persist yet — the
-    caller may need the profile first to decide which user to store under)."""
+    caller may need the profile first to decide which user to store under).
+    Uses the broad scope set so it accepts either the login-only or the
+    login+data grant (relaxed scope checking handles the difference)."""
     from google_auth_oauthlib.flow import Flow
 
     flow = Flow.from_client_config(
-        _client_config(), scopes=get_scopes(), redirect_uri=settings.oauth_redirect_uri
+        _client_config(), scopes=SCOPES, redirect_uri=settings.oauth_redirect_uri
     )
     flow.fetch_token(code=code)
     return flow.credentials

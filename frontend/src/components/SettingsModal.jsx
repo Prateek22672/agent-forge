@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api";
 import { enablePush, pushPermissionState } from "../push";
+import GoogleConsentModal from "./GoogleConsentModal";
 
 // Settings: model privacy toggle (Groq cloud vs local Ollama) + Google connect.
 export default function SettingsModal({ onClose, onChanged, user, onLogout }) {
@@ -9,6 +10,7 @@ export default function SettingsModal({ onClose, onChanged, user, onLogout }) {
   const [conn, setConn] = useState(null);
   const [profile, setProfile] = useState(null);
   const [msg, setMsg] = useState("");
+  const [showConsent, setShowConsent] = useState(false);
 
   const load = async () => {
     setSettings(await api.getSettings());
@@ -33,7 +35,10 @@ export default function SettingsModal({ onClose, onChanged, user, onLogout }) {
     onChanged?.();
   };
 
-  const connectGoogle = async () => {
+  // Show the trust explainer first, then redirect to Google's consent.
+  const connectGoogle = () => setShowConsent(true);
+  const doConnectGoogle = async () => {
+    setShowConsent(false);
     try {
       const desktop = !!(window.agentforge?.isDesktop && window.agentforge?.openExternal);
       const { auth_url } = await api.googleStart(desktop);
@@ -55,6 +60,12 @@ export default function SettingsModal({ onClose, onChanged, user, onLogout }) {
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-start sm:items-center justify-center p-3 sm:p-4 z-30 overflow-y-auto">
+      {showConsent && (
+        <GoogleConsentModal
+          onContinue={doConnectGoogle}
+          onCancel={() => setShowConsent(false)}
+        />
+      )}
       <div className="bg-black border border-white/30 w-full max-w-lg p-5 sm:p-6 my-auto max-h-[92vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-5">
           <h2 className="font-bold tracking-widest text-sm">SETTINGS</h2>

@@ -78,8 +78,8 @@ function Hero({ onGetStarted, onSignIn }) {
         </div>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-xs text-white/35 tracking-wide">
           <span>Free models — Groq · Gemini · local</span>
-          <span>Connect Gmail with Google</span>
-          <span>Private, on-device data</span>
+          <span>Sign in clean — connect Gmail only if you want</span>
+          <span>Never used for training</span>
         </div>
       </div>
     </section>
@@ -88,10 +88,12 @@ function Hero({ onGetStarted, onSignIn }) {
 
 function Crocs() {
   const promises = [
+    ["Never used for training", "Your messages and email content go to the model only to answer you, then they're discarded — never used to train anything."],
+    ["You control Google access", "Sign-in asks for nothing sensitive. Gmail & Calendar are connected only if you choose, and you can disconnect anytime."],
     ["No silent emails", "The AI can only draft. Sending always needs your explicit confirmation."],
-    ["Keys never exposed", "API keys and tokens live in your OS keychain — masked, write-only."],
-    ["Your data, your device", "Chats, memory and reminders stay local. Never used for training."],
-    ["Hardened by default", "Sanitised output, rate limiting, and strict per-user isolation."],
+    ["Secrets encrypted", "Your Google token and API keys are encrypted at rest — even a database dump can't read them."],
+    ["Private to your account", "Everything lives in your own isolated account. No other user can see it; we don't sell or share it."],
+    ["Hardened by default", "Sanitised output, rate limiting, and strict per-user isolation guard against abuse."],
   ];
   return (
     <section className="border-b border-white/10">
