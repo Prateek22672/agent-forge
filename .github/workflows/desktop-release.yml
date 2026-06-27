@@ -1,0 +1,35 @@
+# Auto-build the desktop installer and publish it to a GitHub Release.
+#
+# Trigger: push a version tag, e.g.
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# GitHub builds the Windows installer on its own runners (no local build needed)
+# and uploads AgentForge-Setup-<version>.exe + latest.yml (for auto-update) to a
+# Release for that tag. Then point the site's Download button at:
+#   https://github.com/Prateek22672/agent-forge/releases/latest
+name: Desktop release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # needed so the GITHUB_TOKEN can create the release
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install desktop deps
+        working-directory: desktop
+        run: npm install
+      - name: Build + publish installer
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run publish

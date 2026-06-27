@@ -126,25 +126,30 @@ function Download({ onGetStarted }) {
       <div className="max-w-5xl mx-auto px-6 py-20 text-center">
         <div className="text-[11px] tracking-[0.25em] text-white/40 mb-3">DOWNLOAD</div>
         <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
-          Use it now in your browser.
+          Run it your way.
         </h2>
         <p className="mt-4 text-white/50 max-w-xl mx-auto">
-          No install needed — sign up and start in seconds. A desktop app (for
-          background reminders and on-device data) is on the way.
+          Use it instantly in the browser, or install the desktop app for
+          background reminder notifications that reach you even when it's closed.
         </p>
         <div className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <a
+            href="https://github.com/Prateek22672/agent-forge/releases/latest"
+            target="_blank"
+            rel="noreferrer"
+            className="px-7 py-3 bg-white text-black font-medium hover:bg-white/85"
+          >
+            Download for Windows
+          </a>
           <button
             onClick={onGetStarted}
-            className="px-7 py-3 bg-white text-black font-medium hover:bg-white/85"
+            className="px-7 py-3 border border-white/25 hover:border-white"
           >
             Get started in browser
           </button>
-          <span className="px-7 py-3 border border-white/15 text-white/40 cursor-default">
-            Desktop app — coming soon
-          </span>
         </div>
         <div className="mt-5 text-xs text-white/30">
-          Works on Mac, Windows &amp; mobile browsers · no install
+          Browser works on Mac, Windows &amp; mobile · desktop app for Windows (Mac soon)
         </div>
       </div>
     </section>
