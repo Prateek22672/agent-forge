@@ -21,6 +21,7 @@ from app.api import (
     chat,
     connections,
     emails,
+    priority_api,
     push_api,
     settings_api,
     tasks,
@@ -83,6 +84,7 @@ app.include_router(tasks.router)
 app.include_router(emails.router)
 app.include_router(admin.router)
 app.include_router(push_api.router)
+app.include_router(priority_api.router)
 
 
 @app.get("/api/health")

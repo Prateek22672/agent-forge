@@ -170,6 +170,18 @@ class EmailDraftOut(BaseModel):
     created_at: datetime
 
 
+class PriorityEmailOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    sender: str
+    subject: str
+    snippet: str
+    category: str
+    reason: str
+    created_at: datetime
+
+
 class BrainFactCreate(BaseModel):
     text: str
 
