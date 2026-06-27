@@ -38,6 +38,9 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
+      "shortcutName": "AgentForge",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
       "artifactName": "AgentForge-Setup-${version}.${ext}"
     },
     "mac": {

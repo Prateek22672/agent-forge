@@ -14,8 +14,8 @@
 const { app, BrowserWindow, Tray, Menu, shell, nativeImage } = require("electron");
 const path = require("path");
 
-// 👇 REPLACE with your deployed URL (or set the AGENTFORGE_URL env var).
-const APP_URL = process.env.AGENTFORGE_URL || "https://YOUR-APP.vercel.app";
+// Your deployed app (override at runtime with AGENTFORGE_URL if needed).
+const APP_URL = process.env.AGENTFORGE_URL || "https://agent-forge-hkom.vercel.app";
 
 let mainWindow = null;
 let tray = null;
@@ -42,7 +42,41 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadURL(APP_URL);
+  // Branded splash first, then the app — so the window never flashes blank
+  // (and stays friendly during the ~50s the free backend takes to wake).
+  const SPLASH =
+    "data:text/html;charset=utf-8," +
+    encodeURIComponent(
+      "<body style='margin:0;background:#000;color:#fff;font-family:system-ui;" +
+        "display:flex;align-items:center;justify-content:center;height:100vh'>" +
+        "<div style='text-align:center'><div style='letter-spacing:.35em;" +
+        "font-weight:600'>AGENTFORGE</div><div style='margin-top:14px;color:#888;" +
+        "font-size:13px'>Connecting…</div></div></body>"
+    );
+  mainWindow.loadURL(SPLASH);
+  mainWindow.webContents.once("did-finish-load", () => {
+    mainWindow.loadURL(APP_URL);
+  });
+
+  // If the app can't load (offline / backend asleep), show a retry screen.
+  mainWindow.webContents.on("did-fail-load", (e, code, desc, url) => {
+    if (url && url.startsWith(APP_URL)) {
+      const ERR =
+        "data:text/html;charset=utf-8," +
+        encodeURIComponent(
+          "<body style='margin:0;background:#000;color:#fff;font-family:system-ui;" +
+            "display:flex;align-items:center;justify-content:center;height:100vh'>" +
+            "<div style='text-align:center'><div style='letter-spacing:.35em;" +
+            "font-weight:600'>AGENTFORGE</div><div style='margin-top:14px;color:#888;" +
+            "font-size:13px'>Can’t reach the server. Check your connection.</div>" +
+            "<button onclick='location.href=\"" +
+            APP_URL +
+            "\"' style='margin-top:18px;background:#fff;color:#000;border:0;" +
+            "padding:10px 22px;font-weight:600;cursor:pointer'>Retry</button></div></body>"
+        );
+      mainWindow.loadURL(ERR);
+    }
+  });
 
   // Open external links (Google consent, docs) in the real browser.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
