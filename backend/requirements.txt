@@ -11,6 +11,9 @@ pydantic==2.10.4
 pydantic-settings==2.7.1
 python-dotenv==1.0.1
 
+# --- Auth (JWT sessions + admin tokens) ---
+PyJWT==2.10.1
+
 # --- Database (SQLite via SQLAlchemy, zero setup) ---
 SQLAlchemy==2.0.36
 
@@ -31,6 +34,9 @@ beautifulsoup4==4.12.3
 
 # --- Local/private LLM option (zero data leaves the device) ---
 langchain-ollama==0.2.2        # talk to a local Ollama model (https://ollama.com)
+
+# --- Gemini (cloud overflow / failover) ---
+langchain-google-genai==2.0.8
 
 # --- Google sign-in for Gmail (OAuth, no app password) ---
 google-auth==2.37.0
