@@ -89,6 +89,11 @@ export const api = {
     http("GET", `/conversations/${conversationId}/messages`),
   deleteConversation: (id) => http("DELETE", `/conversations/${id}`),
 
+  // Push notifications
+  vapidPublicKey: () => http("GET", "/push/vapid-public-key"),
+  pushSubscribe: (sub) => http("POST", "/push/subscribe", sub),
+  pushTest: () => http("POST", "/push/test"),
+
   // Trackers
   listReminders: () => http("GET", "/reminders"),
   createReminder: (data) => http("POST", "/reminders", data),

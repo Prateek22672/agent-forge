@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api";
+import { enablePush, pushPermissionState } from "../push";
 
 // Settings: model privacy toggle (Groq cloud vs local Ollama) + Google connect.
 export default function SettingsModal({ onClose, onChanged, user, onLogout }) {
@@ -53,8 +54,8 @@ export default function SettingsModal({ onClose, onChanged, user, onLogout }) {
   const google = conn?.google;
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-30">
-      <div className="bg-black border border-white/30 w-full max-w-lg p-6">
+    <div className="fixed inset-0 bg-black/80 flex items-start sm:items-center justify-center p-3 sm:p-4 z-30 overflow-y-auto">
+      <div className="bg-black border border-white/30 w-full max-w-lg p-5 sm:p-6 my-auto max-h-[92vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-5">
           <h2 className="font-bold tracking-widest text-sm">SETTINGS</h2>
           <button onClick={onClose} className="text-white/60 hover:text-white">
@@ -223,6 +224,14 @@ export default function SettingsModal({ onClose, onChanged, user, onLogout }) {
           {msg && <div className="text-white/50 text-[11px] mt-2">{msg}</div>}
         </div>
 
+        {/* --- Notifications --- */}
+        <div className="mt-6 pt-4 border-t border-white/15">
+          <div className="text-xs tracking-widest text-white/40 mb-2">
+            NOTIFICATIONS
+          </div>
+          <NotificationsRow />
+        </div>
+
         {/* --- Account --- */}
         <div className="mt-6 pt-4 border-t border-white/15">
           <div className="text-xs tracking-widest text-white/40 mb-2">ACCOUNT</div>
@@ -239,6 +248,69 @@ export default function SettingsModal({ onClose, onChanged, user, onLogout }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function NotificationsRow() {
+  const [state, setState] = useState(pushPermissionState());
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const enable = async () => {
+    setBusy(true);
+    setMsg("");
+    const res = await enablePush();
+    setState(pushPermissionState());
+    setMsg(res.ok ? "Notifications enabled." : res.reason);
+    setBusy(false);
+  };
+
+  const test = async () => {
+    setMsg("");
+    try {
+      await api.pushTest();
+      setMsg("Test notification sent.");
+    } catch (e) {
+      setMsg("Couldn't send test.");
+    }
+  };
+
+  return (
+    <div className="border border-white/15 px-3 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-sm">Reminder push notifications</div>
+          <div className="text-[11px] text-white/40">
+            Get reminders even when the app is closed (install as an app for best
+            results).
+          </div>
+        </div>
+        {state === "granted" ? (
+          <button
+            onClick={test}
+            disabled={busy}
+            className="border border-white/30 px-3 py-1.5 text-xs hover:border-white whitespace-nowrap"
+          >
+            Send test
+          </button>
+        ) : (
+          <button
+            onClick={enable}
+            disabled={busy || state === "denied"}
+            className="bg-white text-black px-3 py-1.5 text-xs font-semibold hover:bg-white/85 disabled:opacity-40 whitespace-nowrap"
+          >
+            {busy ? "…" : "Enable"}
+          </button>
+        )}
+      </div>
+      {state === "denied" && (
+        <div className="text-[11px] text-white/40 mt-2">
+          Notifications are blocked in your browser settings — allow them for this
+          site to enable.
+        </div>
+      )}
+      {msg && <div className="text-[11px] text-white/60 mt-2">{msg}</div>}
     </div>
   );
 }

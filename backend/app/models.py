@@ -25,6 +25,20 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class PushSubscription(Base):
+    """A browser/PWA push endpoint for a user, so we can send reminder/priority
+    notifications even when the app is closed. Multiple per user (one per device)."""
+
+    __tablename__ = "push_subscriptions"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    endpoint: Mapped[str] = mapped_column(Text, unique=True)
+    p256dh: Mapped[str] = mapped_column(Text)
+    auth: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class Secret(Base):
     """Encrypted secret storage for CLOUD mode (no OS keychain on a server).
     Values are Fernet-encrypted before they're written here, so the database
