@@ -1,4 +1,5 @@
 import React from "react";
+import CrocsMark from "./CrocsMark";
 
 // One-time trust popup. `variant` controls the storage key so it can show once
 // on the landing page (before login) and once inside the app (after login).
@@ -13,8 +14,11 @@ export default function PrivacyNote({ variant = "app", onClose }) {
   return (
     <div className="fixed inset-0 z-40 bg-black/80 flex items-center justify-center p-4">
       <div className="w-full max-w-md border border-white/25 bg-black p-6">
-        <div className="text-[11px] tracking-[0.25em] text-white/45 mb-1">
-          PROTECTED BY CROCS
+        <div className="flex items-center gap-2 mb-1">
+          <CrocsMark size={20} />
+          <span className="text-[11px] tracking-[0.25em] text-white/45">
+            PROTECTED BY CROCS
+          </span>
         </div>
         <h2 className="text-lg font-semibold mb-1">Your data, your device.</h2>
         <p className="text-white/50 text-sm mb-5">

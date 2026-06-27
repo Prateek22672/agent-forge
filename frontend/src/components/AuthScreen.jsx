@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { api, auth } from "../api";
 import Strands from "./Strands";
+import CrocsMark from "./CrocsMark";
 
 // Login / signup. On success, stores the token and calls onAuthed(user).
 export default function AuthScreen({ initialMode = "signup", onAuthed, onBack }) {
@@ -130,9 +131,9 @@ export default function AuthScreen({ initialMode = "signup", onAuthed, onBack })
           </button>
         </form>
 
-        <div className="mt-4 text-[11px] text-white/35 text-center">
-          Protected by <b className="text-white/55">Crocs</b> — your data &
-          accounts, secured.
+        <div className="mt-4 text-[11px] text-white/35 text-center flex items-center justify-center gap-1.5">
+          <CrocsMark size={14} /> Protected by{" "}
+          <b className="text-white/55">Crocs</b> — your data & accounts, secured.
         </div>
 
         <div className="mt-4 text-sm text-white/50 flex items-center justify-between">
