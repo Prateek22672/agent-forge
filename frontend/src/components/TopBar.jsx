@@ -63,11 +63,9 @@ export default function TopBar({
           Settings
         </button>
 
-        <div className="flex items-center gap-2 pl-1 md:pl-2 md:border-l border-white/15">
-          <span
-            className="hidden md:inline text-white/60 max-w-[140px] truncate"
-            title={user?.email}
-          >
+        {/* User + logout — desktop only; on mobile, Logout lives in Settings. */}
+        <div className="hidden md:flex items-center gap-2 pl-2 border-l border-white/15">
+          <span className="text-white/60 max-w-[140px] truncate" title={user?.email}>
             {user?.name || user?.email}
           </span>
           <button

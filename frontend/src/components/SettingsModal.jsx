@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api } from "../api";
 
 // Settings: model privacy toggle (Groq cloud vs local Ollama) + Google connect.
-export default function SettingsModal({ onClose, onChanged }) {
+export default function SettingsModal({ onClose, onChanged, user, onLogout }) {
   const [settings, setSettings] = useState(null);
   const [models, setModels] = useState([]);
   const [conn, setConn] = useState(null);
@@ -201,6 +201,22 @@ export default function SettingsModal({ onClose, onChanged }) {
             </div>
           )}
           {msg && <div className="text-white/50 text-[11px] mt-2">{msg}</div>}
+        </div>
+
+        {/* --- Account --- */}
+        <div className="mt-6 pt-4 border-t border-white/15">
+          <div className="text-xs tracking-widest text-white/40 mb-2">ACCOUNT</div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-white/70 truncate" title={user?.email}>
+              {user?.name || user?.email || "Signed in"}
+            </span>
+            <button
+              onClick={onLogout}
+              className="border border-white/30 px-4 py-1.5 text-sm hover:border-white whitespace-nowrap"
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </div>
     </div>
