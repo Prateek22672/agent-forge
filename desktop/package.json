@@ -25,7 +25,8 @@
       {
         "provider": "github",
         "owner": "Prateek22672",
-        "repo": "agent-forge"
+        "repo": "agent-forge",
+        "releaseType": "release"
       }
     ],
     "win": {
