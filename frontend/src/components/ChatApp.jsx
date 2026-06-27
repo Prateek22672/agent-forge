@@ -260,7 +260,12 @@ export default function ChatApp({ user, onLogout }) {
 
       {showPrivacy && <PrivacyNote variant="app" onClose={() => setShowPrivacy(false)} />}
       {showSettings && (
-        <SettingsModal onClose={() => setShowSettings(false)} onChanged={loadMeta} />
+        <SettingsModal
+          onClose={() => setShowSettings(false)}
+          onChanged={loadMeta}
+          user={user}
+          onLogout={onLogout}
+        />
       )}
       {showForm && (
         <AgentForm
