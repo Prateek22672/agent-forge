@@ -51,7 +51,7 @@ def list_connections(
 
 
 @router.get("/google/start")
-def google_start(user: User = Depends(get_current_user)):
+def google_start(desktop: bool = False, user: User = Depends(get_current_user)):
     if not google_oauth.is_configured():
         raise HTTPException(
             400,
@@ -59,7 +59,7 @@ def google_start(user: User = Depends(get_current_user)):
             "GOOGLE_CLIENT_SECRET to .env (see docs/CONNECT_GOOGLE.md).",
         )
     # Sign the user id into state so the callback knows who is connecting.
-    state = sign_oauth_state({"uid": user.id})
+    state = sign_oauth_state({"uid": user.id, "desktop": desktop})
     return {"auth_url": google_oauth.build_auth_url(state)}
 
 
@@ -95,26 +95,35 @@ def google_callback(
     if not data:
         return RedirectResponse(f"{frontend}/?google=error")
 
+    # Desktop flows hand control back to the app via the agentforge:// deep link
+    # (the consent ran in the user's real browser, with their Google session).
+    desktop = bool(data.get("desktop"))
+
+    def _back(query: str) -> RedirectResponse:
+        if desktop:
+            return RedirectResponse(f"agentforge://auth?{query}")
+        return RedirectResponse(f"{frontend}/?{query}")
+
     try:
         creds = google_oauth.complete_flow(code)
     except Exception:
-        return RedirectResponse(f"{frontend}/?google=error")
+        return _back("google=error")
 
     # ----- connect flow: existing, already-authenticated user -----
     if data.get("uid"):
         user_id = data["uid"]
         if not db.get(User, user_id):
-            return RedirectResponse(f"{frontend}/?google=error")
+            return _back("google=error")
         google_oauth.store_credentials(user_id, creds)
         _upsert_google_connection(db, user_id, google_oauth.userinfo(creds))
-        return RedirectResponse(f"{frontend}/?google=connected")
+        return _back("google=connected")
 
     # ----- login flow: find-or-create an account from the Google identity -----
     if data.get("login"):
         info = google_oauth.userinfo(creds)
         email = (info.get("email") or "").strip().lower()
         if not email:
-            return RedirectResponse(f"{frontend}/?google=error")
+            return _back("google=error")
         user = db.query(User).filter(User.email == email).first()
         if not user:
             user = User(
@@ -130,10 +139,10 @@ def google_callback(
         google_oauth.store_credentials(user.id, creds)
         _upsert_google_connection(db, user.id, info)
         token = create_token(user.id)
-        # Hand the session token back to the SPA (local app) via the redirect.
-        return RedirectResponse(f"{frontend}/?token={token}&google=connected")
+        # Hand the session token back (browser query, or desktop deep link).
+        return _back(f"token={token}&google=connected")
 
-    return RedirectResponse(f"{frontend}/?google=error")
+    return _back("google=error")
 
 
 @router.delete("/google")

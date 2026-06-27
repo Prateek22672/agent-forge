@@ -32,16 +32,17 @@ _signup_limit = rate_limit(5, 300)  # 5 / 5 min / IP
 
 
 @router.get("/google/start")
-def google_login_start():
+def google_login_start(desktop: bool = False):
     """Public: begin 'Sign in with Google'. Requests Gmail scopes too, so login
-    and the Gmail connection happen in a single consent."""
+    and the Gmail connection happen in a single consent. `desktop=true` makes the
+    callback hand the session back to the desktop app via a deep link."""
     if not google_oauth.is_configured():
         raise HTTPException(
             400,
             "Google login isn't set up yet. Add GOOGLE_CLIENT_ID and "
             "GOOGLE_CLIENT_SECRET to .env (see docs/CONNECT_GOOGLE.md).",
         )
-    state = sign_oauth_state({"login": True})
+    state = sign_oauth_state({"login": True, "desktop": desktop})
     return {"auth_url": google_oauth.build_auth_url(state)}
 
 

@@ -34,8 +34,10 @@ export default function SettingsModal({ onClose, onChanged }) {
 
   const connectGoogle = async () => {
     try {
-      const { auth_url } = await api.googleStart();
-      window.location.href = auth_url; // redirect to Google consent
+      const desktop = !!window.agentforge?.isDesktop;
+      const { auth_url } = await api.googleStart(desktop);
+      if (desktop) window.agentforge.openExternal(auth_url);
+      else window.location.href = auth_url;
     } catch (e) {
       setMsg(String(e.message));
     }
