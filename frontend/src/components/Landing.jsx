@@ -134,7 +134,7 @@ function Download({ onGetStarted }) {
         </p>
         <div className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3">
           <a
-            href="https://github.com/Prateek22672/agent-forge/releases/latest"
+            href="https://github.com/Prateek22672/agent-forge/releases/latest/download/AgentForge-Setup.exe"
             target="_blank"
             rel="noreferrer"
             className="px-7 py-3 bg-white text-black font-medium hover:bg-white/85"
