@@ -46,7 +46,7 @@ export default function AdminPanel({ onClose, standalone = false }) {
 
         {/* Totals */}
         {data && (
-          <div className="grid grid-cols-4 gap-px bg-white/10 m-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-white/10 m-4 md:m-6">
             <Stat label="Total calls" value={data.totals.all_calls} />
             <Stat label="Groq calls" value={data.totals.groq_calls} />
             <Stat label="Gemini calls" value={data.totals.gemini_calls} />
