@@ -153,6 +153,25 @@ class EmailDraft(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class PriorityEmail(Base):
+    """An inbox email the classifier flagged as important (placement, interview,
+    deadline, action-needed…). Shown in the user's Priority view and pushed when
+    new. `key` is a per-user hash of sender+subject so we don't add duplicates."""
+
+    __tablename__ = "priority_emails"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    key: Mapped[str] = mapped_column(String(80), index=True)  # dedupe hash
+    sender: Mapped[str] = mapped_column(String(400), default="")
+    subject: Mapped[str] = mapped_column(Text, default="")
+    snippet: Mapped[str] = mapped_column(Text, default="")
+    category: Mapped[str] = mapped_column(String(60), default="")
+    reason: Mapped[str] = mapped_column(Text, default="")
+    pushed: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class BrainFact(Base):
     """A piece of the user's personal knowledge base ("brain") — e.g. a contact
     ("Bharat's email is bharat@x.com") or a preference. Mirrored into the user's

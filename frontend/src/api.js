@@ -104,6 +104,11 @@ export const api = {
   deleteNote: (id) => http("DELETE", `/notes/${id}`),
   markReminderNotified: (id) => http("POST", `/reminders/${id}/notified`),
 
+  // Priority inbox
+  listPriority: () => http("GET", "/priority"),
+  scanPriority: () => http("POST", "/priority/scan"),
+  dismissPriority: (id) => http("DELETE", `/priority/${id}`),
+
   // Brain (personal knowledge)
   listBrain: () => http("GET", "/brain"),
   addBrain: (text) => http("POST", "/brain", { text }),

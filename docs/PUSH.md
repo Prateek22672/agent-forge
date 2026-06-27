@@ -44,6 +44,17 @@ Use a free service like **cron-job.org** or **UptimeRobot**:
 Each call finds reminders whose `due_at` has passed, **pushes** them, and marks
 them notified. (The ping also keeps the free Render instance awake — a nice bonus.)
 
+### Priority-inbox cron (optional, for auto-scan + push)
+Add a **second** cron job (every ~15 min) so new important emails are detected
+and pushed without opening the app:
+
+- **URL:** `https://agent-forge-7tv7.onrender.com/api/cron/scan-priority?secret=b9ed2eea20e09d37110b38804c281792`
+- **Method:** POST · **Schedule:** every 15 minutes
+
+It scans each Gmail-connected user's recent inbox, flags important mail with the
+LLM, and pushes the new ones. (Users can also tap **Scan now** on the Priority
+page anytime.)
+
 ---
 
 ## 3. User flow (in the app)
