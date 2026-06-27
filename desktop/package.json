@@ -1,6 +1,6 @@
 {
   "name": "agentforge-desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "AgentForge desktop app",
   "main": "main.js",
   "author": "AgentForge",
@@ -21,6 +21,12 @@
     "appId": "com.agentforge.app",
     "productName": "AgentForge",
     "files": ["main.js", "preload.js", "build/**/*"],
+    "protocols": [
+      {
+        "name": "AgentForge",
+        "schemes": ["agentforge"]
+      }
+    ],
     "publish": [
       {
         "provider": "github",
