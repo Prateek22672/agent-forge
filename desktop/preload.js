@@ -8,4 +8,6 @@ contextBridge.exposeInMainWorld("agentforge", {
   isDesktop: true,
   platform: process.platform,
   openExternal: (url) => ipcRenderer.invoke("open-external", url),
+  // Bring the window to the front + flash the taskbar when a reminder alarm fires.
+  ringAlarm: () => ipcRenderer.invoke("ring-alarm"),
 });
