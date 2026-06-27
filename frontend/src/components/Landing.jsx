@@ -159,6 +159,9 @@ function Download({ onGetStarted }) {
         <div className="mt-5 text-xs text-white/30">
           Or click “Install” in your browser bar for the lightweight web app
         </div>
+        <div className="mt-2 text-[11px] text-white/25">
+          Mac first run: right-click the app → Open (it's unsigned during beta)
+        </div>
       </div>
     </section>
   );
