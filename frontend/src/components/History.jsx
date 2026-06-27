@@ -18,9 +18,9 @@ export default function History({
     ["brain", "Brain"],
   ];
   return (
-    <aside className="w-64 border-r border-white/15 flex flex-col shrink-0">
-      {/* Section nav */}
-      <div className="grid grid-cols-2 gap-1 p-2 border-b border-white/10">
+    <aside className="w-64 h-full min-h-0 border-r border-white/15 flex flex-col shrink-0">
+      {/* Section nav (pinned) */}
+      <div className="grid grid-cols-2 gap-1 p-2 border-b border-white/10 shrink-0">
         {NAV.map(([key, label]) => (
           <button
             key={key}
@@ -40,14 +40,14 @@ export default function History({
         <>
           <button
             onClick={onNew}
-            className="m-3 bg-white text-black py-2 font-semibold hover:bg-white/80"
+            className="m-3 shrink-0 bg-white text-black py-2 font-semibold hover:bg-white/80"
           >
             + New chat
           </button>
-          <div className="px-3 pb-1 text-[10px] tracking-widest text-white/40">
+          <div className="px-3 pb-1 shrink-0 text-[10px] tracking-widest text-white/40">
             HISTORY
           </div>
-          <div className="flex-1 overflow-y-auto px-2 space-y-1">
+          <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-2 space-y-1">
             {conversations.length === 0 && (
               <div className="text-white/30 text-xs px-2 py-3">No chats yet.</div>
             )}
