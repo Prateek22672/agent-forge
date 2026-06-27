@@ -98,6 +98,19 @@ function createWindow() {
     return { action: "allow" };
   });
 
+  // Bulletproof Google sign-in: if anything tries to load Google's auth pages
+  // INSIDE the app window, cancel it and open the real browser instead (which
+  // has the user's Google session → account picker). The login returns to the
+  // app via the agentforge:// deep link.
+  const forceExternalGoogle = (e, url) => {
+    if (url.startsWith("https://accounts.google.com")) {
+      e.preventDefault();
+      shell.openExternal(url);
+    }
+  };
+  mainWindow.webContents.on("will-navigate", forceExternalGoogle);
+  mainWindow.webContents.on("will-redirect", forceExternalGoogle);
+
   // Closing hides to the tray (keeps reminders running) instead of quitting.
   mainWindow.on("close", (e) => {
     if (!quitting) {

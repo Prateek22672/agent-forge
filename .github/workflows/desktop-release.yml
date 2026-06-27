@@ -28,6 +28,10 @@ jobs:
       - name: Install desktop deps
         working-directory: desktop
         run: npm install
+      - name: Set version to match the tag
+        working-directory: desktop
+        shell: bash
+        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
       - name: Build + publish Windows installer
         working-directory: desktop
         env:
@@ -44,6 +48,10 @@ jobs:
       - name: Install desktop deps
         working-directory: desktop
         run: npm install
+      - name: Set version to match the tag
+        working-directory: desktop
+        shell: bash
+        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
       - name: Build + publish macOS dmg (unsigned)
         working-directory: desktop
         env:
