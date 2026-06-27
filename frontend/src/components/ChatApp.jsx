@@ -10,6 +10,7 @@ import PrivacyNote, { privacySeen } from "./PrivacyNote";
 import Trackers from "./Trackers";
 import EmailConfirm from "./EmailConfirm";
 import { startersFor } from "../suggestions";
+import { startAlarm, stopAlarm } from "../alarm";
 
 // The authenticated app: ChatGPT-style single input + capability badges +
 // history sidebar. Everything here is scoped to the logged-in user.
@@ -28,9 +29,10 @@ export default function ChatApp({ user, onLogout }) {
   const [showForm, setShowForm] = useState(false);
   const [suggestions, setSuggestions] = useState([]); // per-reply next tasks
   const [showPrivacy, setShowPrivacy] = useState(!privacySeen("app"));
-  const [view, setView] = useState("chat"); // chat | reminders | notes | brain
+  const [view, setView] = useState("chat"); // chat | priority | planner | brain
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
   const [pendingEmails, setPendingEmails] = useState([]);
+  const [alarmReminder, setAlarmReminder] = useState(null); // ringing alarm
 
   const loadPending = () =>
     api.pendingEmails().then(setPendingEmails).catch(() => setPendingEmails([]));
@@ -108,9 +110,17 @@ export default function ChatApp({ user, onLogout }) {
         ) {
           fired.add(r.id);
           try {
-            new Notification("Reminder", { body: r.title, icon: "/icon.svg" });
+            new Notification(r.alarm ? "⏰ Alarm" : "Reminder", {
+              body: r.title,
+              icon: "/icon.svg",
+              requireInteraction: !!r.alarm,
+            });
           } catch {
             /* ignore */
+          }
+          if (r.alarm) {
+            startAlarm();
+            setAlarmReminder(r);
           }
           api.markReminderNotified(r.id).catch(() => {});
         }
@@ -285,6 +295,26 @@ export default function ChatApp({ user, onLogout }) {
           }}
           onCancel={() => setShowForm(false)}
         />
+      )}
+
+      {/* Ringing alarm — blocks until dismissed, stops the sound. */}
+      {alarmReminder && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
+          <div className="border border-white/30 bg-black w-full max-w-sm p-6 text-center">
+            <div className="text-5xl mb-3">⏰</div>
+            <div className="text-xs tracking-widest text-white/40 mb-1">ALARM</div>
+            <div className="text-lg font-semibold mb-5">{alarmReminder.title}</div>
+            <button
+              onClick={() => {
+                stopAlarm();
+                setAlarmReminder(null);
+              }}
+              className="w-full bg-white text-black py-3 font-semibold hover:bg-white/85"
+            >
+              Stop alarm
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

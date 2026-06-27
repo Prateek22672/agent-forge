@@ -134,6 +134,7 @@ class ConversationOut(BaseModel):
 class ReminderCreate(BaseModel):
     title: str
     remind_at: str = ""
+    alarm: bool = False
 
 
 class ReminderOut(BaseModel):
@@ -144,6 +145,7 @@ class ReminderOut(BaseModel):
     remind_at: str
     due_at: str = ""
     notified: bool = False
+    alarm: bool = False
     status: str
     created_at: datetime
 

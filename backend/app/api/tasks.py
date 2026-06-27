@@ -45,6 +45,7 @@ def create_reminder(
         title=payload.title,
         remind_at=payload.remind_at,
         due_at=due.isoformat() if due else "",
+        alarm=payload.alarm,
     )
     db.add(r)
     db.commit()
