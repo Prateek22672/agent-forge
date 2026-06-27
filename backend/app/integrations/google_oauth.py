@@ -22,20 +22,40 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 
 from app.config import settings
 from app.security import secret_store
 
-# Read-only Gmail + profile (so "Sign in with Google" learns the user's email
-# and name). All requested in a single consent so login + Gmail happen at once.
-SCOPES = [
+# Don't error if Google returns a different scope set than requested (happens when
+# a returning user previously granted more, or with include_granted_scopes).
+os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
+
+# Non-sensitive login scopes — these never trigger the "unverified app" warning,
+# so anyone can sign in even before Google verification.
+LOGIN_SCOPES = [
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
-    "https://www.googleapis.com/auth/gmail.readonly",
-    "https://www.googleapis.com/auth/gmail.send",  # send (only after user confirms)
-    "https://www.googleapis.com/auth/calendar.events",  # create calendar events
 ]
+
+# RESTRICTED/SENSITIVE scopes — these require Google verification (+ a CASA
+# assessment for Gmail) to use beyond test users without the warning.
+DATA_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/calendar.events",
+]
+
+
+def get_scopes() -> list[str]:
+    """Active scopes. With GOOGLE_DATA_SCOPES=false (public beta) we request only
+    login scopes, so there's no verification needed and no warning."""
+    return LOGIN_SCOPES + (DATA_SCOPES if settings.google_data_scopes else [])
+
+
+# Kept for backward-compat where a module constant is referenced.
+SCOPES = get_scopes()
 
 def _token_key(user_id: str) -> str:
     # One token per user, stored separately in the OS keychain.
@@ -63,7 +83,7 @@ def build_auth_url(state: str) -> str:
     from google_auth_oauthlib.flow import Flow
 
     flow = Flow.from_client_config(
-        _client_config(), scopes=SCOPES, redirect_uri=settings.oauth_redirect_uri
+        _client_config(), scopes=get_scopes(), redirect_uri=settings.oauth_redirect_uri
     )
     auth_url, _ = flow.authorization_url(
         access_type="offline",       # so we get a refresh token
@@ -80,7 +100,7 @@ def complete_flow(code: str):
     from google_auth_oauthlib.flow import Flow
 
     flow = Flow.from_client_config(
-        _client_config(), scopes=SCOPES, redirect_uri=settings.oauth_redirect_uri
+        _client_config(), scopes=get_scopes(), redirect_uri=settings.oauth_redirect_uri
     )
     flow.fetch_token(code=code)
     return flow.credentials
@@ -122,7 +142,11 @@ def _load_credentials(user_id: str):
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
 
-    creds = Credentials.from_authorized_user_info(json.loads(raw), SCOPES)
+    # Load with the full scope union so any previously-granted token still loads,
+    # regardless of the current GOOGLE_DATA_SCOPES setting.
+    creds = Credentials.from_authorized_user_info(
+        json.loads(raw), LOGIN_SCOPES + DATA_SCOPES
+    )
     if creds.expired and creds.refresh_token:
         creds.refresh(Request())
         secret_store.set_secret(_token_key(user_id), creds.to_json())
