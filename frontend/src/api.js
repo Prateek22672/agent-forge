@@ -69,7 +69,8 @@ export const api = {
   me: () => http("GET", "/auth/me"),
   updateProfile: (data) => http("PATCH", "/auth/me", data),
   googleAuthConfigured: () => http("GET", "/auth/google/configured"),
-  googleAuthStart: () => http("GET", "/auth/google/start"),
+  googleAuthStart: (desktop) =>
+    http("GET", `/auth/google/start${desktop ? "?desktop=true" : ""}`),
 
   listAgents: () => http("GET", "/agents"),
   createAgent: (data) => http("POST", "/agents", data),
@@ -125,6 +126,7 @@ export const api = {
 
   // Connections (Google)
   getConnections: () => http("GET", "/connections"),
-  googleStart: () => http("GET", "/connections/google/start"),
+  googleStart: (desktop) =>
+    http("GET", `/connections/google/start${desktop ? "?desktop=true" : ""}`),
   googleDisconnect: () => http("DELETE", "/connections/google"),
 };

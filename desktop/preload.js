@@ -1,10 +1,11 @@
-// Minimal preload — context-isolated. We don't expose Node to the web app; the
-// app talks to its local backend over HTTP exactly as in the browser. This file
-// exists so we can add safe IPC bridges later (e.g. native file pickers) without
-// loosening security.
-const { contextBridge } = require("electron");
+// Context-isolated bridge. We expose a tiny, safe API to the web app:
+//   • isDesktop  — so the web app knows it's running inside the desktop shell
+//   • openExternal(url) — open a URL (the Google consent) in the real browser,
+//     which has the user's Google session, then return via the agentforge:// link.
+const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("agentforge", {
   isDesktop: true,
   platform: process.platform,
+  openExternal: (url) => ipcRenderer.invoke("open-external", url),
 });

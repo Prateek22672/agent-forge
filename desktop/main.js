@@ -11,8 +11,19 @@
 //
 // Set APP_URL to your Vercel URL (or pass AGENTFORGE_URL at runtime).
 
-const { app, BrowserWindow, Tray, Menu, shell, nativeImage } = require("electron");
+const { app, BrowserWindow, Tray, Menu, shell, nativeImage, ipcMain } = require("electron");
 const path = require("path");
+
+// Custom protocol used to bring the Google sign-in back from the system browser
+// into this app (see handleDeepLink). Registering early is important on Windows.
+const PROTOCOL = "agentforge";
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient(PROTOCOL);
+}
 
 // Your deployed app (override at runtime with AGENTFORGE_URL if needed).
 const APP_URL = process.env.AGENTFORGE_URL || "https://agent-forge-hkom.vercel.app";
@@ -132,15 +143,44 @@ function showWindow() {
   }
 }
 
+// Handle agentforge://auth?token=...&google=connected — the OAuth callback
+// redirects here after the user signs in via their real browser. We reload the
+// app with the token in the URL; the web app reads ?token= and logs in.
+function handleDeepLink(url) {
+  if (!url || !url.startsWith(PROTOCOL + "://")) return;
+  const query = url.split("?")[1] || "";
+  showWindow();
+  if (mainWindow) mainWindow.loadURL(`${APP_URL}/?${query}`);
+}
+
 // Single instance — focus the existing window instead of opening a second one.
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on("second-instance", showWindow);
+  // Windows/Linux: a deep link to a running app arrives as a CLI arg here.
+  app.on("second-instance", (e, argv) => {
+    const deep = argv.find((a) => a.startsWith(PROTOCOL + "://"));
+    if (deep) handleDeepLink(deep);
+    else showWindow();
+  });
 }
+
+// macOS delivers the deep link via this event.
+app.on("open-url", (e, url) => {
+  e.preventDefault();
+  handleDeepLink(url);
+});
+
+// Let the web app ask us to open URLs (the Google consent) in the real browser.
+ipcMain.handle("open-external", (_e, url) => shell.openExternal(url));
 
 app.whenReady().then(() => {
   createWindow();
+
+  // Cold start via the protocol (Windows): the URL is in the launch args.
+  const coldDeep = process.argv.find((a) => a.startsWith(PROTOCOL + "://"));
+  if (coldDeep) setTimeout(() => handleDeepLink(coldDeep), 800);
+
   try {
     createTray();
   } catch (e) {

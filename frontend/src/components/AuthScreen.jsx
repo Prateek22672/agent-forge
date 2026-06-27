@@ -20,8 +20,15 @@ export default function AuthScreen({ initialMode = "signup", onAuthed, onBack })
   const continueWithGoogle = async () => {
     setErr("");
     try {
-      const { auth_url } = await api.googleAuthStart();
-      window.location.href = auth_url; // Google consent; returns with ?token=
+      const desktop = !!window.agentforge?.isDesktop;
+      const { auth_url } = await api.googleAuthStart(desktop);
+      if (desktop) {
+        // Open consent in the real browser (has your Google session → account
+        // picker); it returns to the app via the agentforge:// deep link.
+        window.agentforge.openExternal(auth_url);
+      } else {
+        window.location.href = auth_url;
+      }
     } catch (e) {
       setErr("Google sign-in isn't available right now.");
     }
