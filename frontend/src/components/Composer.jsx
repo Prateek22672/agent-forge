@@ -77,8 +77,8 @@ export default function Composer({
 
       {/* Permanent Crocs reassurance */}
       <div className="mt-2 text-center text-[11px] text-white/35">
-        <b className="text-white/55">Crocs</b> secured · processed once · not
-        retained · your data stays on your device
+        <b className="text-white/55">Crocs</b> secured · private to your account ·
+        secrets encrypted · never used for training
       </div>
     </div>
   );
