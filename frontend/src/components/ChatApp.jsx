@@ -11,6 +11,7 @@ import Trackers from "./Trackers";
 import EmailConfirm from "./EmailConfirm";
 import { startersFor } from "../suggestions";
 import { startAlarm, stopAlarm } from "../alarm";
+import GoogleConsentModal from "./GoogleConsentModal";
 
 // The authenticated app: ChatGPT-style single input + capability badges +
 // history sidebar. Everything here is scoped to the logged-in user.
@@ -33,6 +34,7 @@ export default function ChatApp({ user, onLogout }) {
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
   const [pendingEmails, setPendingEmails] = useState([]);
   const [alarmReminder, setAlarmReminder] = useState(null); // ringing alarm
+  const [showConsent, setShowConsent] = useState(false); // Google connect explainer
 
   const loadPending = () =>
     api.pendingEmails().then(setPendingEmails).catch(() => setPendingEmails([]));
@@ -42,7 +44,10 @@ export default function ChatApp({ user, onLogout }) {
     setConnections(await api.getConnections().catch(() => null));
   };
 
-  const reconnectGoogle = async () => {
+  // Show the trust explainer first, then redirect to Google's consent.
+  const reconnectGoogle = () => setShowConsent(true);
+  const doReconnectGoogle = async () => {
+    setShowConsent(false);
     try {
       const desktop = !!(window.agentforge?.isDesktop && window.agentforge?.openExternal);
       const { auth_url } = await api.googleStart(desktop);
@@ -296,6 +301,13 @@ export default function ChatApp({ user, onLogout }) {
             setActiveAgentId(a.id);
           }}
           onCancel={() => setShowForm(false)}
+        />
+      )}
+
+      {showConsent && (
+        <GoogleConsentModal
+          onContinue={doReconnectGoogle}
+          onCancel={() => setShowConsent(false)}
         />
       )}
 

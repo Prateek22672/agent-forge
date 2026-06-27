@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { api, auth } from "../api";
 import Strands from "./Strands";
 import CrocsMark from "./CrocsMark";
+import { TrustChips } from "./TrustBadges";
 
 // Login / signup. On success, stores the token and calls onAuthed(user).
 export default function AuthScreen({ initialMode = "signup", onAuthed, onBack }) {
@@ -85,7 +86,8 @@ export default function AuthScreen({ initialMode = "signup", onAuthed, onBack })
               <GoogleGlyph /> Continue with Google
             </button>
             <div className="text-[11px] text-white/40 text-center mt-2">
-              Signs you in and connects Gmail (read-only) in one step.
+              Just signs you in — nothing sensitive. Connect Gmail &amp; Calendar
+              later, only if you want.
             </div>
             <div className="flex items-center gap-3 my-4 text-white/30 text-xs">
               <div className="h-px flex-1 bg-white/15" /> or <div className="h-px flex-1 bg-white/15" />
@@ -131,9 +133,9 @@ export default function AuthScreen({ initialMode = "signup", onAuthed, onBack })
           </button>
         </form>
 
-        <div className="mt-4 text-[11px] text-white/35 text-center flex items-center justify-center gap-1.5">
-          <CrocsMark size={14} /> Protected by{" "}
-          <b className="text-white/55">Crocs</b> — your data & accounts, secured.
+        <TrustChips className="mt-4" />
+        <div className="mt-1.5 text-[10px] text-white/30 text-center">
+          Private to your account · disconnect anytime
         </div>
 
         <div className="mt-4 text-sm text-white/50 flex items-center justify-between">
