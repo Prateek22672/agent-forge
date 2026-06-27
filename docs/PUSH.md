@@ -51,9 +51,20 @@ and pushed without opening the app:
 - **URL:** `https://agent-forge-7tv7.onrender.com/api/cron/scan-priority?secret=b9ed2eea20e09d37110b38804c281792`
 - **Method:** POST · **Schedule:** every 15 minutes
 
-It scans each Gmail-connected user's recent inbox, flags important mail with the
-LLM, and pushes the new ones. (Users can also tap **Scan now** on the Priority
-page anytime.)
+Schedule this cron to run **every 15 minutes**. It does NOT scan everyone each
+time — each user picks their own cadence on the Priority page (**Never / Every
+hour / Every 5 hours / Every morning / Every night / Morning & night**), and the
+cron only scans the users who are due. "Morning/night" fire at the **user's local
+time** (their device timezone is captured when they choose it). Users can also tap
+**Scan now** on the Priority page anytime.
+
+### Accuracy: tuned to never miss
+The classifier is **recall-first** — its golden rule is *"missing an important
+email is a serious failure; showing one extra is fine,"* so anything borderline
+is included. It runs on a strong model (GPT-OSS-120B) and only excludes **clear**
+marketing/newsletter/social noise. If the model is ever unavailable, it falls
+back to including everything that isn't obvious marketing — it never silently
+drops a possibly-important mail.
 
 ---
 

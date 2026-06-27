@@ -68,6 +68,9 @@ def _ensure_columns() -> None:
             "about": "TEXT DEFAULT ''",
             "is_admin": f"BOOLEAN DEFAULT {bool_default}",
             "save_history": "BOOLEAN DEFAULT " + ("TRUE" if is_pg else "1"),
+            "priority_scan_freq": "VARCHAR(20) DEFAULT 'off'",
+            "tz_offset_min": "INTEGER DEFAULT 0",
+            "last_priority_scan": "VARCHAR(40) DEFAULT ''",
         },
         "reminders": {
             "due_at": "VARCHAR(40) DEFAULT ''",

@@ -66,6 +66,10 @@ class User(Base):
     about: Mapped[str] = mapped_column(Text, default="")
     # When False, chat messages aren't persisted (privacy). Brain still works.
     save_history: Mapped[bool] = mapped_column(default=True)
+    # Priority-inbox auto-scan: off | 1h | 5h | morning | night | morning_night
+    priority_scan_freq: Mapped[str] = mapped_column(String(20), default="off")
+    tz_offset_min: Mapped[int] = mapped_column(default=0)  # JS getTimezoneOffset()
+    last_priority_scan: Mapped[str] = mapped_column(String(40), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 

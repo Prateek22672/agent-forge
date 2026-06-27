@@ -123,6 +123,14 @@ def get_llm(model: str | None = None, temperature: float = 0.7):
     return _cached_groq(model, temperature, _next_groq_key())
 
 
+def get_groq(model: str, temperature: float = 0.2):
+    """Force a specific Groq model (independent of the provider toggle), rotating
+    keys. Used by internal features that need a particular model for accuracy."""
+    if not key_manager.groq_keys():
+        return None
+    return _cached_groq(model, temperature, _next_groq_key())
+
+
 def get_fast_groq(temperature: float = 0.4):
     """A small fast Groq model for INTERNAL helpers (e.g. follow-up suggestions),
     independent of the user's selected provider so it stays cheap and reliable."""
