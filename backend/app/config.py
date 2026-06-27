@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     admin_username: str = "dj"
     admin_password: str = "dj"
 
+    # --- Web Push (PWA notifications) ---
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""          # PEM (\n-escaped is fine)
+    vapid_subject: str = "mailto:admin@agentforge.app"
+    cron_secret: str = ""                # protects /api/cron/* (set on Render)
+
     # --- LLM provider toggle: "groq" (cloud) | "gemini" | "ollama" (local) ---
     llm_provider: str = "groq"
     ollama_model: str = "llama3.2"
