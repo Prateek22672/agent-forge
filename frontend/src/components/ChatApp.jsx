@@ -29,6 +29,7 @@ export default function ChatApp({ user, onLogout }) {
   const [suggestions, setSuggestions] = useState([]); // per-reply next tasks
   const [showPrivacy, setShowPrivacy] = useState(!privacySeen("app"));
   const [view, setView] = useState("chat"); // chat | reminders | notes | brain
+  const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
   const [pendingEmails, setPendingEmails] = useState([]);
 
   const loadPending = () =>
@@ -185,22 +186,43 @@ export default function ChatApp({ user, onLogout }) {
         onOpenSettings={() => setShowSettings(true)}
         onOpenAdmin={() => (window.location.href = "/admin")}
         onReconnectGoogle={reconnectGoogle}
+        onToggleSidebar={() => setSidebarOpen((o) => !o)}
         onLogout={onLogout}
       />
 
-      <div className="flex-1 flex min-h-0">
-        <History
-          conversations={conversations}
-          activeId={conversationId}
-          onPick={pickConversation}
-          onNew={() => {
-            setView("chat");
-            newChat();
-          }}
-          onDelete={deleteConversation}
-          view={view}
-          setView={setView}
-        />
+      <div className="flex-1 flex min-h-0 relative">
+        {/* Sidebar: inline on desktop, slide-in drawer on mobile */}
+        <div
+          className={`${
+            sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          } md:translate-x-0 transition-transform duration-200 fixed md:relative inset-y-0 left-0 z-40 md:z-auto bg-black`}
+        >
+          <History
+            conversations={conversations}
+            activeId={conversationId}
+            onPick={(c) => {
+              pickConversation(c);
+              setSidebarOpen(false);
+            }}
+            onNew={() => {
+              setView("chat");
+              newChat();
+              setSidebarOpen(false);
+            }}
+            onDelete={deleteConversation}
+            view={view}
+            setView={(v) => {
+              setView(v);
+              setSidebarOpen(false);
+            }}
+          />
+        </div>
+        {sidebarOpen && (
+          <div
+            className="md:hidden fixed inset-0 bg-black/60 z-30"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
 
         {view !== "chat" ? (
           <Trackers view={view} user={user} />

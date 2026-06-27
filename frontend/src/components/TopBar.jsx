@@ -2,8 +2,8 @@ import React from "react";
 import ConnectionStatus from "./ConnectionStatus";
 import CrocsMark from "./CrocsMark";
 
-// Top status strip: brand, live provider, Google connection state, settings,
-// and the signed-in user with a logout option.
+// Top status strip. Responsive: condenses on mobile, with a hamburger to open
+// the sidebar drawer.
 export default function TopBar({
   user,
   settings,
@@ -11,34 +11,45 @@ export default function TopBar({
   onOpenSettings,
   onOpenAdmin,
   onReconnectGoogle,
+  onToggleSidebar,
   onLogout,
 }) {
   const provider = settings?.llm_provider || "groq";
-  const google = connections?.google;
   const providerLabel =
-    provider === "ollama" ? "LOCAL · OLLAMA" : provider === "gemini" ? "GEMINI" : "GROQ";
+    provider === "ollama" ? "LOCAL" : provider === "gemini" ? "GEMINI" : "GROQ";
 
   return (
-    <div className="flex items-center justify-between border-b border-white/15 px-5 h-14 shrink-0">
-      <div className="flex items-center gap-3">
-        <span className="font-semibold tracking-[0.2em] text-sm">AGENTFORGE</span>
+    <div className="flex items-center justify-between border-b border-white/15 px-3 md:px-5 h-14 shrink-0 gap-2">
+      <div className="flex items-center gap-2 md:gap-3 min-w-0">
+        <button
+          onClick={onToggleSidebar}
+          className="md:hidden border border-white/25 px-2 py-1 text-sm"
+          aria-label="Menu"
+        >
+          ☰
+        </button>
+        <span className="font-semibold tracking-[0.15em] md:tracking-[0.2em] text-xs md:text-sm whitespace-nowrap">
+          AGENTFORGE
+        </span>
         <span
-          className="flex items-center gap-1.5 text-[10px] border border-white/20 px-2 py-0.5 text-white/45 tracking-widest"
-          title="Protected by Crocs — see docs/CROCS_SECURITY.md"
+          className="hidden lg:flex items-center gap-1.5 text-[10px] border border-white/20 px-2 py-0.5 text-white/45 tracking-widest"
+          title="Protected by Crocs"
         >
           <CrocsMark size={13} /> CROCS SECURED
         </span>
       </div>
 
-      <div className="flex items-center gap-3 text-xs">
-        <span className="border border-white/25 px-2 py-1 tracking-wide">{providerLabel}</span>
+      <div className="flex items-center gap-2 md:gap-3 text-xs min-w-0">
+        <span className="hidden sm:inline border border-white/25 px-2 py-1 tracking-wide">
+          {providerLabel}
+        </span>
 
         <ConnectionStatus connections={connections} onReconnect={onReconnectGoogle} />
 
         {user?.is_admin && (
           <button
             onClick={onOpenAdmin}
-            className="border border-white/30 px-3 py-1 hover:border-white"
+            className="hidden sm:block border border-white/30 px-3 py-1 hover:border-white"
             title="Admin panel"
           >
             Admin
@@ -47,17 +58,22 @@ export default function TopBar({
 
         <button
           onClick={onOpenSettings}
-          className="bg-white text-black px-3 py-1 font-semibold hover:bg-white/80"
+          className="bg-white text-black px-2 md:px-3 py-1 font-semibold hover:bg-white/80 whitespace-nowrap"
         >
           Settings
         </button>
 
-        {/* User menu */}
-        <div className="flex items-center gap-2 pl-2 border-l border-white/15">
-          <span className="text-white/60 max-w-[160px] truncate" title={user?.email}>
+        <div className="flex items-center gap-2 pl-1 md:pl-2 md:border-l border-white/15">
+          <span
+            className="hidden md:inline text-white/60 max-w-[140px] truncate"
+            title={user?.email}
+          >
             {user?.name || user?.email}
           </span>
-          <button onClick={onLogout} className="text-white/50 hover:text-white underline">
+          <button
+            onClick={onLogout}
+            className="text-white/50 hover:text-white underline whitespace-nowrap"
+          >
             Logout
           </button>
         </div>

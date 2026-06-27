@@ -47,7 +47,7 @@ export default function Messages({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
+    <div className="flex-1 overflow-y-auto px-4 md:px-6 py-6 space-y-5">
       {messages.map((m, i) => (
         <Bubble key={i} message={m} />
       ))}
