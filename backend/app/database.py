@@ -75,6 +75,7 @@ def _ensure_columns() -> None:
         "reminders": {
             "due_at": "VARCHAR(40) DEFAULT ''",
             "notified": f"BOOLEAN DEFAULT {bool_default}",
+            "alarm": f"BOOLEAN DEFAULT {bool_default}",
         },
     }
     with engine.begin() as conn:

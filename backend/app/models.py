@@ -125,6 +125,9 @@ class Reminder(Base):
     # Concrete time the ping should fire (naive local ISO); null if unparseable.
     due_at: Mapped[str] = mapped_column(String(40), default="")
     notified: Mapped[bool] = mapped_column(default=False)
+    # When True, the due ping is a loud, dismiss-required ALARM (sound), not just
+    # a passive notification.
+    alarm: Mapped[bool] = mapped_column(default=False)
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|done
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 

@@ -212,6 +212,7 @@ function Reminders() {
   const [items, setItems] = useState([]);
   const [title, setTitle] = useState("");
   const [when, setWhen] = useState("");
+  const [alarm, setAlarm] = useState(false);
 
   const load = () => api.listReminders().then(setItems).catch(() => setItems([]));
   useEffect(() => {
@@ -220,30 +221,43 @@ function Reminders() {
 
   const add = async () => {
     if (!title.trim()) return;
-    await api.createReminder({ title: title.trim(), remind_at: when.trim() });
+    await api.createReminder({ title: title.trim(), remind_at: when.trim(), alarm });
     setTitle("");
     setWhen("");
+    setAlarm(false);
     load();
   };
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="px-4 md:px-6 py-4 flex flex-wrap gap-2 border-b border-white/10">
+      <div className="px-4 md:px-6 py-4 flex flex-wrap items-center gap-2 border-b border-white/10">
         <input
-          className="flex-1 bg-black border border-white/30 px-3 py-2 focus:border-white outline-none"
+          className="flex-1 min-w-[160px] bg-black border border-white/30 px-3 py-2 focus:border-white outline-none"
           placeholder="Remind me to…"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && add()}
         />
         <input
-          className="w-48 bg-black border border-white/30 px-3 py-2 focus:border-white outline-none"
+          className="w-44 bg-black border border-white/30 px-3 py-2 focus:border-white outline-none"
           placeholder="when (e.g. today 9 PM)"
           value={when}
           onChange={(e) => setWhen(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && add()}
         />
-        <button onClick={add} className="bg-white text-black px-5 font-semibold hover:bg-white/85">
+        <button
+          type="button"
+          onClick={() => setAlarm((a) => !a)}
+          title="Alarm: sounds a loud alert you must dismiss"
+          className={`px-3 py-2 text-sm border whitespace-nowrap ${
+            alarm
+              ? "bg-white text-black border-white font-semibold"
+              : "border-white/30 text-white/70 hover:border-white"
+          }`}
+        >
+          {alarm ? "⏰ Alarm on" : "Alarm off"}
+        </button>
+        <button onClick={add} className="bg-white text-black px-5 py-2 font-semibold hover:bg-white/85">
           Add
         </button>
       </div>
@@ -264,6 +278,7 @@ function Reminders() {
             />
             <div className="flex-1">
               <div className={r.status === "done" ? "line-through text-white/40" : ""}>
+                {r.alarm && <span title="Alarm">⏰ </span>}
                 {r.title}
               </div>
               <div className="text-xs text-white/40">

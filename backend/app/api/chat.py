@@ -70,8 +70,19 @@ def chat(
     except Exception as exc:
         raise HTTPException(500, f"Agent run failed: {exc}")
 
-    # 4b. Suggest next tasks (best-effort; never blocks/breaks the reply).
-    suggestions = suggest_followups(payload.message, reply)
+    # 4b. Suggest next tasks (best-effort). Time-bounded so a slow suggestion
+    # model can never add more than a moment to the user's wait — if it doesn't
+    # finish quickly we just return the reply with no chips.
+    import concurrent.futures
+
+    suggestions = []
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            suggestions = ex.submit(
+                suggest_followups, payload.message, reply
+            ).result(timeout=2.5)
+    except Exception:
+        suggestions = []
 
     # 5. Persist the assistant reply (skipped when history saving is off).
     if save_history:

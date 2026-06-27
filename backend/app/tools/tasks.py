@@ -12,10 +12,11 @@ from langchain_core.tools import tool
 
 def make_task_tools(user_id: str) -> list:
     @tool
-    def create_reminder(title: str, when: str = "") -> str:
+    def create_reminder(title: str, when: str = "", alarm: bool = False) -> str:
         """Save a reminder for the user. `title` is what to be reminded about;
-        `when` is the human-readable time (e.g. 'today 9:14 PM'). Use this when
-        the user asks to be reminded of something."""
+        `when` is the human-readable time (e.g. 'today 9:14 PM'). Set `alarm=True`
+        if the user asks for an ALARM (a loud sound they must dismiss) rather than
+        a quiet reminder. Use this whenever the user asks to be reminded or woken."""
         from app.database import SessionLocal
         from app.models import Reminder, User
         from app.util.timeparse import parse_when
@@ -31,14 +32,21 @@ def make_task_tools(user_id: str) -> list:
                     title=title,
                     remind_at=when,
                     due_at=due.isoformat() if due else "",
+                    alarm=alarm,
                 )
             )
             db.commit()
         finally:
             db.close()
         when_txt = f" for {when}" if when else ""
-        ping = " I'll ping you when it's due." if due else ""
-        return f"Saved a reminder{when_txt}: “{title}”.{ping} View it on your Reminders page."
+        kind = "alarm" if alarm else "reminder"
+        ping = (
+            (" It'll sound an alarm" if alarm else " I'll ping you")
+            + " when it's due."
+            if due
+            else ""
+        )
+        return f"Saved an {kind}{when_txt}: “{title}”.{ping} View it on your Planner page."
 
     @tool
     def list_reminders() -> str:

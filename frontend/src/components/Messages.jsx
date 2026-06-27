@@ -56,12 +56,33 @@ export default function Messages({
           <div className="h-8 w-16">
             <Strands colors={["#7C3AED", "#06B6D4", "#FFFFFF"]} count={4} glow={2.6} speed={0.9} />
           </div>
-          Generating…
+          <ThinkingText />
         </div>
       )}
       <div ref={endRef} />
     </div>
   );
+}
+
+// Reassuring, evolving status so a wait never feels stuck. Each phrase shows for
+// a few seconds, then settles on "Almost there…" so the user always feels progress.
+const THINKING_PHASES = [
+  ["Reading your request…", 0],
+  ["Working through it…", 2500],
+  ["Gathering the details…", 6000],
+  ["Putting it together…", 10000],
+  ["Almost there…", 15000],
+];
+
+function ThinkingText() {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    const timers = THINKING_PHASES.slice(1).map(([, at], i) =>
+      setTimeout(() => setIdx(i + 1), at)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, []);
+  return <span>{THINKING_PHASES[idx][0]}</span>;
 }
 
 function Bubble({ message }) {
