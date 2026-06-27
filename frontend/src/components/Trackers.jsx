@@ -61,7 +61,7 @@ function Calendar({ owner }) {
           onKeyDown={(e) => e.key === "Enter" && add()}
         />
         <input
-          className="w-48 bg-black border border-white/30 px-3 py-2 focus:border-white outline-none"
+          className="w-full sm:w-48 bg-black border border-white/30 px-3 py-2 focus:border-white outline-none"
           placeholder="when (e.g. tomorrow 10:30am)"
           value={when}
           onChange={(e) => setWhen(e.target.value)}
@@ -259,11 +259,11 @@ function Brain({ owner }) {
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <Header title={`${owner}'s Brain`} />
-      <div className="px-6 py-3 text-xs text-white/40 border-b border-white/10">
+      <div className="px-4 md:px-6 py-3 text-xs text-white/40 border-b border-white/10">
         Facts here (contacts, emails, preferences) are recalled automatically by
         the Assistant — so it doesn't have to keep asking.
       </div>
-      <div className="px-6 py-4 flex gap-2 border-b border-white/10">
+      <div className="px-4 md:px-6 py-4 flex gap-2 border-b border-white/10">
         <input
           className="flex-1 bg-black border border-white/30 px-3 py-2 focus:border-white outline-none"
           placeholder="e.g. Bharat Velineni's email is bvelinen@gitam.in"
@@ -275,7 +275,7 @@ function Brain({ owner }) {
           Add
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
+      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 space-y-2">
         {items.length === 0 && <Empty text="Nothing yet. Tell the Assistant facts to remember, or add them here." />}
         {items.map((f) => (
           <div key={f.id} className="flex items-center gap-3 border border-white/15 px-4 py-3">
@@ -298,7 +298,7 @@ function Brain({ owner }) {
 
 function Header({ title }) {
   return (
-    <div className="border-b border-white/15 px-6 py-4">
+    <div className="border-b border-white/15 px-4 md:px-6 py-4">
       <div className="font-semibold text-lg">{title}</div>
     </div>
   );
@@ -335,7 +335,7 @@ function Reminders() {
           onKeyDown={(e) => e.key === "Enter" && add()}
         />
         <input
-          className="w-44 bg-black border border-white/30 px-3 py-2 focus:border-white outline-none"
+          className="w-full sm:w-44 bg-black border border-white/30 px-3 py-2 focus:border-white outline-none"
           placeholder="when (e.g. today 9 PM)"
           value={when}
           onChange={(e) => setWhen(e.target.value)}
@@ -362,7 +362,7 @@ function Reminders() {
           notification instead.
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
+      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 space-y-2">
         {items.length === 0 && <Empty text="No reminders yet. Ask the Assistant to set one." />}
         {items.map((r) => (
           <div
@@ -447,7 +447,7 @@ function Notes() {
           Add note
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto px-6 py-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 grid grid-cols-1 md:grid-cols-2 gap-3">
         {items.length === 0 && <Empty text="No notes yet. Ask the Assistant to jot one down." />}
         {items.map((n) => (
           <div key={n.id} className="border border-white/15 p-4">
