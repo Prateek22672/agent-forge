@@ -96,6 +96,26 @@ export default function SettingsModal({ onClose, onChanged, user, onLogout }) {
               placeholder="e.g. Final-year CS student preparing for placements; prefers short answers."
               className="w-full bg-black border border-white/30 px-2 py-2 text-sm mt-1 h-20 focus:border-white outline-none"
             />
+
+            {/* Privacy: save chat history */}
+            <div className="flex items-center justify-between mt-3 border border-white/15 px-3 py-2">
+              <div>
+                <div className="text-sm">Save chat history</div>
+                <div className="text-[11px] text-white/40">
+                  Off = messages aren't stored; only your Brain persists.
+                </div>
+              </div>
+              <button
+                onClick={() => saveProfile({ save_history: !profile.save_history })}
+                className={`border px-3 py-1 text-xs ${
+                  profile.save_history
+                    ? "bg-white text-black border-white font-semibold"
+                    : "border-white/30 hover:border-white"
+                }`}
+              >
+                {profile.save_history ? "On" : "Off"}
+              </button>
+            </div>
           </div>
         )}
 

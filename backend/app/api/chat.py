@@ -39,24 +39,30 @@ def chat(
     if not agent or agent.user_id != user.id:
         raise HTTPException(404, "Agent not found")
 
+    save_history = getattr(user, "save_history", True)
+
     # 1. Resolve conversation.
     if payload.conversation_id:
         convo = db.get(Conversation, payload.conversation_id)
         if not convo or convo.agent_id != agent_id:
             raise HTTPException(404, "Conversation not found")
     else:
-        title = payload.message[:60] or "New conversation"
+        # With history off, don't even put the message text in the title.
+        title = (payload.message[:60] if save_history else "Private chat") or "New chat"
         convo = Conversation(agent_id=agent_id, title=title)
         db.add(convo)
         db.commit()
         db.refresh(convo)
 
-    # 2. Short-term memory: prior messages in this conversation.
-    history = list(convo.messages)
+    # 2. Short-term memory: prior messages (empty when history isn't saved).
+    history = list(convo.messages) if save_history else []
 
-    # 3. Persist the user message.
-    db.add(Message(conversation_id=convo.id, role="user", content=payload.message))
-    db.commit()
+    # 3. Persist the user message (skipped when history saving is off).
+    if save_history:
+        db.add(
+            Message(conversation_id=convo.id, role="user", content=payload.message)
+        )
+        db.commit()
 
     # 4. Run the agent (personalised with the user's tone/about/memory).
     try:
@@ -67,16 +73,17 @@ def chat(
     # 4b. Suggest next tasks (best-effort; never blocks/breaks the reply).
     suggestions = suggest_followups(payload.message, reply)
 
-    # 5. Persist the assistant reply (with the tool trace in meta).
-    db.add(
-        Message(
-            conversation_id=convo.id,
-            role="assistant",
-            content=reply,
-            meta={"tool_calls": traces, "suggestions": suggestions},
+    # 5. Persist the assistant reply (skipped when history saving is off).
+    if save_history:
+        db.add(
+            Message(
+                conversation_id=convo.id,
+                role="assistant",
+                content=reply,
+                meta={"tool_calls": traces, "suggestions": suggestions},
+            )
         )
-    )
-    db.commit()
+        db.commit()
 
     return ChatResponse(
         conversation_id=convo.id, reply=reply, tool_calls=traces, suggestions=suggestions

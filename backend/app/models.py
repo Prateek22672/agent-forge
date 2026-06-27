@@ -50,6 +50,8 @@ class User(Base):
     # Personalization (stored so every agent talks in the user's preferred way).
     tone: Mapped[str] = mapped_column(String(40), default="friendly")
     about: Mapped[str] = mapped_column(Text, default="")
+    # When False, chat messages aren't persisted (privacy). Brain still works.
+    save_history: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
