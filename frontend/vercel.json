@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "comment": "Proxy API calls to the Render backend. REPLACE the host below with your Render URL after deploying the backend.",
+      "source": "/api/:path*",
+      "destination": "https://YOUR-BACKEND.onrender.com/api/:path*"
+    },
+    {
+      "comment": "SPA fallback so /admin and refreshes serve index.html",
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

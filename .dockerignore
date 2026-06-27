@@ -1,0 +1,12 @@
+# Keep the build context small and never bake secrets/data into the image.
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.pyc
+backend/data
+frontend/dist
+.git
+.gitignore
+**/.env
+*.sqlite3
+docs
