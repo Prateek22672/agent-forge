@@ -5,7 +5,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://YOUR-BACKEND.onrender.com/api/:path*"
+      "destination": "https://agent-forge-7tv7.onrender.com/api/:path*"
     },
     {
       "source": "/((?!api/).*)",
