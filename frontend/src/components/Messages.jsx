@@ -81,7 +81,7 @@ function Bubble({ message }) {
 
   return (
     <div className="flex justify-start">
-      <div className="max-w-[80%] border border-white/20 px-4 py-3">
+      <div className="max-w-full md:max-w-[85%] w-full md:w-auto border border-white/20 px-4 py-3 overflow-hidden">
         <Markdown text={message.content} />
         {traces.length > 0 && (
           <div className="mt-3 pt-2 border-t border-white/15">

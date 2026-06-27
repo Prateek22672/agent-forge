@@ -33,12 +33,14 @@ class UserOut(BaseModel):
     is_admin: bool = False
     tone: str = "friendly"
     about: str = ""
+    save_history: bool = True
 
 
 class ProfileUpdate(BaseModel):
     name: str | None = None
     tone: str | None = None       # friendly | concise | professional | playful
     about: str | None = None      # free-text "about me" for personalization
+    save_history: bool | None = None
 
 
 class TokenOut(BaseModel):

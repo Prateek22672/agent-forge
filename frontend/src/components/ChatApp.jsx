@@ -53,7 +53,11 @@ export default function ChatApp({ user, onLogout }) {
   const loadAgents = async () => {
     const list = await api.listAgents();
     setAgents(list);
-    if (!activeAgentId && list.length) setActiveAgentId(list[0].id);
+    if (!activeAgentId && list.length) {
+      // Default to the Email capability when present.
+      const def = list.find((a) => a.name === "Email") || list[0];
+      setActiveAgentId(def.id);
+    }
     return list;
   };
   const loadHistory = async () => {

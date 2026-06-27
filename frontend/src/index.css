@@ -66,7 +66,47 @@ body {
   border: 1px solid #2a2a2a;
   padding: 10px;
   overflow-x: auto;
+  white-space: pre;
 }
 .md strong {
   font-weight: 700;
+}
+.md code {
+  word-break: break-word;
+}
+/* Readable, scrollable tables on mobile (Claude-style). */
+.md table {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.85em;
+  margin: 0.4em 0 0.8em;
+  -webkit-overflow-scrolling: touch;
+}
+.md th,
+.md td {
+  border: 1px solid #2a2a2a;
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+  min-width: 90px;
+}
+.md th {
+  background: #141414;
+  font-weight: 600;
+}
+.md ul,
+.md ol {
+  padding-left: 1.1em;
+}
+.md li {
+  margin: 0.25em 0;
+  line-height: 1.5;
+}
+.md p {
+  line-height: 1.55;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }

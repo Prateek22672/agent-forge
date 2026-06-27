@@ -67,6 +67,7 @@ def _ensure_columns() -> None:
             "tone": "VARCHAR(40) DEFAULT 'friendly'",
             "about": "TEXT DEFAULT ''",
             "is_admin": f"BOOLEAN DEFAULT {bool_default}",
+            "save_history": "BOOLEAN DEFAULT " + ("TRUE" if is_pg else "1"),
         },
         "reminders": {
             "due_at": "VARCHAR(40) DEFAULT ''",
