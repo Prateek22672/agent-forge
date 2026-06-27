@@ -1,0 +1,45 @@
+# ====== AgentForge backend dependencies ======
+# Pinned to ranges known to work together (Jan 2026). All free / open-source.
+
+# --- Web framework ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+
+# --- Settings & validation ---
+pydantic==2.10.4
+pydantic-settings==2.7.1
+python-dotenv==1.0.1
+
+# --- Database (SQLite via SQLAlchemy, zero setup) ---
+SQLAlchemy==2.0.36
+
+# --- LLM + Agent framework (LangChain / LangGraph) ---
+langchain==0.3.14
+langchain-core==0.3.29
+langchain-community==0.3.14
+langgraph==0.2.62
+langchain-groq==0.2.3          # FREE, fast inference (Llama / GPT-OSS models)
+
+# --- Vector memory (free, local, no API key) ---
+chromadb==0.5.23
+
+# --- Tools (all free, no keys) ---
+ddgs==9.0.0                    # DuckDuckGo search (the renamed duckduckgo-search)
+httpx==0.28.1
+beautifulsoup4==4.12.3
+
+# --- Local/private LLM option (zero data leaves the device) ---
+langchain-ollama==0.2.2        # talk to a local Ollama model (https://ollama.com)
+
+# --- Google sign-in for Gmail (OAuth, no app password) ---
+google-auth==2.37.0
+google-auth-oauthlib==1.2.1
+google-api-python-client==2.157.0
+
+# --- Secure secret storage in the OS keychain ---
+keyring==25.6.0                # Windows Credential Manager / macOS Keychain / libsecret
+
+# --- Cloud deploy (Render): Postgres + encrypted DB secret storage ---
+psycopg[binary]==3.2.3         # PostgreSQL driver (only needed in cloud mode)
+cryptography==44.0.0           # Fernet — encrypt secrets at rest in the DB

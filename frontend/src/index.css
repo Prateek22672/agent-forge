@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Sharp black & white theme: pure black bg, white text, square edges. */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #000000;
+  color: #ffffff;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* {
+  border-radius: 0 !important; /* enforce the sharp, no-rounded look everywhere */
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+}
+
+/* Minimal markdown styling for polished replies */
+.md p {
+  margin: 0 0 0.6em;
+}
+.md ul,
+.md ol {
+  margin: 0 0 0.6em;
+  padding-left: 1.2em;
+}
+.md li {
+  margin: 0.15em 0;
+}
+.md h1,
+.md h2,
+.md h3 {
+  font-weight: 700;
+  margin: 0.6em 0 0.3em;
+}
+.md a {
+  color: #ffffff;
+  text-decoration: underline;
+}
+.md code {
+  background: #1a1a1a;
+  padding: 1px 5px;
+  font-family: ui-monospace, monospace;
+  font-size: 0.9em;
+}
+.md pre {
+  background: #111111;
+  border: 1px solid #2a2a2a;
+  padding: 10px;
+  overflow-x: auto;
+}
+.md strong {
+  font-weight: 700;
+}

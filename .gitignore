@@ -1,0 +1,31 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# ---- Env & secrets ----
+.env
+*.env
+!.env.example
+
+# ---- Local data (SQLite, Chroma, agent workspaces) ----
+backend/data/
+data/
+*.sqlite3
+*.db
+chroma/
+
+# ---- Node / frontend ----
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# ---- Editor / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
