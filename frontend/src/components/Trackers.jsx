@@ -6,12 +6,11 @@ import { api } from "../api";
 export default function Trackers({ view, user }) {
   const firstName = (user?.name || user?.email || "Your").split(/[ @]/)[0];
   if (view === "priority") return <Priority owner={firstName} />;
-  if (view === "calendar") return <Calendar owner={firstName} />;
   if (view === "brain") return <Brain owner={firstName} />;
-  return <Planner owner={firstName} />; // "planner" — reminders + notes together
+  return <Planner owner={firstName} />; // reminders + notes + calendar together
 }
 
-function Calendar({ owner }) {
+function Calendar() {
   const [state, setState] = useState({ connected: true, granted: true, events: [] });
   const [title, setTitle] = useState("");
   const [when, setWhen] = useState("");
@@ -51,7 +50,6 @@ function Calendar({ owner }) {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <Header title={`${owner}'s Calendar`} />
       <div className="px-4 md:px-6 py-4 flex flex-wrap items-center gap-2 border-b border-white/10">
         <input
           className="flex-1 min-w-[160px] bg-black border border-white/30 px-3 py-2 focus:border-white outline-none"
@@ -109,28 +107,36 @@ function Calendar({ owner }) {
 // Reminders and Notes merged into one scrollable page with two clear sections.
 function Planner({ owner }) {
   const [tab, setTab] = useState("reminders");
+  const TABS = [
+    ["reminders", "Reminders"],
+    ["notes", "Notes"],
+    ["calendar", "Calendar"],
+  ];
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="border-b border-white/15 px-4 md:px-6 pt-4 flex items-center gap-4">
-        <div className="font-semibold text-lg mr-2">{owner}'s Planner</div>
-        {[
-          ["reminders", "Reminders"],
-          ["notes", "Notes"],
-        ].map(([k, label]) => (
-          <button
-            key={k}
-            onClick={() => setTab(k)}
-            className={`pb-3 -mb-px border-b-2 text-sm ${
-              tab === k
-                ? "border-white text-white font-semibold"
-                : "border-transparent text-white/50 hover:text-white"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="border-b border-white/15 px-4 md:px-6 pt-4 shrink-0">
+        <div className="font-semibold text-lg mb-3">{owner}'s Planner</div>
+        <div className="flex items-center gap-1 overflow-x-auto">
+          {TABS.map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => setTab(k)}
+              className={`px-3 py-2 text-sm border-b-2 whitespace-nowrap ${
+                tab === k
+                  ? "border-white text-white font-semibold"
+                  : "border-transparent text-white/50 hover:text-white"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
-      {tab === "reminders" ? <Reminders /> : <Notes />}
+      <div className="flex-1 min-h-0 flex flex-col">
+        {tab === "reminders" && <Reminders />}
+        {tab === "notes" && <Notes />}
+        {tab === "calendar" && <Calendar />}
+      </div>
     </div>
   );
 }

@@ -56,9 +56,12 @@ def subscribe(
 
 @router.post("/push/test")
 def test_push(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Send a test notification to the current user's devices."""
-    n = push.notify_user(db, user.id, "AgentForge", "Notifications are working.", "/")
-    return {"sent": n}
+    """Send a test notification to the current user's devices, returning a full
+    diagnostic so we can see WHY a push didn't arrive (e.g. on iOS)."""
+    result = push.notify_user(
+        db, user.id, "AgentForge", "Notifications are working.", "/"
+    )
+    return {"enabled": push.push_enabled(), **result}
 
 
 # ---------- Cron: fire due reminders ----------
