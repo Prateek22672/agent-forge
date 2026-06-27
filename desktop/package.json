@@ -41,7 +41,7 @@
       "shortcutName": "AgentForge",
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": false,
-      "artifactName": "AgentForge-Setup-${version}.${ext}"
+      "artifactName": "AgentForge-Setup.${ext}"
     },
     "mac": {
       "target": ["dmg"],
