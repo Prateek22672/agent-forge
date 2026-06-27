@@ -141,15 +141,23 @@ function Download({ onGetStarted }) {
           >
             Download for Windows
           </a>
-          <button
-            onClick={onGetStarted}
+          <a
+            href="https://github.com/Prateek22672/agent-forge/releases/latest/download/AgentForge.dmg"
+            target="_blank"
+            rel="noreferrer"
             className="px-7 py-3 border border-white/25 hover:border-white"
           >
-            Get started in browser
+            Download for Mac
+          </a>
+          <button
+            onClick={onGetStarted}
+            className="px-7 py-3 border border-white/15 text-white/70 hover:border-white"
+          >
+            Use in browser
           </button>
         </div>
         <div className="mt-5 text-xs text-white/30">
-          Browser works on Mac, Windows &amp; mobile · desktop app for Windows (Mac soon)
+          Or click “Install” in your browser bar for the lightweight web app
         </div>
       </div>
     </section>
