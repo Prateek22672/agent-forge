@@ -15,7 +15,7 @@ export default function Composer({
   onPickSuggestion,
 }) {
   return (
-    <div className="border-t border-white/15 p-4 shrink-0">
+    <div className="border-t border-white/15 p-3 md:p-4 shrink-0">
       {/* Suggested next tasks (from the last reply) */}
       {suggestions.length > 0 && !busy && (
         <div className="flex flex-wrap gap-2 mb-3">
