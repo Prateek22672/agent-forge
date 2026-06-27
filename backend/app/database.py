@@ -52,34 +52,44 @@ def init_db() -> None:
 
 
 def _ensure_columns() -> None:
-    """Add new columns to existing tables without dropping data (SQLite supports
-    ADD COLUMN). Lets us evolve the schema in place during development.
-
-    Only runs on SQLite — a fresh cloud Postgres gets the full schema from
-    create_all(), so no in-place migration is needed there."""
-    if settings.is_cloud:
-        return
+    """Add columns that were introduced after a table was first created, on BOTH
+    SQLite and Postgres. `create_all` only creates *missing tables* — it never
+    adds a column to a table that already exists, so a database created at an
+    earlier point can be missing newer columns (this is what broke reminders/notes
+    on the cloud). This back-fills them safely."""
     from sqlalchemy import text
+
+    is_pg = engine.dialect.name == "postgresql"
+    bool_default = "FALSE" if is_pg else "0"
 
     wanted = {
         "users": {
             "tone": "VARCHAR(40) DEFAULT 'friendly'",
             "about": "TEXT DEFAULT ''",
-            "is_admin": "BOOLEAN DEFAULT 0",
+            "is_admin": f"BOOLEAN DEFAULT {bool_default}",
         },
         "reminders": {
             "due_at": "VARCHAR(40) DEFAULT ''",
-            "notified": "BOOLEAN DEFAULT 0",
+            "notified": f"BOOLEAN DEFAULT {bool_default}",
         },
     }
     with engine.begin() as conn:
         for table, cols in wanted.items():
-            existing = {
-                row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))
-            }
-            for col, ddl in cols.items():
-                if col not in existing:
-                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))
+            if is_pg:
+                # Postgres supports ADD COLUMN IF NOT EXISTS.
+                for col, ddl in cols.items():
+                    conn.execute(
+                        text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {ddl}")
+                    )
+            else:
+                existing = {
+                    row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))
+                }
+                for col, ddl in cols.items():
+                    if col not in existing:
+                        conn.execute(
+                            text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
+                        )
 
 
 def get_db() -> Generator[Session, None, None]:
