@@ -45,8 +45,11 @@
     },
     "mac": {
       "target": ["dmg"],
-      "icon": "build/icon.icns",
+      "icon": "build/icon.png",
       "category": "public.app-category.productivity"
+    },
+    "dmg": {
+      "artifactName": "AgentForge.dmg"
     },
     "linux": {
       "target": ["AppImage"],

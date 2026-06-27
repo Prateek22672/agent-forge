@@ -28,8 +28,26 @@ jobs:
       - name: Install desktop deps
         working-directory: desktop
         run: npm install
-      - name: Build + publish installer
+      - name: Build + publish Windows installer
         working-directory: desktop
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run publish
+
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install desktop deps
+        working-directory: desktop
+        run: npm install
+      - name: Build + publish macOS dmg (unsigned)
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Skip code signing (no Apple Developer cert) — produces an unsigned dmg.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run publish
