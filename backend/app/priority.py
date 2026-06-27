@@ -17,25 +17,61 @@ def _key(user_id: str, sender: str, subject: str) -> str:
     return hashlib.sha256(raw).hexdigest()[:32]
 
 
-def _classify(emails: list[dict]) -> list[dict]:
-    """Return [{index, category, reason}] for the PRIORITY emails only."""
-    from app.llm.router import get_fast_groq
+# Obvious-noise markers — used as a SAFETY NET only to drop clear marketing when
+# the model is unavailable. We never use these to override the model's INCLUSION.
+_NOISE_HINTS = (
+    "unsubscribe to stop",
+    "% off",
+    "sale ends",
+    "limited time offer",
+    "shop now",
+    "you have new followers",
+)
 
-    llm = get_fast_groq(0.2)
-    if llm is None or not emails:
+
+def _classify(emails: list[dict]) -> list[dict]:
+    """Return [{index, category, reason}] for the PRIORITY emails.
+
+    Tuned for RECALL: it is far worse to miss an important email than to show an
+    extra one, so the model is told to INCLUDE anything uncertain and exclude only
+    clear promotional noise."""
+    from app.llm.router import get_groq
+
+    if not emails:
         return []
+    # A strong open-weight model for accuracy (not the tiny fast one).
+    llm = get_groq("openai/gpt-oss-120b", 0.1) or get_groq("openai/gpt-oss-20b", 0.1)
+    if llm is None:
+        return []
+
     listing = "\n".join(
-        f"{i}. From: {e.get('from','')} | Subject: {e.get('subject','')} | {e.get('snippet','')[:140]}"
+        f"{i}. From: {e.get('from','')} | Subject: {e.get('subject','')} | {e.get('snippet','')[:160]}"
         for i, e in enumerate(emails)
     )
     prompt = (
-        "You triage a student's inbox. From the emails below, pick ONLY the ones "
-        "that genuinely need attention — placements, interviews, internships, "
-        "deadlines, results, important academic/official notices, or anything "
-        "requiring a reply or action. Ignore promotions, newsletters, and noise.\n"
-        "Return a STRICT JSON array; each item: "
-        '{"index": <number>, "category": "<short label>", "reason": "<one line>"}. '
-        "If none are important, return [].\n\nEMAILS:\n" + listing
+        "You are a careful inbox-triage assistant for a student/professional. Your "
+        "job is to surface every email that could MATTER, while filtering obvious "
+        "marketing noise.\n\n"
+        "GOLDEN RULE: Missing an important email is a serious failure; showing one "
+        "extra is fine. So when you are UNSURE, INCLUDE it.\n\n"
+        "INCLUDE (priority) — anything like:\n"
+        "- placements, interviews, internships, job offers, hiring/recruiter mail\n"
+        "- deadlines, exam schedules, results, fee/registration, official/academic "
+        "notices from a college/university/company\n"
+        "- anything asking for a reply, confirmation, signature, or action\n"
+        "- security alerts, account/bank/payment, OTP/verification, password\n"
+        "- personal messages from a real person, calendar invites, meetings\n"
+        "- anything time-sensitive or that a person would be upset to miss\n\n"
+        "EXCLUDE (noise) — ONLY when clearly one of these with no action needed:\n"
+        "- marketing/sales/discount/promotional blasts, coupons\n"
+        "- newsletters, digests, content recommendations, course ads\n"
+        "- social-media notifications (likes, follows, 'people you may know')\n"
+        "- automated 'no-reply' marketing\n\n"
+        "If an email is borderline between the two, treat it as PRIORITY.\n\n"
+        'Return a STRICT JSON array. Each item: {"index": <number>, '
+        '"category": "<short label e.g. Placement, Interview, Deadline, Security, '
+        'Personal, Action needed>", "reason": "<one short line>"}. '
+        "Return [] only if every email is clearly noise.\n\nEMAILS:\n" + listing
     )
     try:
         out = llm.invoke(prompt)
@@ -44,10 +80,18 @@ def _classify(emails: list[dict]) -> list[dict]:
         items = json.loads(m.group(0)) if m else []
         return [x for x in items if isinstance(x, dict) and "index" in x]
     except Exception:
-        return []
+        # Model failed — SAFETY NET: include everything that isn't obvious marketing,
+        # so we never silently drop a potentially-important email.
+        out = []
+        for i, e in enumerate(emails):
+            blob = f"{e.get('subject','')} {e.get('snippet','')}".lower()
+            if any(h in blob for h in _NOISE_HINTS):
+                continue
+            out.append({"index": i, "category": "Needs review", "reason": "Auto-included (classifier offline)"})
+        return out
 
 
-def scan_user(db, user_id: str, count: int = 15) -> list:
+def scan_user(db, user_id: str, count: int = 25) -> list:
     """Scan the user's recent inbox, store newly-found priority emails, and return
     the new PriorityEmail rows (for pushing). Raises nothing — returns [] on any
     issue (e.g. Gmail not connected)."""

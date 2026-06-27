@@ -34,6 +34,7 @@ class UserOut(BaseModel):
     tone: str = "friendly"
     about: str = ""
     save_history: bool = True
+    priority_scan_freq: str = "off"
 
 
 class ProfileUpdate(BaseModel):
@@ -41,6 +42,8 @@ class ProfileUpdate(BaseModel):
     tone: str | None = None       # friendly | concise | professional | playful
     about: str | None = None      # free-text "about me" for personalization
     save_history: bool | None = None
+    priority_scan_freq: str | None = None  # off | 1h | 5h | morning | night | morning_night
+    tz_offset_min: int | None = None
 
 
 class TokenOut(BaseModel):

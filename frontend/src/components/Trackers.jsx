@@ -11,15 +11,34 @@ export default function Trackers({ view, user }) {
   return <Notes owner={firstName} />;
 }
 
+const SCAN_FREQS = [
+  ["off", "Never (manual)"],
+  ["1h", "Every hour"],
+  ["5h", "Every 5 hours"],
+  ["morning", "Every morning"],
+  ["night", "Every night"],
+  ["morning_night", "Morning & night"],
+];
+
 function Priority({ owner }) {
   const [items, setItems] = useState([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [freq, setFreq] = useState("off");
 
   const load = () => api.listPriority().then(setItems).catch(() => setItems([]));
   useEffect(() => {
     load();
+    api.me().then((u) => setFreq(u.priority_scan_freq || "off")).catch(() => {});
   }, []);
+
+  const changeFreq = async (value) => {
+    setFreq(value);
+    // Send the device timezone so "morning/night" fires at the user's local time.
+    await api
+      .updateProfile({ priority_scan_freq: value, tz_offset_min: new Date().getTimezoneOffset() })
+      .catch(() => {});
+  };
 
   const scan = async () => {
     setBusy(true);
@@ -37,15 +56,29 @@ function Priority({ owner }) {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="border-b border-white/15 px-4 md:px-6 py-4 flex items-center justify-between gap-3">
+      <div className="border-b border-white/15 px-4 md:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
         <div className="font-semibold text-lg">{owner}'s Priority Inbox</div>
-        <button
-          onClick={scan}
-          disabled={busy}
-          className="bg-white text-black px-4 py-1.5 text-sm font-semibold hover:bg-white/85 disabled:opacity-50 whitespace-nowrap"
-        >
-          {busy ? "Scanning…" : "Scan now"}
-        </button>
+        <div className="flex items-center gap-2">
+          <select
+            value={freq}
+            onChange={(e) => changeFreq(e.target.value)}
+            className="bg-black border border-white/30 px-2 py-1.5 text-xs focus:border-white outline-none"
+            title="Auto-scan schedule"
+          >
+            {SCAN_FREQS.map(([v, label]) => (
+              <option key={v} value={v}>
+                Auto: {label}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={scan}
+            disabled={busy}
+            className="bg-white text-black px-4 py-1.5 text-sm font-semibold hover:bg-white/85 disabled:opacity-50 whitespace-nowrap"
+          >
+            {busy ? "Scanning…" : "Scan now"}
+          </button>
+        </div>
       </div>
       <div className="px-4 md:px-6 py-2 text-xs text-white/40 border-b border-white/10">
         Important mail — placements, interviews, deadlines — surfaced from your
