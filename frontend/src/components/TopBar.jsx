@@ -1,8 +1,17 @@
 import React from "react";
+import ConnectionStatus from "./ConnectionStatus";
 
 // Top status strip: brand, live provider, Google connection state, settings,
 // and the signed-in user with a logout option.
-export default function TopBar({ user, settings, connections, onOpenSettings, onOpenAdmin, onLogout }) {
+export default function TopBar({
+  user,
+  settings,
+  connections,
+  onOpenSettings,
+  onOpenAdmin,
+  onReconnectGoogle,
+  onLogout,
+}) {
   const provider = settings?.llm_provider || "groq";
   const google = connections?.google;
   const providerLabel =
@@ -23,15 +32,7 @@ export default function TopBar({ user, settings, connections, onOpenSettings, on
       <div className="flex items-center gap-3 text-xs">
         <span className="border border-white/25 px-2 py-1 tracking-wide">{providerLabel}</span>
 
-        {google?.connected ? (
-          <span className="border border-white/25 px-2 py-1">
-            Gmail — {google.account_email || "connected"}
-          </span>
-        ) : (
-          <span className="border border-white/15 px-2 py-1 text-white/50">
-            Gmail not connected
-          </span>
-        )}
+        <ConnectionStatus connections={connections} onReconnect={onReconnectGoogle} />
 
         {user?.is_admin && (
           <button
