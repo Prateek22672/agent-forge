@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_client_secret: str = ""
     oauth_redirect_uri: str = "http://localhost:8000/api/connections/google/callback"
+    # Whether to request the RESTRICTED Gmail/Calendar scopes. Set False for a
+    # public beta to avoid Google's "unverified app" warning + verification: the
+    # app then only asks for login (email/profile), and Gmail/Calendar features
+    # are gated until you complete Google verification. See docs/GOOGLE_VERIFICATION.md
+    google_data_scopes: bool = True
 
     # --- Admin console (separate /admin login) ---
     admin_username: str = "dj"
