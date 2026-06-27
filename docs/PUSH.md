@@ -19,7 +19,7 @@ Add these to **Render → Environment** (the keys below were generated for this 
 ```
 VAPID_PUBLIC_KEY=BFaVPhsS98xmH1ZJhn1_z-NfnBkX84g1D7jb1S5pUMUsmkCzxvLOG9_M4FHm4IC34bbNbSbSEwM1kfKzbwKcn2c
 VAPID_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgFf5J7B9BgfbbIlbk\nAlEozL3snbx1twd8hTqkscP74GShRANCAARWlT4bEvfMZh9WSYZ9f8/jX5wZF/OINQ+429UuaVDFLJpAs8byzhvfzOBR5uCAt+G2zW0m0hMDNZHys28CnJ9n\n-----END PRIVATE KEY-----
-VAPID_SUBJECT=mailto:you@yourdomain.com
+VAPID_SUBJECT=mailto:prateek.koratala@gmail.com
 CRON_SECRET=b9ed2eea20e09d37110b38804c281792
 ```
 
