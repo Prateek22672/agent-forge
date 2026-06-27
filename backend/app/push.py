@@ -21,7 +21,9 @@ def _private_key_pem() -> str:
 
 
 def send_to_subscription(sub, title: str, body: str, url: str = "/") -> bool:
-    """Send one push. Returns False if the subscription is dead (caller deletes it)."""
+    """Send one push. Returns (status, error):
+      status = "sent" | "dead" (prune it) | "error"
+      error  = a short string when status == "error" (else "")."""
     from pywebpush import WebPushException, webpush
 
     payload = json.dumps({"title": title, "body": body, "url": url})
@@ -35,22 +37,28 @@ def send_to_subscription(sub, title: str, body: str, url: str = "/") -> bool:
             data=payload,
             vapid_private_key=_private_key_pem(),
             vapid_claims={"sub": settings.vapid_subject},
+            ttl=60,
         )
-        return True
+        return ("sent", "")
     except WebPushException as exc:
         status = getattr(getattr(exc, "response", None), "status_code", None)
         if status in (404, 410):
-            return False  # gone — prune it
-        # Other errors (network etc.) — keep the subscription, just log.
-        return True
-    except Exception:
-        return True
+            return ("dead", "")  # subscription gone — prune it
+        body_txt = ""
+        try:
+            body_txt = exc.response.text[:200] if exc.response is not None else ""
+        except Exception:
+            pass
+        return ("error", f"{status or ''} {exc} {body_txt}".strip())
+    except Exception as exc:
+        return ("error", str(exc)[:200])
 
 
-def notify_user(db, user_id: str, title: str, body: str, url: str = "/") -> int:
-    """Push to all of a user's devices. Prunes dead subscriptions. Returns count sent."""
+def notify_user(db, user_id: str, title: str, body: str, url: str = "/") -> dict:
+    """Push to all of a user's devices. Prunes dead subscriptions.
+    Returns {subscriptions, sent, dead, errors:[...]} for diagnostics."""
     if not push_enabled():
-        return 0
+        return {"subscriptions": 0, "sent": 0, "dead": 0, "errors": ["push_not_configured"]}
     from app.models import PushSubscription
 
     subs = (
@@ -58,12 +66,16 @@ def notify_user(db, user_id: str, title: str, body: str, url: str = "/") -> int:
         .filter(PushSubscription.user_id == user_id)
         .all()
     )
-    sent = 0
+    sent = dead = 0
+    errors: list[str] = []
     for sub in subs:
-        ok = send_to_subscription(sub, title, body, url)
-        if ok:
+        status, err = send_to_subscription(sub, title, body, url)
+        if status == "sent":
             sent += 1
-        else:
+        elif status == "dead":
+            dead += 1
             db.delete(sub)
+        else:
+            errors.append(err)
     db.commit()
-    return sent
+    return {"subscriptions": len(subs), "sent": sent, "dead": dead, "errors": errors}

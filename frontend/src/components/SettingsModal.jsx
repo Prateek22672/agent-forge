@@ -278,12 +278,42 @@ function NotificationsRow() {
   };
 
   const test = async () => {
+    setBusy(true);
     setMsg("");
     try {
-      await api.pushTest();
-      setMsg("Test notification sent.");
+      const r = await api.pushTest(); // {enabled, subscriptions, sent, dead, errors}
+      if (!r.enabled) {
+        setMsg("Server push isn't configured (VAPID keys missing on the server).");
+      } else if (r.subscriptions === 0) {
+        setMsg("This device isn't subscribed yet — tap Enable first (inside the installed app on iOS).");
+      } else if (r.sent > 0) {
+        setMsg(
+          `Sent to ${r.sent} device(s). On iOS it only arrives if you opened the app from the Home-Screen icon and allowed notifications.`
+        );
+      } else {
+        setMsg("Push failed: " + (r.errors?.[0] || "unknown error"));
+      }
     } catch (e) {
       setMsg("Couldn't send test.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const testAlarm = async () => {
+    setBusy(true);
+    setMsg("");
+    try {
+      await api.createReminder({
+        title: "Test alarm",
+        remind_at: "in 1 minute",
+        alarm: true,
+      });
+      setMsg("Test alarm set for ~1 minute from now. Keep the app open — it'll ring.");
+    } catch (e) {
+      setMsg("Couldn't set the test alarm.");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -315,6 +345,21 @@ function NotificationsRow() {
           </button>
         )}
       </div>
+
+      {/* Trail-test the alarm: rings in ~1 minute while the app is open. */}
+      <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-white/10">
+        <div className="text-[11px] text-white/40">
+          Test the alarm — sets one for ~1 minute from now.
+        </div>
+        <button
+          onClick={testAlarm}
+          disabled={busy}
+          className="border border-white/30 px-3 py-1.5 text-xs hover:border-white whitespace-nowrap"
+        >
+          ⏰ Test alarm
+        </button>
+      </div>
+
       {state === "denied" && (
         <div className="text-[11px] text-white/40 mt-2">
           Notifications are blocked in your browser settings — allow them for this
