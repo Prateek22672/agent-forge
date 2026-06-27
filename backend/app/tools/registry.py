@@ -112,6 +112,7 @@ def build_tools(names: list[str], agent_id: str, user_id: str) -> list:
     Per-user tools (email) and per-agent tools (memory) are built dynamically."""
     tools: list = []
     want_memory = False
+    added: set[str] = set()
     task_tools = {t.name: t for t in make_task_tools(user_id)} if user_id else {}
     for name in names:
         if name in STATIC_TOOLS:
@@ -124,8 +125,18 @@ def build_tools(names: list[str], agent_id: str, user_id: str) -> list:
             tools.append(make_calendar_tool(user_id))
         elif name in TASK_TOOLS and name in task_tools:
             tools.append(task_tools[name])
+            added.add(name)
         elif name in MEMORY_TOOLS:
             want_memory = True
+
+    # Reminders & notes are universal: a user may ask to be reminded or to jot a
+    # note from ANY capability (Email, Web Search, custom agents…), and older
+    # agents predate these tools. So always bind any task tools not already added,
+    # guaranteeing "remind me…" actually creates a reminder instead of the model
+    # just claiming it did.
+    for tname, tobj in task_tools.items():
+        if tname not in added:
+            tools.append(tobj)
     if want_memory:
         # Only add the memory tools that were actually requested.
         mem = {t.name: t for t in _make_memory_tools(agent_id, user_id)}

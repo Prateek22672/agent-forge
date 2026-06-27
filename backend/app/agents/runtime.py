@@ -121,6 +121,16 @@ def _build_system_prompt(agent: Agent, user_message: str, user=None) -> str:
                 f"- {m}" for m in umem
             )
 
+    # Universal: reminders & notes work from every capability now, so make sure
+    # the model knows it can use them — and must actually call the tool.
+    prompt += (
+        "\n\nReminders & notes: the user can ask you to remind them of something "
+        "or to note something from ANY capability. When they do, you MUST call "
+        "create_reminder (give a clear `title` and put the time in `when`, e.g. "
+        "'today 9:14 PM') or create_note. NEVER say you've set a reminder or saved "
+        "a note unless you actually called the tool in this turn."
+    )
+
     # Universal guardrail: stop weaker models from looping on search forever.
     tools = agent.tools or []
     if "web_search" in tools:

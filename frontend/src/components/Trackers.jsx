@@ -6,9 +6,37 @@ import { api } from "../api";
 export default function Trackers({ view, user }) {
   const firstName = (user?.name || user?.email || "Your").split(/[ @]/)[0];
   if (view === "priority") return <Priority owner={firstName} />;
-  if (view === "reminders") return <Reminders owner={firstName} />;
   if (view === "brain") return <Brain owner={firstName} />;
-  return <Notes owner={firstName} />;
+  return <Planner owner={firstName} />; // "planner" — reminders + notes together
+}
+
+// Reminders and Notes merged into one scrollable page with two clear sections.
+function Planner({ owner }) {
+  const [tab, setTab] = useState("reminders");
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      <div className="border-b border-white/15 px-4 md:px-6 pt-4 flex items-center gap-4">
+        <div className="font-semibold text-lg mr-2">{owner}'s Planner</div>
+        {[
+          ["reminders", "Reminders"],
+          ["notes", "Notes"],
+        ].map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => setTab(k)}
+            className={`pb-3 -mb-px border-b-2 text-sm ${
+              tab === k
+                ? "border-white text-white font-semibold"
+                : "border-transparent text-white/50 hover:text-white"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === "reminders" ? <Reminders /> : <Notes />}
+    </div>
+  );
 }
 
 const SCAN_FREQS = [
@@ -180,7 +208,7 @@ function Header({ title }) {
   );
 }
 
-function Reminders({ owner }) {
+function Reminders() {
   const [items, setItems] = useState([]);
   const [title, setTitle] = useState("");
   const [when, setWhen] = useState("");
@@ -200,8 +228,7 @@ function Reminders({ owner }) {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <Header title={`${owner}'s Reminders`} />
-      <div className="px-6 py-4 flex gap-2 border-b border-white/10">
+      <div className="px-4 md:px-6 py-4 flex flex-wrap gap-2 border-b border-white/10">
         <input
           className="flex-1 bg-black border border-white/30 px-3 py-2 focus:border-white outline-none"
           placeholder="Remind me to…"
@@ -243,7 +270,10 @@ function Reminders({ owner }) {
                 {r.remind_at}
                 {r.due_at && (
                   <span className="text-white/60">
-                    {" "}· due {new Date(r.due_at).toLocaleString()}
+                    {" "}· due{" "}
+                    {new Date(
+                      r.due_at.endsWith("Z") ? r.due_at : r.due_at + "Z"
+                    ).toLocaleString()}
                   </span>
                 )}
               </div>
@@ -264,7 +294,7 @@ function Reminders({ owner }) {
   );
 }
 
-function Notes({ owner }) {
+function Notes() {
   const [items, setItems] = useState([]);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -284,8 +314,7 @@ function Notes({ owner }) {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <Header title={`${owner}'s Notes`} />
-      <div className="px-6 py-4 border-b border-white/10 space-y-2">
+      <div className="px-4 md:px-6 py-4 border-b border-white/10 space-y-2">
         <input
           className="w-full bg-black border border-white/30 px-3 py-2 focus:border-white outline-none"
           placeholder="Note title"

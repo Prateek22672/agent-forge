@@ -1,11 +1,12 @@
 """
 Lightweight natural-time parser: "tomorrow 10am", "in 2 minutes", "today 9:14pm"
--> a concrete datetime, so reminders can actually fire.
+-> a concrete UTC datetime, so reminders fire at the user's intended local time.
 
-This app is self-hosted on the user's own machine, so the server's local clock
-IS the user's local time — we parse in local time and return a naive local
-datetime (ISO without tz). The frontend compares it against the local clock to
-decide when to ping.
+In the cloud the server clock is UTC (not the user's local time), so we take the
+user's timezone offset (JS `getTimezoneOffset()`, minutes) and:
+  1. interpret the spoken time in the USER's local clock, then
+  2. convert it back to UTC for storage.
+The reminder cron compares stored due_at (naive-UTC ISO) against utcnow().
 
 Deliberately dependency-free and forgiving: anything it can't parse returns None
 (the reminder is still saved, just without an automatic ping).
@@ -16,10 +17,16 @@ import re
 from datetime import datetime, timedelta
 
 
-def parse_when(text: str, now: datetime | None = None) -> datetime | None:
+def parse_when(
+    text: str, now: datetime | None = None, tz_offset_min: int = 0
+) -> datetime | None:
+    """Return a naive UTC datetime for `text`, interpreted in the user's local
+    timezone (tz_offset_min = JS getTimezoneOffset, e.g. -330 for IST)."""
     if not text:
         return None
-    now = now or datetime.now()
+    now_utc = now or datetime.utcnow()
+    # The user's local "now" — all reasoning about today/tomorrow/passed happens here.
+    now = now_utc - timedelta(minutes=tz_offset_min)
     t = text.strip().lower()
 
     # "in/after N minutes/hours" or "N minutes from now"
@@ -28,7 +35,7 @@ def parse_when(text: str, now: datetime | None = None) -> datetime | None:
         n = int(m.group(1))
         unit = m.group(2)
         delta = timedelta(hours=n) if unit.startswith(("hour", "hr")) else timedelta(minutes=n)
-        return now + delta
+        return now + delta + timedelta(minutes=tz_offset_min)  # -> UTC
 
     # day offset
     base = now
@@ -52,10 +59,11 @@ def parse_when(text: str, now: datetime | None = None) -> datetime | None:
             # If no day word and the time already passed today, assume tomorrow.
             if "tomorrow" not in t and "today" not in t and candidate <= now:
                 candidate += timedelta(days=1)
-            return candidate
+            return candidate + timedelta(minutes=tz_offset_min)  # -> UTC
 
     # "tomorrow" with no time -> default 9:00 am
     if "tomorrow" in t:
-        return base.replace(hour=9, minute=0, second=0, microsecond=0)
+        local = base.replace(hour=9, minute=0, second=0, microsecond=0)
+        return local + timedelta(minutes=tz_offset_min)  # -> UTC
 
     return None

@@ -39,7 +39,7 @@ def create_reminder(
 ):
     from app.util.timeparse import parse_when
 
-    due = parse_when(payload.remind_at)
+    due = parse_when(payload.remind_at, tz_offset_min=getattr(user, "tz_offset_min", 0) or 0)
     r = Reminder(
         user_id=user.id,
         title=payload.title,

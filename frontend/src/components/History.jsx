@@ -13,8 +13,7 @@ export default function History({
   const NAV = [
     ["chat", "Chats"],
     ["priority", "Priority"],
-    ["reminders", "Reminders"],
-    ["notes", "Notes"],
+    ["planner", "Planner"],
     ["brain", "Brain"],
   ];
   return (
