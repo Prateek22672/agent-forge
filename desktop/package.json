@@ -46,7 +46,8 @@
     "mac": {
       "target": ["dmg"],
       "icon": "build/icon.png",
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "identity": null
     },
     "dmg": {
       "artifactName": "AgentForge.dmg"

@@ -89,6 +89,25 @@ https://github.com/Prateek22672/agent-forge/releases/latest
 polished look, replace them with a real 512×512 icon (and add `icon.icns` for the
 Mac build). electron-builder derives the rest.
 
+## 6b. macOS first run (unsigned app)
+
+Without an Apple Developer cert the `.dmg` is **unsigned**, so on first open macOS
+says **"AgentForge is damaged and can't be opened"** (Apple Silicon) or
+"unidentified developer" (Intel). This is Gatekeeper quarantining a downloaded
+unsigned app — not actual damage.
+
+**Fix for testers (one line):**
+1. Drag **AgentForge** into **Applications**.
+2. Open **Terminal** and run:
+   ```bash
+   xattr -cr /Applications/AgentForge.app
+   ```
+3. Open it normally. (Alternatively: right-click the app → **Open** → **Open**.)
+
+**Permanent fix:** join the **Apple Developer Program** ($99/yr), then set
+`CSC_LINK`/`CSC_KEY_PASSWORD` (cert) and an Apple ID for **notarization** in the
+mac CI job. Once notarized, it opens with a normal double-click, no warning.
+
 ## 7. Notes & limits (honest)
 - **Background notifications** work while the app runs in the tray. If the user
   fully **Quits**, nothing polls — true "app fully closed" push needs web-push
