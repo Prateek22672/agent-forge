@@ -223,10 +223,15 @@ def create_event(
 
 def fetch_recent(count: int, user_id: str) -> list[dict]:
     """Fetch recent inbox messages via the Gmail API. Returns dicts with
-    from/subject/snippet. Raises RuntimeError if not connected."""
+    from/subject/snippet. Raises RuntimeError if not connected / scope missing."""
     creds = _load_credentials(user_id)
     if not creds:
         raise RuntimeError("Google account is not connected.")
+    if "https://www.googleapis.com/auth/gmail.readonly" not in (creds.scopes or []):
+        raise RuntimeError(
+            "Gmail access wasn't granted (the app is in sign-in-only mode). "
+            "Enable Gmail scopes and reconnect Google to read email."
+        )
 
     from googleapiclient.discovery import build
 
