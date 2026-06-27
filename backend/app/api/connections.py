@@ -40,12 +40,22 @@ def list_connections(
         .filter(Connection.provider == "google", Connection.user_id == user.id)
         .first()
     )
+    connected = google_oauth.is_connected(user.id)
+    scopes = google.scopes if google else []
+    has = lambda frag: any(frag in s for s in scopes)  # noqa: E731
     return {
         "google": {
             "configured": google_oauth.is_configured(),
-            "connected": google_oauth.is_connected(user.id),
+            "connected": connected,
             "account_email": google.account_email if google else "",
-            "scopes": google.scopes if google else [],
+            "scopes": scopes,
+            # Per-service status for the UI's green/red indicators.
+            "services": {
+                "signed_in": connected,
+                "gmail_read": connected and has("gmail.readonly"),
+                "gmail_send": connected and has("gmail.send"),
+                "calendar": connected and has("calendar.events"),
+            },
         }
     }
 

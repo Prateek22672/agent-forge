@@ -38,6 +38,17 @@ export default function ChatApp({ user, onLogout }) {
     setSettings(await api.getSettings().catch(() => null));
     setConnections(await api.getConnections().catch(() => null));
   };
+
+  const reconnectGoogle = async () => {
+    try {
+      const desktop = !!(window.agentforge?.isDesktop && window.agentforge?.openExternal);
+      const { auth_url } = await api.googleStart(desktop);
+      if (desktop) window.agentforge.openExternal(auth_url);
+      else window.location.href = auth_url;
+    } catch (e) {
+      /* surfaced elsewhere */
+    }
+  };
   const loadAgents = async () => {
     const list = await api.listAgents();
     setAgents(list);
@@ -173,6 +184,7 @@ export default function ChatApp({ user, onLogout }) {
         connections={connections}
         onOpenSettings={() => setShowSettings(true)}
         onOpenAdmin={() => (window.location.href = "/admin")}
+        onReconnectGoogle={reconnectGoogle}
         onLogout={onLogout}
       />
 

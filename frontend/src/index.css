@@ -20,6 +20,11 @@ body {
   border-radius: 0 !important; /* enforce the sharp, no-rounded look everywhere */
 }
 
+/* Exception: status dots stay circular (more specific than * so this wins). */
+.rounded-full {
+  border-radius: 9999px !important;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
