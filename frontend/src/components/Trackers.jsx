@@ -260,6 +260,11 @@ function Reminders() {
         <button onClick={add} className="bg-white text-black px-5 py-2 font-semibold hover:bg-white/85">
           Add
         </button>
+        <div className="w-full text-[11px] text-white/35">
+          Alarm rings fully (looping sound) while the app is open or the desktop app
+          runs in the tray; when fully closed on a phone you get a single push
+          notification instead.
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
         {items.length === 0 && <Empty text="No reminders yet. Ask the Assistant to set one." />}

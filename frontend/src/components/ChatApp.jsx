@@ -121,6 +121,8 @@ export default function ChatApp({ user, onLogout }) {
           if (r.alarm) {
             startAlarm();
             setAlarmReminder(r);
+            // Desktop app: pop the window to the front from the tray + flash.
+            window.agentforge?.ringAlarm?.();
           }
           api.markReminderNotified(r.id).catch(() => {});
         }

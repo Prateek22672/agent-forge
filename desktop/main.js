@@ -187,6 +187,28 @@ app.on("open-url", (e, url) => {
 // Let the web app ask us to open URLs (the Google consent) in the real browser.
 ipcMain.handle("open-external", (_e, url) => shell.openExternal(url));
 
+// A reminder alarm is due — bring the window to the front (even from the tray)
+// and flash the taskbar so it reads like a real alarm. The renderer keeps the
+// poller alive in the tray because backgroundThrottling is off.
+ipcMain.handle("ring-alarm", () => {
+  showWindow();
+  if (mainWindow) {
+    try {
+      mainWindow.setAlwaysOnTop(true);
+      mainWindow.show();
+      mainWindow.focus();
+      mainWindow.flashFrame(true);
+      // Stop flashing once focused.
+      mainWindow.once("focus", () => {
+        mainWindow.flashFrame(false);
+        mainWindow.setAlwaysOnTop(false);
+      });
+    } catch (e) {
+      /* best effort */
+    }
+  }
+});
+
 app.whenReady().then(() => {
   createWindow();
 
