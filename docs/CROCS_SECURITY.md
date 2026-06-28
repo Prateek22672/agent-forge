@@ -1,6 +1,6 @@
-# 🐊 Crocs — AgentForge Security
+# 🐊 Crocs — AgentFury Security
 
-**Crocs** is AgentForge's built-in security layer — the tough shell around your
+**Crocs** is AgentFury's built-in security layer — the tough shell around your
 data, your accounts, and especially the ability to act on your behalf (like
 sending email). This document is the honest, complete picture: what we protect,
 how, and where the boundaries are.
@@ -114,7 +114,7 @@ Being straight with you matters more than marketing:
   to your unlocked machine/disk. Use full-disk encryption (BitLocker/FileVault)
   for device-level protection.
 - **HTTPS in production is on you.** On `localhost` everything stays on the
-  loopback (safe). If you host AgentForge on a public URL, you **must** put it
+  loopback (safe). If you host AgentFury on a public URL, you **must** put it
   behind HTTPS, or tokens and any key you add travel in clear text.
 - **Token theft via a compromised browser/extension** is outside the app's
   control. Crocs reduces blast radius (XSS sanitised, send needs a click) but no

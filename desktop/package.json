@@ -1,9 +1,9 @@
 {
   "name": "agentforge-desktop",
   "version": "0.2.0",
-  "description": "AgentForge desktop app",
+  "description": "AgentFury desktop app",
   "main": "main.js",
-  "author": "AgentForge",
+  "author": "AgentFury",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
@@ -19,11 +19,11 @@
   },
   "build": {
     "appId": "com.agentforge.app",
-    "productName": "AgentForge",
+    "productName": "AgentFury",
     "files": ["main.js", "preload.js", "build/**/*"],
     "protocols": [
       {
-        "name": "AgentForge",
+        "name": "AgentFury",
         "schemes": ["agentforge"]
       }
     ],
@@ -44,10 +44,10 @@
       "perMachine": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "AgentForge",
+      "shortcutName": "AgentFury",
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": false,
-      "artifactName": "AgentForge-Setup.${ext}"
+      "artifactName": "AgentFury-Setup.${ext}"
     },
     "mac": {
       "target": ["dmg"],
@@ -56,7 +56,7 @@
       "identity": null
     },
     "dmg": {
-      "artifactName": "AgentForge.dmg"
+      "artifactName": "AgentFury.dmg"
     },
     "linux": {
       "target": ["AppImage"],

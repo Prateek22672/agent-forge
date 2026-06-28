@@ -1,4 +1,4 @@
-# ⚒ AgentForge
+# ⚒ AgentFury
 
 > A platform for creating **personal AI agents** — like a "Wix for AI agents."
 > Build an agent (email summariser, web researcher, file organiser, anything),

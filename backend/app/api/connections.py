@@ -101,7 +101,7 @@ def _desktop_bridge(query: str) -> HTMLResponse:
 <html lang="en"><head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>AgentForge — signed in</title>
+<title>AgentFury — signed in</title>
 <style>
   html,body{{height:100%}}
   body{{margin:0;background:#000;color:#fff;display:flex;align-items:center;
@@ -116,10 +116,10 @@ def _desktop_bridge(query: str) -> HTMLResponse:
   .btn:hover{{background:#e6e6e6}}
 </style></head>
 <body><div class="card">
-  <div class="tag">AGENTFORGE</div>
+  <div class="tag">AGENTFURY</div>
   <h1>You're signed in &#10003;</h1>
-  <p>Returning you to the AgentForge app&hellip;</p>
-  <a class="btn" href="{deep}" id="open">Open AgentForge</a>
+  <p>Returning you to the AgentFury app&hellip;</p>
+  <a class="btn" href="{deep}" id="open">Open AgentFury</a>
   <p style="margin-top:18px">If the app doesn't open, click the button above.<br/>
      You can close this tab afterwards.</p>
 </div>

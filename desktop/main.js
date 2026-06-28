@@ -1,4 +1,4 @@
-// AgentForge desktop (Electron) — native shell over the live cloud app.
+// AgentFury desktop (Electron) — native shell over the live cloud app.
 //
 // Why this design: you already run the backend in the cloud (Render) and the UI
 // on Vercel. The desktop app loads that same app, so accounts + data are shared
@@ -9,7 +9,7 @@
 //     notifications even when the window is closed
 //   • silent auto-update from GitHub Releases
 //
-// Set APP_URL to your Vercel URL (or pass AGENTFORGE_URL at runtime).
+// Set APP_URL to your Vercel URL (or pass AGENTFURY_URL at runtime).
 
 const { app, BrowserWindow, Tray, Menu, shell, nativeImage, ipcMain } = require("electron");
 const path = require("path");
@@ -25,8 +25,8 @@ if (process.defaultApp) {
   app.setAsDefaultProtocolClient(PROTOCOL);
 }
 
-// Your deployed app (override at runtime with AGENTFORGE_URL if needed).
-const APP_URL = process.env.AGENTFORGE_URL || "https://agent-forge-hkom.vercel.app";
+// Your deployed app (override at runtime with AGENTFURY_URL if needed).
+const APP_URL = process.env.AGENTFURY_URL || "https://agentfury.foliofyx.in";
 
 let mainWindow = null;
 let tray = null;
@@ -42,7 +42,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     backgroundColor: "#000000",
-    title: "AgentForge",
+    title: "AgentFury",
     autoHideMenuBar: true,
     webPreferences: {
       // Keep timers (the reminder poller) running when the window is hidden in
@@ -61,7 +61,7 @@ function createWindow() {
       "<body style='margin:0;background:#000;color:#fff;font-family:system-ui;" +
         "display:flex;align-items:center;justify-content:center;height:100vh'>" +
         "<div style='text-align:center'><div style='letter-spacing:.35em;" +
-        "font-weight:600'>AGENTFORGE</div><div style='margin-top:14px;color:#888;" +
+        "font-weight:600'>AGENTFURY</div><div style='margin-top:14px;color:#888;" +
         "font-size:13px'>Connecting…</div></div></body>"
     );
   mainWindow.loadURL(SPLASH);
@@ -78,7 +78,7 @@ function createWindow() {
           "<body style='margin:0;background:#000;color:#fff;font-family:system-ui;" +
             "display:flex;align-items:center;justify-content:center;height:100vh'>" +
             "<div style='text-align:center'><div style='letter-spacing:.35em;" +
-            "font-weight:600'>AGENTFORGE</div><div style='margin-top:14px;color:#888;" +
+            "font-weight:600'>AGENTFURY</div><div style='margin-top:14px;color:#888;" +
             "font-size:13px'>Can’t reach the server. Check your connection.</div>" +
             "<button onclick='location.href=\"" +
             APP_URL +
@@ -131,10 +131,10 @@ function createTray() {
     image = nativeImage.createEmpty();
   }
   tray = new Tray(image);
-  tray.setToolTip("AgentForge");
+  tray.setToolTip("AgentFury");
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: "Open AgentForge", click: () => showWindow() },
+      { label: "Open AgentFury", click: () => showWindow() },
       { type: "separator" },
       {
         label: "Quit",

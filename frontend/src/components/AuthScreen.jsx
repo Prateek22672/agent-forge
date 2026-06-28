@@ -71,7 +71,7 @@ export default function AuthScreen({ initialMode = "signup", onAuthed, onBack })
       </div>
 
       <div className="relative z-10 w-full max-w-sm border border-white/20 bg-black/70 backdrop-blur p-7">
-        <div className="font-bold tracking-widest text-sm mb-1">AGENTFORGE</div>
+        <div className="font-bold tracking-widest text-sm mb-1">AGENTFURY</div>
         <h1 className="text-2xl font-bold mb-6">
           {mode === "signup" ? "Create your account" : "Welcome back"}
         </h1>
