@@ -35,6 +35,7 @@ export default function ChatApp({ user, onLogout }) {
   const [pendingEmails, setPendingEmails] = useState([]);
   const [alarmReminder, setAlarmReminder] = useState(null); // ringing alarm
   const [showConsent, setShowConsent] = useState(false); // Google connect explainer
+  const [showConnectInvite, setShowConnectInvite] = useState(false); // one-time nudge
 
   const loadPending = () =>
     api.pendingEmails().then(setPendingEmails).catch(() => setPendingEmails([]));
@@ -203,6 +204,25 @@ export default function ChatApp({ user, onLogout }) {
 
   const activeAgent = agents.find((a) => a.id === activeAgentId);
 
+  // Proactively nudge to connect Google when the active capability needs it but
+  // it isn't granted — so users aren't surprised when an email task can't run.
+  const svc = connections?.google?.services;
+  const needsGoogleConnect =
+    activeAgent?.name === "Email" && svc && !svc.gmail_read
+      ? { label: "Gmail", why: "Connect it so I can read and summarize your inbox." }
+      : null;
+
+  // One-time invite: if Google data scopes aren't connected, gently offer it once.
+  useEffect(() => {
+    const g = connections?.google;
+    if (!g?.configured || !g.services) return;
+    const noData = !g.services.gmail_read && !g.services.calendar;
+    if (noData && !localStorage.getItem("af_connect_invite")) {
+      setShowConnectInvite(true);
+      localStorage.setItem("af_connect_invite", "1");
+    }
+  }, [connections]);
+
   return (
     <div className="h-full flex flex-col">
       <TopBar
@@ -268,6 +288,20 @@ export default function ChatApp({ user, onLogout }) {
                 ))}
               </div>
             )}
+            {needsGoogleConnect && (
+              <div className="mx-4 md:mx-6 mb-2 border border-amber-400/40 bg-amber-400/5 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2">
+                <div className="flex-1 text-sm">
+                  <span className="text-amber-300">⚠ {needsGoogleConnect.label} isn't connected.</span>{" "}
+                  <span className="text-white/60">{needsGoogleConnect.why}</span>
+                </div>
+                <button
+                  onClick={() => setShowConsent(true)}
+                  className="bg-white text-black px-4 py-1.5 text-sm font-semibold hover:bg-white/85 whitespace-nowrap"
+                >
+                  Connect {needsGoogleConnect.label}
+                </button>
+              </div>
+            )}
             <Composer
               agents={agents}
               activeAgentId={activeAgentId}
@@ -309,6 +343,38 @@ export default function ChatApp({ user, onLogout }) {
           onContinue={doReconnectGoogle}
           onCancel={() => setShowConsent(false)}
         />
+      )}
+
+      {/* One-time, friendly nudge to connect Google for email/calendar features. */}
+      {showConnectInvite && !showConsent && (
+        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4">
+          <div className="border border-white/25 bg-black w-full max-w-sm p-6 text-center">
+            <div className="text-4xl mb-3">📬</div>
+            <h2 className="text-lg font-semibold mb-2">Unlock email &amp; calendar</h2>
+            <p className="text-sm text-white/55 mb-5">
+              Connect your Google account so AgentFury can summarize your inbox,
+              surface priority mail, and manage your calendar. We'll show you
+              exactly what's shared first — and you can disconnect anytime.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowConnectInvite(false)}
+                className="flex-1 border border-white/25 py-2.5 text-sm hover:border-white"
+              >
+                Maybe later
+              </button>
+              <button
+                onClick={() => {
+                  setShowConnectInvite(false);
+                  setShowConsent(true);
+                }}
+                className="flex-1 bg-white text-black py-2.5 font-semibold hover:bg-white/85"
+              >
+                Connect Google
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Ringing alarm — blocks until dismissed, stops the sound. */}
