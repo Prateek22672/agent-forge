@@ -75,7 +75,7 @@ def fetch_url(url: str) -> str:
             url,
             timeout=20,
             follow_redirects=True,
-            headers={"User-Agent": "Mozilla/5.0 (AgentForge)"},
+            headers={"User-Agent": "Mozilla/5.0 (AgentFury)"},
         )
         resp.raise_for_status()
     except Exception as exc:

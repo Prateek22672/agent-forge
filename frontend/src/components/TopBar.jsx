@@ -29,7 +29,7 @@ export default function TopBar({
           ☰
         </button>
         <span className="font-semibold tracking-[0.15em] md:tracking-[0.2em] text-xs md:text-sm whitespace-nowrap">
-          AGENTFORGE
+          AGENTFURY
         </span>
         <span
           className="hidden lg:flex items-center gap-1.5 text-[10px] border border-white/20 px-2 py-0.5 text-white/45 tracking-widest"

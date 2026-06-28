@@ -1,5 +1,5 @@
 # =====================================================================
-#  AgentForge — one-command deployment.
+#  AgentFury — one-command deployment.
 #
 #    1. Put your GROQ_API_KEY in backend/.env (copy backend/.env.example)
 #    2. docker compose up --build

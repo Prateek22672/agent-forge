@@ -1,4 +1,4 @@
-# ====== AgentForge backend dependencies ======
+# ====== AgentFury backend dependencies ======
 # Pinned to ranges known to work together (Jan 2026). All free / open-source.
 
 # --- Web framework ---

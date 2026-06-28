@@ -1,6 +1,6 @@
 # Roadmap — from this foundation to the full personal-AI-OS
 
-AgentForge today implements **Phase 1–2** of the vision. This document shows the
+AgentFury today implements **Phase 1–2** of the vision. This document shows the
 four phases and, crucially, **how each one bolts onto the existing code** so the
 architecture you have now is the right starting point.
 

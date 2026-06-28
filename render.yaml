@@ -29,7 +29,7 @@ services:
           name: agentforge-db
           property: connectionString
       # --- Chroma/vector scratch dir (ephemeral; structured data is in Postgres) ---
-      - key: AGENTFORGE_DATA_DIR
+      - key: AGENTFURY_DATA_DIR
         value: /tmp/agentforge
       # --- set these to your real URLs after the first deploy ---
       - key: FRONTEND_ORIGIN

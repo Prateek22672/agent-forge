@@ -1,4 +1,4 @@
-# AgentForge — Architecture
+# AgentFury — Architecture
 
 This document explains **every component** and **how a request flows through the
 system**. Read it alongside the code; file references are given throughout.
@@ -7,7 +7,7 @@ system**. Read it alongside the code; file references are given throughout.
 
 ## 1. The big idea: an agent is *data*, not code
 
-Most tutorials hard-code one agent in Python. AgentForge instead stores an agent
+Most tutorials hard-code one agent in Python. AgentFury instead stores an agent
 as a **row in a database**:
 
 ```
@@ -90,7 +90,7 @@ Trace through [`app/api/chat.py`](../backend/app/api/chat.py):
 
 ## 4. The three memory layers
 
-Memory is where most agent products fall over. AgentForge separates three kinds:
+Memory is where most agent products fall over. AgentFury separates three kinds:
 
 | Layer | Lives in | Lifespan | Code |
 | --- | --- | --- | --- |

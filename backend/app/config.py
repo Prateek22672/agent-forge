@@ -90,11 +90,11 @@ class Settings(BaseSettings):
     # ---- Derived / helper paths ----
     @property
     def data_dir(self) -> Path:
-        # Packaged desktop app sets AGENTFORGE_DATA_DIR to a user-writable folder
-        # (e.g. %APPDATA%/AgentForge) since the install dir is read-only.
+        # Packaged desktop app sets AGENTFURY_DATA_DIR to a user-writable folder
+        # (e.g. %APPDATA%/AgentFury) since the install dir is read-only.
         import os
 
-        override = os.environ.get("AGENTFORGE_DATA_DIR")
+        override = os.environ.get("AGENTFURY_DATA_DIR")
         d = Path(override) if override else (BASE_DIR / "data")
         d.mkdir(parents=True, exist_ok=True)
         return d

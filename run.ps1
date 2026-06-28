@@ -1,4 +1,4 @@
-# AgentForge — one-command run (Windows). Builds the UI and serves everything
+# AgentFury — one-command run (Windows). Builds the UI and serves everything
 # on http://localhost:8000. Requires Python 3.11+ and Node 18+.
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
@@ -20,6 +20,6 @@ Set-Location "$root\frontend"
 if (-not (Test-Path "node_modules")) { npm install --no-audit --no-fund }
 npm run build
 
-Write-Host "==> Starting AgentForge on http://localhost:8000" -ForegroundColor Green
+Write-Host "==> Starting AgentFury on http://localhost:8000" -ForegroundColor Green
 Set-Location "$root\backend"
 & ".venv\Scripts\python.exe" -m uvicorn app.main:app --host 0.0.0.0 --port 8000

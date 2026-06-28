@@ -4,7 +4,7 @@ self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 
 // A push arrived from the server (reminder / priority email) — show it.
 self.addEventListener("push", (event) => {
-  let data = { title: "AgentForge", body: "", url: "/" };
+  let data = { title: "AgentFury", body: "", url: "/" };
   try {
     if (event.data) data = { ...data, ...event.data.json() };
   } catch (e) {

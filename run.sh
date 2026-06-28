@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AgentForge — one-command run (macOS/Linux). Builds the UI and serves
+# AgentFury — one-command run (macOS/Linux). Builds the UI and serves
 # everything on http://localhost:8000. Requires Python 3.11+ and Node 18+.
 set -e
 root="$(cd "$(dirname "$0")" && pwd)"
@@ -21,6 +21,6 @@ cd "$root/frontend"
 [ -d node_modules ] || npm install --no-audit --no-fund
 npm run build
 
-echo "==> Starting AgentForge on http://localhost:8000"
+echo "==> Starting AgentFury on http://localhost:8000"
 cd "$root/backend"
 exec ./.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000

@@ -18,7 +18,7 @@ phones — no install. Data is durable (Postgres) and secrets are encrypted at r
 ## 0. Push the repo
 
 ```bash
-git add -A && git commit -m "AgentForge"
+git add -A && git commit -m "AgentFury"
 git push   # to GitHub/GitLab
 ```
 `.env` and `data/` are gitignored — your real keys are **not** committed. You'll
@@ -67,7 +67,7 @@ serves the SPA for `/` and `/admin`.
 | `GEMINI_API_KEY` | optional |
 | `FRONTEND_ORIGIN` | your Vercel URL, e.g. `https://agentforge.vercel.app` |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | **change from dj/dj** |
-| `AGENTFORGE_DATA_DIR` | `/tmp/agentforge` (scratch for the vector store) |
+| `AGENTFURY_DATA_DIR` | `/tmp/agentforge` (scratch for the vector store) |
 
 For Google sign-in / Gmail (optional):
 | Var | Value |

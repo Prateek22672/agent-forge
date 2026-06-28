@@ -21,7 +21,7 @@ from pathlib import Path
 
 from app.config import settings
 
-SERVICE = "AgentForge"
+SERVICE = "AgentFury"
 
 
 # ---------- encryption (cloud) ----------

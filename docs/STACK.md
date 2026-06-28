@@ -1,4 +1,4 @@
-# AgentForge — Backend, Database & Auth Stack
+# AgentFury — Backend, Database & Auth Stack
 
 A precise reference for **what we're actually running**, why each piece was
 chosen, and where it lives in the code. Read this with the files open.

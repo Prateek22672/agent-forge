@@ -1,4 +1,4 @@
-# AgentForge Desktop App (Electron)
+# AgentFury Desktop App (Electron)
 
 A native installable app that **connects to your live cloud backend** (the same
 Render API your web app uses), so accounts and data are shared between web and
@@ -19,9 +19,9 @@ desktop. What the desktop shell adds:
 ## 1. One-time setup
 
 1. **Point it at your app.** In `desktop/main.js` set `APP_URL` to your Vercel
-   URL (or pass `AGENTFORGE_URL` at runtime):
+   URL (or pass `AGENTFURY_URL` at runtime):
    ```js
-   const APP_URL = process.env.AGENTFORGE_URL || "https://YOUR-APP.vercel.app";
+   const APP_URL = process.env.AGENTFURY_URL || "https://YOUR-APP.vercel.app";
    ```
 2. Install deps:
    ```bash
@@ -42,7 +42,7 @@ keeps running (so reminders still notify). Quit fully from the tray menu.
 cd desktop
 npm run dist
 ```
-Produces `desktop/dist/AgentForge-Setup-<version>.exe` — a normal installer
+Produces `desktop/dist/AgentFury-Setup-<version>.exe` — a normal installer
 (choose folder, desktop shortcut). **This step runs on your machine** (it bundles
 the native Electron runtime); it can't be produced on a server.
 
@@ -92,15 +92,15 @@ Mac build). electron-builder derives the rest.
 ## 6b. macOS first run (unsigned app)
 
 Without an Apple Developer cert the `.dmg` is **unsigned**, so on first open macOS
-says **"AgentForge is damaged and can't be opened"** (Apple Silicon) or
+says **"AgentFury is damaged and can't be opened"** (Apple Silicon) or
 "unidentified developer" (Intel). This is Gatekeeper quarantining a downloaded
 unsigned app — not actual damage.
 
 **Fix for testers (one line):**
-1. Drag **AgentForge** into **Applications**.
+1. Drag **AgentFury** into **Applications**.
 2. Open **Terminal** and run:
    ```bash
-   xattr -cr /Applications/AgentForge.app
+   xattr -cr /Applications/AgentFury.app
    ```
 3. Open it normally. (Alternatively: right-click the app → **Open** → **Open**.)
 

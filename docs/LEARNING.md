@@ -1,6 +1,6 @@
 # Learn LangChain & LangGraph — using *this* codebase
 
-This is a guided tour of the AI concepts behind AgentForge. Every concept points
+This is a guided tour of the AI concepts behind AgentFury. Every concept points
 at the exact file where you can see it working. Read top-to-bottom once, then keep
 it open while you explore the code.
 
@@ -57,7 +57,7 @@ Key methods you'll meet:
 - `.bind_tools(tools)` — tell the model which tools exist (LangGraph does this
   for us).
 
-In AgentForge this lives in [`app/llm/router.py`](../backend/app/llm/router.py).
+In AgentFury this lives in [`app/llm/router.py`](../backend/app/llm/router.py).
 Notice the `get_llm(name)` indirection — that's the seam for multi-provider
 routing.
 

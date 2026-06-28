@@ -1,5 +1,5 @@
 # ============================================================
-#  AgentForge — single-image deployment.
+#  AgentFury — single-image deployment.
 #  Stage 1 builds the React frontend; stage 2 runs the FastAPI
 #  backend which ALSO serves that built frontend. One container,
 #  one port (8000), everything inside.

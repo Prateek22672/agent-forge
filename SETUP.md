@@ -1,4 +1,4 @@
-# AgentForge — Setup (pick one path)
+# AgentFury — Setup (pick one path)
 
 Only **one thing is required**: a free **Groq API key** from
 <https://console.groq.com>. Everything else has a free default.

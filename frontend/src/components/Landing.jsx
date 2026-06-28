@@ -21,7 +21,7 @@ function Nav({ onGetStarted, onSignIn }) {
     <header className="sticky top-0 z-20 backdrop-blur bg-black/70 border-b border-white/10">
       <div className="max-w-5xl mx-auto flex items-center justify-between px-6 h-16">
         <div className="flex items-center gap-3">
-          <span className="font-semibold tracking-[0.2em] text-sm">AGENTFORGE</span>
+          <span className="font-semibold tracking-[0.2em] text-sm">AGENTFURY</span>
           <span className="hidden sm:flex items-center gap-1.5 text-[10px] tracking-widest text-white/40 border border-white/15 px-2 py-0.5">
             <CrocsMark size={13} /> CROCS SECURED
           </span>
@@ -140,7 +140,7 @@ function Download({ onGetStarted }) {
         </p>
         <div className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3">
           <a
-            href="https://github.com/Prateek22672/agent-forge/releases/latest/download/AgentForge-Setup.exe"
+            href="https://github.com/Prateek22672/agent-forge/releases/latest/download/AgentFury-Setup.exe"
             target="_blank"
             rel="noreferrer"
             className="px-7 py-3 bg-white text-black font-medium hover:bg-white/85"
@@ -148,7 +148,7 @@ function Download({ onGetStarted }) {
             Download for Windows
           </a>
           <a
-            href="https://github.com/Prateek22672/agent-forge/releases/latest/download/AgentForge.dmg"
+            href="https://github.com/Prateek22672/agent-forge/releases/latest/download/AgentFury.dmg"
             target="_blank"
             rel="noreferrer"
             className="px-7 py-3 border border-white/25 hover:border-white"
@@ -176,7 +176,7 @@ function Download({ onGetStarted }) {
 function Footer() {
   return (
     <footer className="max-w-5xl mx-auto px-6 py-10 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-white/35">
-      <span className="tracking-[0.2em]">AGENTFORGE</span>
+      <span className="tracking-[0.2em]">AGENTFURY</span>
       <span>Secured by Crocs · Private by design</span>
     </footer>
   );

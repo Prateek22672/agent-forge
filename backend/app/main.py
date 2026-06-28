@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="AgentForge",
+    title="AgentFury",
     description="Create and run personal AI agents on free infrastructure.",
     version="0.1.0",
     lifespan=lifespan,
