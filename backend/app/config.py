@@ -94,7 +94,9 @@ class Settings(BaseSettings):
         # (e.g. %APPDATA%/AgentFury) since the install dir is read-only.
         import os
 
-        override = os.environ.get("AGENTFURY_DATA_DIR")
+        override = os.environ.get("AGENTFURY_DATA_DIR") or os.environ.get(
+            "AGENTFORGE_DATA_DIR"
+        )
         d = Path(override) if override else (BASE_DIR / "data")
         d.mkdir(parents=True, exist_ok=True)
         return d
