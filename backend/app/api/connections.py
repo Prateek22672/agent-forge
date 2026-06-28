@@ -9,9 +9,10 @@ id is carried inside a SIGNED `state` value created at /start and verified at
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+import json
 import os
 
 from app.auth import (
@@ -89,6 +90,53 @@ def _upsert_google_connection(db: Session, user_id: str, info: dict) -> None:
     db.commit()
 
 
+def _desktop_bridge(query: str) -> HTMLResponse:
+    """A real page shown in the user's browser after Google sign-in for the
+    DESKTOP app. It launches the app via the agentforge:// deep link (auto, with
+    a manual button as a reliable fallback) — the equivalent of Slack/Notion's
+    'you can return to the app now' screen."""
+    deep = f"agentforge://auth?{query}"
+    deep_js = json.dumps(deep)  # safely escaped for the inline script
+    html = f"""<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AgentForge — signed in</title>
+<style>
+  html,body{{height:100%}}
+  body{{margin:0;background:#000;color:#fff;display:flex;align-items:center;
+    justify-content:center;text-align:center;
+    font-family:system-ui,-apple-system,'Segoe UI',sans-serif}}
+  .card{{max-width:440px;padding:36px}}
+  .tag{{font-size:12px;letter-spacing:.28em;color:#7a7a7a}}
+  h1{{font-size:26px;margin:16px 0 8px;font-weight:600}}
+  p{{color:#9a9a9a;font-size:14px;line-height:1.6;margin:6px 0}}
+  .btn{{display:inline-block;margin-top:22px;background:#fff;color:#000;
+    padding:13px 26px;text-decoration:none;font-weight:600}}
+  .btn:hover{{background:#e6e6e6}}
+</style></head>
+<body><div class="card">
+  <div class="tag">AGENTFORGE</div>
+  <h1>You're signed in &#10003;</h1>
+  <p>Returning you to the AgentForge app&hellip;</p>
+  <a class="btn" href="{deep}" id="open">Open AgentForge</a>
+  <p style="margin-top:18px">If the app doesn't open, click the button above.<br/>
+     You can close this tab afterwards.</p>
+</div>
+<script>
+  // Hand control back to the desktop app. A click (button) reliably launches the
+  // custom scheme; we also try automatically right away.
+  var url = {deep_js};
+  function go(){{ window.location.href = url; }}
+  setTimeout(go, 300);
+  document.getElementById('open').addEventListener('click', function(e){{
+    e.preventDefault(); go();
+  }});
+</script>
+</body></html>"""
+    return HTMLResponse(html)
+
+
 @router.get("/google/callback")
 def google_callback(
     code: str = "", state: str = "", error: str = "", db: Session = Depends(get_db)
@@ -110,9 +158,12 @@ def google_callback(
     # (the consent ran in the user's real browser, with their Google session).
     desktop = bool(data.get("desktop"))
 
-    def _back(query: str) -> RedirectResponse:
+    def _back(query: str):
+        # Browsers refuse to auto-launch a custom scheme (agentforge://) from a
+        # plain HTTP redirect, so for desktop we return a real "you're signed in"
+        # page that launches the app (automatically + a manual button fallback).
         if desktop:
-            return RedirectResponse(f"agentforge://auth?{query}")
+            return _desktop_bridge(query)
         return RedirectResponse(f"{frontend}/?{query}")
 
     try:
