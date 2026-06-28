@@ -10,10 +10,24 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="apple-mobile-web-app-title" content="AgentFury" />
-    <title>AgentFury</title>
+    <title>AgentFury — Your personal AI agents</title>
+    <meta
+      name="description"
+      content="AgentFury is a personal AI assistant that researches the web, summarises your email, manages reminders and notes, and your calendar — secured by Crocs."
+    />
+    <meta property="og:site_name" content="AgentFury" />
+    <meta property="og:title" content="AgentFury — Your personal AI agents" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://agentfury.foliofyx.in" />
   </head>
   <body>
     <div id="root"></div>
+    <!-- Static brand text so crawlers (e.g. Google OAuth branding verification)
+         can read the app name even before the JS app renders. -->
+    <noscript>
+      <h1>AgentFury</h1>
+      <p>AgentFury — your personal AI agents for research, email, reminders, notes and calendar.</p>
+    </noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
