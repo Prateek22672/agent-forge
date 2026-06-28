@@ -110,15 +110,29 @@ def build_auth_url(state: str, include_data: bool = False) -> str:
 def complete_flow(code: str):
     """Exchange the auth code for OAuth credentials (does NOT persist yet — the
     caller may need the profile first to decide which user to store under).
-    Uses the broad scope set so it accepts either the login-only or the
-    login+data grant (relaxed scope checking handles the difference)."""
+
+    We request the broad scope set so the exchange accepts either a login-only or
+    a login+data grant. CRITICAL: under relaxed scope checking, `credentials.scopes`
+    reflects the *requested* scopes, not what the user actually granted — so we
+    override it with the granted scopes from Google's token response. Otherwise the
+    UI would falsely show Gmail/Calendar as connected when only login was granted."""
     from google_auth_oauthlib.flow import Flow
 
     flow = Flow.from_client_config(
         _client_config(), scopes=SCOPES, redirect_uri=settings.oauth_redirect_uri
     )
     flow.fetch_token(code=code)
-    return flow.credentials
+    creds = flow.credentials
+
+    # Authoritative granted scopes come from the token response's `scope` field.
+    try:
+        raw = (flow.oauth2session.token or {}).get("scope")
+        if raw:
+            granted = raw.split() if isinstance(raw, str) else list(raw)
+            creds._scopes = granted  # what the user REALLY granted
+    except Exception:
+        pass
+    return creds
 
 
 def userinfo(creds) -> dict:
@@ -131,10 +145,12 @@ def userinfo(creds) -> dict:
         return {
             "email": info.get("email", ""),
             "name": info.get("name", ""),
-            "scopes": list(creds.scopes or SCOPES),
+            # Report the ACTUAL granted scopes — never assume the full set, or the
+            # UI would falsely show Gmail/Calendar as connected.
+            "scopes": list(creds.scopes or []),
         }
     except Exception:
-        return {"email": "", "name": "", "scopes": list(creds.scopes or SCOPES)}
+        return {"email": "", "name": "", "scopes": list(creds.scopes or [])}
 
 
 def store_credentials(user_id: str, creds) -> None:
