@@ -177,7 +177,11 @@ function Footer() {
   return (
     <footer className="max-w-5xl mx-auto px-6 py-10 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-white/35">
       <span className="tracking-[0.2em]">AGENTFURY</span>
-      <span>Secured by Crocs · Private by design</span>
+      <div className="flex items-center gap-4">
+        <a href="/privacy" className="hover:text-white">Privacy</a>
+        <a href="/terms" className="hover:text-white">Terms</a>
+        <span>Secured by Crocs</span>
+      </div>
     </footer>
   );
 }
