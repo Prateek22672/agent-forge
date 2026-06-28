@@ -49,7 +49,7 @@ function Calendar() {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="flex-1 flex flex-col min-h-0 min-w-0">
       <div className="px-4 md:px-6 py-4 flex flex-wrap items-center gap-2 border-b border-white/10">
         <input
           className="flex-1 min-w-[160px] bg-black border border-white/30 px-3 py-2 focus:border-white outline-none"
@@ -113,7 +113,7 @@ function Planner({ owner }) {
     ["calendar", "Calendar"],
   ];
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="flex-1 flex flex-col min-h-0 min-w-0">
       <div className="border-b border-white/15 px-4 md:px-6 pt-4 shrink-0">
         <div className="font-semibold text-lg mb-3">{owner}'s Planner</div>
         <div className="flex items-center gap-1 overflow-x-auto">
@@ -185,7 +185,7 @@ function Priority({ owner }) {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="flex-1 flex flex-col min-h-0 min-w-0">
       <div className="border-b border-white/15 px-4 md:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
         <div className="font-semibold text-lg">{owner}'s Priority Inbox</div>
         <div className="flex items-center gap-2">
@@ -263,7 +263,7 @@ function Brain({ owner }) {
     load();
   };
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="flex-1 flex flex-col min-h-0 min-w-0">
       <Header title={`${owner}'s Brain`} />
       <div className="px-4 md:px-6 py-3 text-xs text-white/40 border-b border-white/10">
         Facts here (contacts, emails, preferences) are recalled automatically by
@@ -331,7 +331,7 @@ function Reminders() {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="flex-1 flex flex-col min-h-0 min-w-0">
       <div className="px-4 md:px-6 py-4 flex flex-wrap items-center gap-2 border-b border-white/10">
         <input
           className="flex-1 min-w-[160px] bg-black border border-white/30 px-3 py-2 focus:border-white outline-none"
@@ -383,8 +383,8 @@ function Reminders() {
                 load();
               }}
             />
-            <div className="flex-1">
-              <div className={r.status === "done" ? "line-through text-white/40" : ""}>
+            <div className="flex-1 min-w-0">
+              <div className={`break-words ${r.status === "done" ? "line-through text-white/40" : ""}`}>
                 {r.alarm && <span title="Alarm">⏰ </span>}
                 {r.title}
               </div>
@@ -435,7 +435,7 @@ function Notes() {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="flex-1 flex flex-col min-h-0 min-w-0">
       <div className="px-4 md:px-6 py-4 border-b border-white/10 space-y-2">
         <input
           className="w-full bg-black border border-white/30 px-3 py-2 focus:border-white outline-none"
