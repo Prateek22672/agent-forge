@@ -79,83 +79,107 @@ def _should_scan(user: User, now_utc) -> bool:
     return False
 
 
-@router.post("/cron/scan-priority")
-def cron_scan_priority(secret: str = Query(default=""), db: Session = Depends(get_db)):
-    """Called by the external cron (e.g. every 15 min). For each Gmail-connected
-    user it checks their auto-scan schedule and, if due, scans + pushes new
-    priority emails. Protected by CRON_SECRET."""
-    if not settings.cron_secret or secret != settings.cron_secret:
-        raise HTTPException(403, "Forbidden")
+# The scan can take minutes (Gmail + LLM per user) but external cron pingers
+# time out at ~30s — so the endpoint ACKS INSTANTLY and the work runs on a
+# background thread. A lock guarantees only one pass runs at a time.
+import threading
 
-    from datetime import datetime
+_scan_lock = threading.Lock()
+_scan_running = False
 
-    now_utc = datetime.utcnow()
-    connected = (
-        db.query(Connection)
-        .filter(Connection.provider == "google", Connection.status == "connected")
-        .all()
-    )
-    # Heartbeat: lets the app SHOW users whether this background checker is
-    # actually running (the #1 cause of "no notification came").
-    from app.security import secret_store
 
-    try:
-        secret_store.set_secret("heartbeat_scan", now_utc.isoformat())
-    except Exception:
-        pass
-
-    scanned, total_new = 0, 0
-    for conn in connected:
-        user = db.get(User, conn.user_id)
-        if not user:
-            continue
-        # New-mail alerts run EVERY tick for opted-in users (cheap, no LLM) —
-        # independent of their priority-scan frequency.
-        if getattr(user, "notify_new_mail", False):
-            priority.check_new_mail(db, user.id)
-        if not _should_scan(user, now_utc):
-            continue
-        scanned += 1
-        new_rows = priority.scan_user(db, user.id)
-        for row in new_rows:
-            push.notify_user(
-                db, user.id, f"⭐ {row.category or 'Priority email'}", row.subject, "/"
-            )
-            row.pushed = True
-            total_new += 1
-        user.last_priority_scan = now_utc.isoformat()
-    db.commit()
-
-    # ---- Second-chance escalation (the core USP safety net) ----
-    # A priority email still sitting there (not dismissed) hours after detection
-    # means the user probably hasn't seen it. Alert ONCE more, louder: a push
-    # plus an alarm-grade calendar event a few minutes out.
-    from datetime import timedelta, timezone as _tz
+def _run_scan_pass() -> None:
+    """One full scan pass over all users, on its own DB session."""
+    global _scan_running
+    from datetime import datetime, timedelta, timezone as _tz
 
     from app.calendar_bridge import mirror_reminder
+    from app.database import SessionLocal
+    from app.security import secret_store
 
-    cutoff = datetime.now(_tz.utc) - timedelta(hours=4)
-    stale = (
-        db.query(PriorityEmail)
-        .filter(
-            PriorityEmail.escalated == False,  # noqa: E712
-            PriorityEmail.created_at <= cutoff,
+    db = SessionLocal()
+    try:
+        now_utc = datetime.utcnow()
+        # Heartbeat: lets the app SHOW users whether this background checker is
+        # actually running (the #1 cause of "no notification came").
+        try:
+            secret_store.set_secret("heartbeat_scan", now_utc.isoformat())
+        except Exception:
+            pass
+
+        connected = (
+            db.query(Connection)
+            .filter(Connection.provider == "google", Connection.status == "connected")
+            .all()
         )
-        .limit(100)
-        .all()
-    )
-    escalated = 0
-    for p in stale:
-        push.notify_user(
-            db, p.user_id, "⏰ Still unread — priority email", p.subject, "/"
+        for conn in connected:
+            try:
+                user = db.get(User, conn.user_id)
+                if not user:
+                    continue
+                # New-mail alerts run EVERY tick for opted-in users (cheap, no
+                # LLM) — independent of their priority-scan frequency.
+                if getattr(user, "notify_new_mail", False):
+                    priority.check_new_mail(db, user.id)
+                if not _should_scan(user, now_utc):
+                    continue
+                new_rows = priority.scan_user(db, user.id)
+                for row in new_rows:
+                    push.notify_user(
+                        db, user.id,
+                        f"⭐ {row.category or 'Priority email'}", row.subject, "/",
+                    )
+                    row.pushed = True
+                user.last_priority_scan = now_utc.isoformat()
+                db.commit()
+            except Exception:
+                db.rollback()  # one user's failure never blocks the rest
+
+        # ---- Second-chance escalation (the core USP safety net) ----
+        # A priority email still sitting there (not dismissed) hours after
+        # detection means the user probably hasn't seen it. Alert ONCE more,
+        # louder: a push plus an alarm-grade calendar event minutes out.
+        cutoff = datetime.now(_tz.utc) - timedelta(hours=4)
+        stale = (
+            db.query(PriorityEmail)
+            .filter(
+                PriorityEmail.escalated == False,  # noqa: E712
+                PriorityEmail.created_at <= cutoff,
+            )
+            .limit(100)
+            .all()
         )
-        mirror_reminder(
-            p.user_id,
-            f"Unread priority: {p.subject[:60]}",
-            (datetime.utcnow() + timedelta(minutes=10)).isoformat(),
-            alarm=True,
-        )
-        p.escalated = True
-        escalated += 1
-    db.commit()
-    return {"scanned_users": scanned, "new_priority": total_new, "escalated": escalated}
+        for p in stale:
+            push.notify_user(
+                db, p.user_id, "⏰ Still unread — priority email", p.subject, "/"
+            )
+            mirror_reminder(
+                p.user_id,
+                f"Unread priority: {p.subject[:60]}",
+                (datetime.utcnow() + timedelta(minutes=10)).isoformat(),
+                alarm=True,
+            )
+            p.escalated = True
+        db.commit()
+    except Exception:
+        pass
+    finally:
+        db.close()
+        with _scan_lock:
+            _scan_running = False
+
+
+@router.post("/cron/scan-priority")
+def cron_scan_priority(secret: str = Query(default="")):
+    """Called by the external cron (every ~15 min). Returns immediately; the
+    scan (mail alerts + priority + escalation) runs in the background so the
+    pinger's short timeout can never kill it. Protected by CRON_SECRET."""
+    global _scan_running
+    if not settings.cron_secret or secret != settings.cron_secret:
+        raise HTTPException(403, "Forbidden")
+    with _scan_lock:
+        if _scan_running:
+            return {"started": False, "reason": "previous pass still running"}
+        _scan_running = True
+    threading.Thread(target=_run_scan_pass, daemon=True).start()
+    return {"started": True}
