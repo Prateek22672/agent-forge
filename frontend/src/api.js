@@ -107,6 +107,7 @@ export const api = {
   // Calendar
   listCalendar: () => http("GET", "/calendar/events"),
   createCalendarEvent: (data) => http("POST", "/calendar/events", data),
+  calendarFeedUrl: () => http("GET", "/calendar/feed-url"),
 
   // Priority inbox
   listPriority: () => http("GET", "/priority"),

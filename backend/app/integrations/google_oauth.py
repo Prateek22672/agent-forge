@@ -228,9 +228,17 @@ def send_email(user_id: str, to: str, subject: str, body: str) -> str:
 
 
 def create_event(
-    user_id: str, summary: str, start_iso: str, end_iso: str, location: str = ""
+    user_id: str,
+    summary: str,
+    start_iso: str,
+    end_iso: str,
+    location: str = "",
+    description: str = "",
+    reminder_minutes: int | None = None,
 ) -> str:
-    """Create a Google Calendar event. start/end are local ISO datetimes.
+    """Create a Google Calendar event. start/end are naive-UTC ISO datetimes.
+    `reminder_minutes` sets an explicit popup reminder (0 = at event time) so
+    Google Calendar's own app delivers a native notification.
     Raises RuntimeError if not connected or the scope wasn't granted."""
     creds = _load_credentials(user_id)
     if not creds:
@@ -251,9 +259,15 @@ def create_event(
     body = {
         "summary": summary,
         "location": location,
+        "description": description,
         "start": {"dateTime": _utc(start_iso)},
         "end": {"dateTime": _utc(end_iso)},
     }
+    if reminder_minutes is not None:
+        body["reminders"] = {
+            "useDefault": False,
+            "overrides": [{"method": "popup", "minutes": int(reminder_minutes)}],
+        }
     ev = service.events().insert(calendarId="primary", body=body).execute()
     return ev.get("htmlLink", "created")
 
