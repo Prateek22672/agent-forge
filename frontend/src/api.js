@@ -93,6 +93,7 @@ export const api = {
   vapidPublicKey: () => http("GET", "/push/vapid-public-key"),
   pushSubscribe: (sub) => http("POST", "/push/subscribe", sub),
   pushTest: () => http("POST", "/push/test"),
+  pushHealth: () => http("GET", "/push/health"),
 
   // Trackers
   listReminders: () => http("GET", "/reminders"),

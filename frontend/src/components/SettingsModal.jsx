@@ -397,6 +397,70 @@ function NotificationsRow() {
         </div>
       )}
       {msg && <div className="text-[11px] text-white/60 mt-2">{msg}</div>}
+
+      <AlertHealth />
+    </div>
+  );
+}
+
+// Per-channel health so a user always knows WHY an alert didn't come — and the fix.
+function AlertHealth() {
+  const [h, setH] = useState(null);
+
+  useEffect(() => {
+    api.pushHealth().then(setH).catch(() => {});
+  }, []);
+  if (!h) return null;
+
+  const minsAgo = (iso) => {
+    if (!iso) return null;
+    const ref = h.server_now ? new Date(h.server_now + "Z") : new Date();
+    return Math.round((ref - new Date(iso + "Z")) / 60000);
+  };
+  const remAge = minsAgo(h.cron_reminders_last);
+  const scanAge = minsAgo(h.cron_scan_last);
+  const perm = pushPermissionState();
+
+  const rows = [
+    h.push_configured
+      ? [true, "Push server ready"]
+      : [false, "Push server not configured — VAPID keys missing on the server (docs/PUSH.md)."],
+    perm === "granted" && h.device_subscriptions > 0
+      ? [true, `This device is subscribed (${h.device_subscriptions} device${h.device_subscriptions > 1 ? "s" : ""})`]
+      : [false, "This device isn't subscribed — tap Enable above (on iPhone: open from the Home-Screen icon first)."],
+    remAge !== null && remAge <= 5
+      ? [true, `Reminder checker ran ${remAge} min ago`]
+      : [false, remAge === null
+          ? "Reminder checker has NEVER run — the every-1-min cron isn't set up (cron-job.org → docs/PUSH.md)."
+          : `Reminder checker last ran ${remAge} min ago — the every-1-min cron looks stopped; check cron-job.org.`],
+    scanAge !== null && scanAge <= 25
+      ? [true, `Mail checker ran ${scanAge} min ago`]
+      : [false, scanAge === null
+          ? "Mail checker has NEVER run — the every-15-min cron isn't set up (cron-job.org → docs/PUSH.md)."
+          : `Mail checker last ran ${scanAge} min ago — the every-15-min cron looks stopped; check cron-job.org.`],
+    h.notify_new_mail
+      ? [true, "New-mail alerts ON — arrive within ~15 min of a mail landing"]
+      : [false, "New-mail alerts are OFF — turn on “Mail alerts” on the Priority page."],
+  ];
+
+  return (
+    <div className="mt-3 pt-3 border-t border-white/10">
+      <div className="text-[11px] tracking-widest text-white/40 mb-2">
+        NOTIFICATION HEALTH
+      </div>
+      <div className="space-y-1.5">
+        {rows.map(([ok, text], i) => (
+          <div key={i} className="flex items-start gap-2 text-[11px]">
+            <span className={ok ? "text-green-400" : "text-amber-400"}>●</span>
+            <span className={ok ? "text-white/55" : "text-white/75"}>{text}</span>
+          </div>
+        ))}
+      </div>
+      <div className="text-[10px] text-white/35 mt-2">
+        Delays are normal up to the checker interval: reminders ≈1 min, new-mail
+        &amp; priority ≈15 min. If a row is amber, that's the exact reason an
+        alert didn't arrive.
+      </div>
     </div>
   );
 }

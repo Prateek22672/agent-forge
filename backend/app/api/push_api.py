@@ -64,6 +64,28 @@ def test_push(db: Session = Depends(get_db), user: User = Depends(get_current_us
     return {"enabled": push.push_enabled(), **result}
 
 
+@router.get("/push/health")
+def push_health(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Everything the UI needs to tell the user WHY an alert might not arrive —
+    and exactly how to fix it."""
+    from app.security import secret_store
+
+    subs = (
+        db.query(PushSubscription)
+        .filter(PushSubscription.user_id == user.id)
+        .count()
+    )
+    return {
+        "push_configured": push.push_enabled(),
+        "device_subscriptions": subs,
+        "cron_reminders_last": secret_store.get_secret("heartbeat_reminders") or "",
+        "cron_scan_last": secret_store.get_secret("heartbeat_scan") or "",
+        "notify_new_mail": getattr(user, "notify_new_mail", False),
+        "scan_freq": getattr(user, "priority_scan_freq", "off"),
+        "server_now": datetime.utcnow().isoformat(),
+    }
+
+
 # ---------- Cron: fire due reminders ----------
 @router.post("/cron/fire-reminders")
 def fire_reminders(
@@ -76,6 +98,13 @@ def fire_reminders(
         raise HTTPException(403, "Forbidden")
 
     now = datetime.utcnow().isoformat()  # due_at is stored as naive-UTC ISO
+    # Heartbeat so the UI can prove/deny that this checker is running.
+    from app.security import secret_store
+
+    try:
+        secret_store.set_secret("heartbeat_reminders", now)
+    except Exception:
+        pass
     due = (
         db.query(Reminder)
         .filter(

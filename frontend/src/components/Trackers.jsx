@@ -262,6 +262,11 @@ function Priority({ owner }) {
             onClick={async () => {
               const next = !mailAlerts;
               setMailAlerts(next);
+              setMsg(
+                next
+                  ? "Mail alerts armed — the first background check (within ~15 min) sets the baseline; every mail arriving after that gets a push."
+                  : "Mail alerts off."
+              );
               await api.updateProfile({ notify_new_mail: next }).catch(() => {});
             }}
             title="Get a push notification for EVERY new inbox email (checked at your scan frequency), not just priority ones"
