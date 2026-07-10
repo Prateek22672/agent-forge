@@ -70,6 +70,8 @@ def _ensure_columns() -> None:
             "save_history": "BOOLEAN DEFAULT " + ("TRUE" if is_pg else "1"),
             "priority_scan_freq": "VARCHAR(20) DEFAULT 'off'",
             "priority_to_calendar": "BOOLEAN DEFAULT " + ("TRUE" if is_pg else "1"),
+            "notify_new_mail": f"BOOLEAN DEFAULT {bool_default}",
+            "last_seen_mail_key": "VARCHAR(80) DEFAULT ''",
             "tz_offset_min": "INTEGER DEFAULT 0",
             "last_priority_scan": "VARCHAR(40) DEFAULT ''",
         },

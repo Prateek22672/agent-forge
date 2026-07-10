@@ -360,6 +360,36 @@ function NotificationsRow() {
         </button>
       </div>
 
+      {/* Trail-test the Google Calendar channel end-to-end. */}
+      <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-white/10">
+        <div className="text-[11px] text-white/40">
+          Test Google Calendar alerts — creates a test event ~2 min out.
+        </div>
+        <button
+          onClick={async () => {
+            setBusy(true);
+            setMsg("");
+            try {
+              const r = await api.calendarTest();
+              setMsg(
+                r.ok
+                  ? "Test event created — your phone should show a Google Calendar notification in ~2 minutes. (Delete the event after.)"
+                  : "Calendar test failed: " + (r.error || "unknown") +
+                    " — hit the status chip (top right) → Connect Google."
+              );
+            } catch {
+              setMsg("Couldn't run the calendar test.");
+            } finally {
+              setBusy(false);
+            }
+          }}
+          disabled={busy}
+          className="border border-white/30 px-3 py-1.5 text-xs hover:border-white whitespace-nowrap"
+        >
+          📅 Test calendar
+        </button>
+      </div>
+
       {state === "denied" && (
         <div className="text-[11px] text-white/40 mt-2">
           Notifications are blocked in your browser settings — allow them for this

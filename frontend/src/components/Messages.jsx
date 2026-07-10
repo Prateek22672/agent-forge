@@ -10,6 +10,7 @@ export default function Messages({
   activeAgentName,
   starters = [],
   onPickStarter,
+  onNavigate,
 }) {
   const endRef = useRef(null);
   useEffect(() => {
@@ -49,7 +50,7 @@ export default function Messages({
   return (
     <div className="flex-1 overflow-y-auto px-4 md:px-6 py-6 space-y-5">
       {messages.map((m, i) => (
-        <Bubble key={i} message={m} />
+        <Bubble key={i} message={m} onNavigate={onNavigate} />
       ))}
       {busy && (
         <div className="flex items-center gap-3 text-white/50 text-sm">
@@ -85,7 +86,17 @@ function ThinkingText() {
   return <span>{THINKING_PHASES[idx][0]}</span>;
 }
 
-function Bubble({ message }) {
+// Which tool call leads to which page — so replies carry a "go check it" button.
+const TOOL_NAV = {
+  create_reminder: ["Check your Reminders →", "planner"],
+  create_note: ["Check your Notes →", "planner"],
+  add_calendar_event: ["Open Calendar →", "planner"],
+  list_upcoming_events: ["Open Calendar →", "planner"],
+  fetch_recent_emails: ["Open Priority Inbox →", "priority"],
+  remember: ["Open your Brain →", "brain"],
+};
+
+function Bubble({ message, onNavigate }) {
   const isUser = message.role === "user";
   const [showTrace, setShowTrace] = useState(false);
   const traces = message.tool_calls || [];
@@ -100,10 +111,34 @@ function Bubble({ message }) {
     );
   }
 
+  // Derive nav chips from what the agent actually DID this turn (deduped).
+  const navActions = [];
+  const seen = new Set();
+  for (const t of traces) {
+    const nav = TOOL_NAV[t.tool];
+    if (nav && !seen.has(nav[1] + nav[0])) {
+      seen.add(nav[1] + nav[0]);
+      navActions.push(nav);
+    }
+  }
+
   return (
     <div className="flex justify-start">
       <div className="max-w-full md:max-w-[85%] w-full md:w-auto border border-white/20 px-4 py-3 overflow-hidden">
         <Markdown text={message.content} />
+        {navActions.length > 0 && onNavigate && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {navActions.map(([label, view]) => (
+              <button
+                key={label}
+                onClick={() => onNavigate(view)}
+                className="border border-white/40 px-3 py-1.5 text-xs font-medium hover:bg-white hover:text-black"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         {traces.length > 0 && (
           <div className="mt-3 pt-2 border-t border-white/15">
             <button
