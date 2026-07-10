@@ -70,6 +70,10 @@ class User(Base):
     priority_scan_freq: Mapped[str] = mapped_column(String(20), default="off")
     # Mirror new priority emails into Google Calendar (native notifications).
     priority_to_calendar: Mapped[bool] = mapped_column(default=True)
+    # Push a notification for EVERY new inbox email (checked each scan tick).
+    notify_new_mail: Mapped[bool] = mapped_column(default=False)
+    # Dedupe cursor: key of the newest inbox email we've already seen.
+    last_seen_mail_key: Mapped[str] = mapped_column(String(80), default="")
     tz_offset_min: Mapped[int] = mapped_column(default=0)  # JS getTimezoneOffset()
     last_priority_scan: Mapped[str] = mapped_column(String(40), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

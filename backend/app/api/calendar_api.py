@@ -60,6 +60,29 @@ def create_event(
     return {"link": link}
 
 
+@router.post("/test")
+def test_calendar(user: User = Depends(get_current_user)):
+    """Create a test event ~2 minutes out with a popup reminder — if the phone
+    gets a Google Calendar notification, the whole channel is proven working.
+    Returns the real error when it isn't (scope missing, not connected…)."""
+    try:
+        start = datetime.utcnow() + timedelta(minutes=2)
+        link = google_oauth.create_event(
+            user.id,
+            "🔔 AgentFury calendar test",
+            start.isoformat(),
+            (start + timedelta(minutes=15)).isoformat(),
+            description=(
+                "If your phone showed a Google Calendar notification for this, "
+                "calendar alerts are working. You can delete this event."
+            ),
+            reminder_minutes=0,
+        )
+        return {"ok": True, "link": link}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)[:300]}
+
+
 # ---------- ICS subscribe feed (Apple Calendar & friends) ----------
 def _feed_sig(user_id: str) -> str:
     """Unguessable per-user signature so the feed URL acts as its own secret."""

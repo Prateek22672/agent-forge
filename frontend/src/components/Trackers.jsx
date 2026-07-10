@@ -180,6 +180,7 @@ function Priority({ owner }) {
   const [msg, setMsg] = useState("");
   const [freq, setFreq] = useState("off");
   const [toCal, setToCal] = useState(true);
+  const [mailAlerts, setMailAlerts] = useState(false);
   const [svc, setSvc] = useState(null); // live Google service status
 
   const load = () => api.listPriority().then(setItems).catch(() => setItems([]));
@@ -190,6 +191,7 @@ function Priority({ owner }) {
       .then((u) => {
         setFreq(u.priority_scan_freq || "off");
         setToCal(u.priority_to_calendar !== false);
+        setMailAlerts(u.notify_new_mail === true);
       })
       .catch(() => {});
     api
@@ -254,6 +256,22 @@ function Priority({ owner }) {
             }`}
           >
             {toCal ? "📅 → Calendar on" : "→ Calendar off"}
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              const next = !mailAlerts;
+              setMailAlerts(next);
+              await api.updateProfile({ notify_new_mail: next }).catch(() => {});
+            }}
+            title="Get a push notification for EVERY new inbox email (checked at your scan frequency), not just priority ones"
+            className={`px-3 py-1.5 text-xs border whitespace-nowrap ${
+              mailAlerts
+                ? "bg-white text-black border-white font-semibold"
+                : "border-white/30 text-white/70 hover:border-white"
+            }`}
+          >
+            {mailAlerts ? "📩 Mail alerts on" : "Mail alerts off"}
           </button>
           <button
             onClick={scan}

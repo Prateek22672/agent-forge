@@ -138,7 +138,52 @@ def scan_user(db, user_id: str, count: int = 25) -> list:
     # notification for each — the most reliable alert channel on iOS/Android.
     if new_rows:
         _mirror_to_calendar(db, user_id, new_rows)
+
+    # Optional: push for EVERY new inbox email (not just priority), using a
+    # last-seen cursor so each mail alerts exactly once.
+    _notify_new_mail(db, user_id, emails, {r.key for r in new_rows})
     return new_rows
+
+
+def _notify_new_mail(db, user_id: str, emails: list[dict], priority_keys: set) -> None:
+    """Best-effort per-mail push. `emails` is newest-first; we walk until the
+    stored cursor. Priority mails are skipped (they already got a ⭐ push)."""
+    from app import push
+    from app.models import User
+
+    try:
+        user = db.get(User, user_id)
+        if user is None or not getattr(user, "notify_new_mail", False) or not emails:
+            return
+        keys = [_key(user_id, e.get("from", ""), e.get("subject", "")) for e in emails]
+        last = getattr(user, "last_seen_mail_key", "") or ""
+        if not last:
+            # First scan after enabling: set the baseline, don't spam history.
+            user.last_seen_mail_key = keys[0]
+            db.commit()
+            return
+        fresh = []
+        for e, k in zip(emails, keys):
+            if k == last:
+                break
+            if k not in priority_keys:
+                fresh.append(e)
+        fresh = fresh[:10]
+        if len(fresh) <= 3:
+            for e in fresh:
+                push.notify_user(
+                    db, user_id, "📩 New email",
+                    f"{e.get('subject','(no subject)')} — {e.get('from','')[:60]}", "/",
+                )
+        elif fresh:
+            push.notify_user(
+                db, user_id, f"📩 {len(fresh)} new emails",
+                f"Newest: {fresh[0].get('subject','')[:80]}", "/",
+            )
+        user.last_seen_mail_key = keys[0]
+        db.commit()
+    except Exception:
+        pass
 
 
 def _mirror_to_calendar(db, user_id: str, rows: list) -> None:

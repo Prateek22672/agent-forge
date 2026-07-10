@@ -11,6 +11,7 @@ import Trackers from "./Trackers";
 import EmailConfirm from "./EmailConfirm";
 import { startersFor } from "../suggestions";
 import { startAlarm, stopAlarm } from "../alarm";
+import { enablePush } from "../push";
 import GoogleConsentModal from "./GoogleConsentModal";
 
 // The authenticated app: ChatGPT-style single input + capability badges +
@@ -82,6 +83,12 @@ export default function ChatApp({ user, onLogout }) {
     api
       .updateProfile({ tz_offset_min: new Date().getTimezoneOffset() })
       .catch(() => {});
+    // Auto-heal push: if notifications are already allowed, silently (re)register
+    // this device's subscription — covers deploys, DB resets, and new devices,
+    // so the user never has to think about it.
+    if ("Notification" in window && Notification.permission === "granted") {
+      enablePush().catch(() => {});
+    }
     // Returning from Google OAuth.
     const p = new URLSearchParams(window.location.search);
     if (p.get("google")) {
@@ -288,6 +295,7 @@ export default function ChatApp({ user, onLogout }) {
               activeAgentName={activeAgent?.name}
               starters={messages.length === 0 ? startersFor(activeAgent?.name) : []}
               onPickStarter={(s) => send(s)}
+              onNavigate={(v) => setView(v)}
             />
             {pendingEmails.length > 0 && (
               <div className="px-6 pb-2 space-y-2">

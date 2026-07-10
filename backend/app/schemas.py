@@ -36,6 +36,7 @@ class UserOut(BaseModel):
     save_history: bool = True
     priority_scan_freq: str = "off"
     priority_to_calendar: bool = True
+    notify_new_mail: bool = False
 
 
 class ProfileUpdate(BaseModel):
@@ -45,6 +46,7 @@ class ProfileUpdate(BaseModel):
     save_history: bool | None = None
     priority_scan_freq: str | None = None  # off | 15m | 1h | 5h | morning | night | morning_night
     priority_to_calendar: bool | None = None
+    notify_new_mail: bool | None = None
     tz_offset_min: int | None = None
 
 
