@@ -110,4 +110,37 @@ def cron_scan_priority(secret: str = Query(default=""), db: Session = Depends(ge
             total_new += 1
         user.last_priority_scan = now_utc.isoformat()
     db.commit()
-    return {"scanned_users": scanned, "new_priority": total_new}
+
+    # ---- Second-chance escalation (the core USP safety net) ----
+    # A priority email still sitting there (not dismissed) hours after detection
+    # means the user probably hasn't seen it. Alert ONCE more, louder: a push
+    # plus an alarm-grade calendar event a few minutes out.
+    from datetime import timedelta, timezone as _tz
+
+    from app.calendar_bridge import mirror_reminder
+
+    cutoff = datetime.now(_tz.utc) - timedelta(hours=4)
+    stale = (
+        db.query(PriorityEmail)
+        .filter(
+            PriorityEmail.escalated == False,  # noqa: E712
+            PriorityEmail.created_at <= cutoff,
+        )
+        .limit(100)
+        .all()
+    )
+    escalated = 0
+    for p in stale:
+        push.notify_user(
+            db, p.user_id, "⏰ Still unread — priority email", p.subject, "/"
+        )
+        mirror_reminder(
+            p.user_id,
+            f"Unread priority: {p.subject[:60]}",
+            (datetime.utcnow() + timedelta(minutes=10)).isoformat(),
+            alarm=True,
+        )
+        p.escalated = True
+        escalated += 1
+    db.commit()
+    return {"scanned_users": scanned, "new_priority": total_new, "escalated": escalated}

@@ -78,6 +78,9 @@ def _ensure_columns() -> None:
             "notified": f"BOOLEAN DEFAULT {bool_default}",
             "alarm": f"BOOLEAN DEFAULT {bool_default}",
         },
+        "priority_emails": {
+            "escalated": f"BOOLEAN DEFAULT {bool_default}",
+        },
     }
     with engine.begin() as conn:
         for table, cols in wanted.items():

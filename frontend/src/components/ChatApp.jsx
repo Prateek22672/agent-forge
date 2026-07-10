@@ -212,6 +212,14 @@ export default function ChatApp({ user, onLogout }) {
       ? { label: "Gmail", why: "Connect it so I can read and summarize your inbox." }
       : null;
 
+  // Any page (e.g. Priority's amber banner) can request the guided Google
+  // connect flow by dispatching this window event.
+  useEffect(() => {
+    const open = () => setShowConsent(true);
+    window.addEventListener("agentfury:connect-google", open);
+    return () => window.removeEventListener("agentfury:connect-google", open);
+  }, []);
+
   // One-time invite: if Google data scopes aren't connected, gently offer it once.
   useEffect(() => {
     const g = connections?.google;

@@ -180,6 +180,7 @@ function Priority({ owner }) {
   const [msg, setMsg] = useState("");
   const [freq, setFreq] = useState("off");
   const [toCal, setToCal] = useState(true);
+  const [svc, setSvc] = useState(null); // live Google service status
 
   const load = () => api.listPriority().then(setItems).catch(() => setItems([]));
   useEffect(() => {
@@ -190,6 +191,10 @@ function Priority({ owner }) {
         setFreq(u.priority_scan_freq || "off");
         setToCal(u.priority_to_calendar !== false);
       })
+      .catch(() => {});
+    api
+      .getConnections()
+      .then((c) => setSvc(c?.google?.services || null))
       .catch(() => {});
   }, []);
 
@@ -262,11 +267,40 @@ function Priority({ owner }) {
       <div className="px-4 md:px-6 py-2 text-xs text-white/40 border-b border-white/10">
         Important mail — placements, interviews, deadlines — surfaced from your
         inbox. With “→ Calendar on”, each new one lands in your Google Calendar
-        with a reminder, so the Google Calendar app notifies you natively.
+        with a reminder, so the Google Calendar app notifies you natively. Still
+        unread after 4 hours → we alert you again, louder.
         <span className="text-white/55">
           {" "}Tip: install the Google Calendar app &amp; allow its notifications.
         </span>
       </div>
+
+      {/* Live plumbing check: the calendar bridge only works with these two ON. */}
+      {svc && (!svc.gmail_read || (toCal && !svc.calendar)) && (
+        <div className="mx-4 md:mx-6 mt-2 border border-amber-400/40 bg-amber-400/5 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2 text-sm">
+          <div className="flex-1">
+            <span className="text-amber-300">
+              ⚠ {!svc.gmail_read ? "Gmail isn't connected" : "Google Calendar isn't connected"}
+            </span>{" "}
+            <span className="text-white/60">
+              {!svc.gmail_read
+                ? "— I can't scan your inbox for priority mail until you connect it."
+                : "— priority emails and reminders can't reach your phone's calendar notifications."}
+            </span>
+          </div>
+          <button
+            onClick={() => window.dispatchEvent(new Event("agentfury:connect-google"))}
+            className="bg-white text-black px-4 py-1.5 text-sm font-semibold hover:bg-white/85 whitespace-nowrap"
+          >
+            Connect Google
+          </button>
+        </div>
+      )}
+      {svc && svc.gmail_read && svc.calendar && (
+        <div className="mx-4 md:mx-6 mt-2 text-[11px] text-white/45">
+          <span className="text-green-400">●</span> Gmail scan connected ·{" "}
+          <span className="text-green-400">●</span> Calendar notifications connected
+        </div>
+      )}
       {msg && <div className="px-4 md:px-6 py-2 text-xs text-white/60">{msg}</div>}
       <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 space-y-2">
         {items.length === 0 && (

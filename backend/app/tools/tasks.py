@@ -21,6 +21,8 @@ def make_task_tools(user_id: str) -> list:
         from app.models import Reminder, User
         from app.util.timeparse import parse_when
 
+        from app.calendar_bridge import mirror_reminder
+
         db = SessionLocal()
         try:
             u = db.get(User, user_id)
@@ -38,14 +40,22 @@ def make_task_tools(user_id: str) -> list:
             db.commit()
         finally:
             db.close()
+
+        # Mirror into Google Calendar so the alert reaches the user's phone
+        # NATIVELY even after they close AgentFury.
+        on_calendar = mirror_reminder(user_id, title, due.isoformat() if due else "", alarm)
+
         when_txt = f" for {when}" if when else ""
         kind = "alarm" if alarm else "reminder"
-        ping = (
-            (" It'll sound an alarm" if alarm else " I'll ping you")
-            + " when it's due."
-            if due
-            else ""
-        )
+        if due and on_calendar:
+            ping = " It's on your Google Calendar too, so your phone will notify you even if AgentFury is closed."
+        elif due:
+            ping = (
+                " I'll notify you when it's due — tip: connect Google Calendar "
+                "(status chip, top right) so your phone alerts you even when AgentFury is closed."
+            )
+        else:
+            ping = ""
         return f"Saved an {kind}{when_txt}: “{title}”.{ping} View it on your Planner page."
 
     @tool

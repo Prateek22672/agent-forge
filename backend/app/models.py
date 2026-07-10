@@ -178,6 +178,8 @@ class PriorityEmail(Base):
     category: Mapped[str] = mapped_column(String(60), default="")
     reason: Mapped[str] = mapped_column(Text, default="")
     pushed: Mapped[bool] = mapped_column(default=False)
+    # Second-chance alert fired (user hadn't dismissed it hours later).
+    escalated: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
