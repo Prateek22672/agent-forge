@@ -439,7 +439,7 @@ function AlertHealth() {
           ? "Mail checker has NEVER run — the every-15-min cron isn't set up (cron-job.org → docs/PUSH.md)."
           : `Mail checker last ran ${scanAge} min ago — the every-15-min cron looks stopped; check cron-job.org.`],
     h.notify_new_mail
-      ? [true, "New-mail alerts ON — arrive within ~15 min of a mail landing"]
+      ? [true, "New-mail alerts ON — arrive within ~1 min of a mail landing"]
       : [false, "New-mail alerts are OFF — turn on “Mail alerts” on the Priority page."],
   ];
 
@@ -457,9 +457,9 @@ function AlertHealth() {
         ))}
       </div>
       <div className="text-[10px] text-white/35 mt-2">
-        Delays are normal up to the checker interval: reminders ≈1 min, new-mail
-        &amp; priority ≈15 min. If a row is amber, that's the exact reason an
-        alert didn't arrive.
+        Delays are normal up to the checker interval: reminders &amp; new-mail
+        ≈1 min, priority scans ≈15 min. If a row is amber, that's the exact
+        reason an alert didn't arrive.
       </div>
     </div>
   );

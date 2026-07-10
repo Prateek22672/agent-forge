@@ -264,12 +264,12 @@ function Priority({ owner }) {
               setMailAlerts(next);
               setMsg(
                 next
-                  ? "Mail alerts armed — the first background check (within ~15 min) sets the baseline; every mail arriving after that gets a push."
+                  ? "Mail alerts armed — the first check (within ~1 min) sets the baseline; every mail arriving after that gets a push within ~1 minute."
                   : "Mail alerts off."
               );
               await api.updateProfile({ notify_new_mail: next }).catch(() => {});
             }}
-            title="Get a push notification for EVERY new inbox email (checked at your scan frequency), not just priority ones"
+            title="Get a push notification for EVERY new inbox email, checked every minute — not just priority ones"
             className={`px-3 py-1.5 text-xs border whitespace-nowrap ${
               mailAlerts
                 ? "bg-white text-black border-white font-semibold"
