@@ -86,39 +86,80 @@ def push_health(db: Session = Depends(get_db), user: User = Depends(get_current_
     }
 
 
-# ---------- Cron: fire due reminders ----------
-@router.post("/cron/fire-reminders")
-def fire_reminders(
-    secret: str = Query(default=""),
-    db: Session = Depends(get_db),
-):
-    """Called every minute by an external cron (cron-job.org). Finds reminders
-    whose time has arrived and pushes them. Protected by CRON_SECRET."""
-    if not settings.cron_secret or secret != settings.cron_secret:
-        raise HTTPException(403, "Forbidden")
+# ---------- Cron: every-minute pass (reminders + new-mail alerts) ----------
+# ACKs instantly and works on a background thread so the external pinger's short
+# timeout can never kill it. This 1-min ping also keeps the free instance awake.
+import threading
 
-    now = datetime.utcnow().isoformat()  # due_at is stored as naive-UTC ISO
-    # Heartbeat so the UI can prove/deny that this checker is running.
+_min_lock = threading.Lock()
+_min_running = False
+
+
+def _run_minute_pass() -> None:
+    """Fire due reminders + check new mail for opted-in users (cheap, no LLM)."""
+    global _min_running
+    from app import priority
+    from app.database import SessionLocal
+    from app.models import Connection, User
     from app.security import secret_store
 
+    db = SessionLocal()
     try:
-        secret_store.set_secret("heartbeat_reminders", now)
+        now = datetime.utcnow().isoformat()  # due_at is stored as naive-UTC ISO
+        # Heartbeat so the UI can prove/deny that this checker is running.
+        try:
+            secret_store.set_secret("heartbeat_reminders", now)
+        except Exception:
+            pass
+
+        # 1. Due reminders -> push.
+        due = (
+            db.query(Reminder)
+            .filter(
+                Reminder.status == "pending",
+                Reminder.notified == False,  # noqa: E712
+                Reminder.due_at != "",
+                Reminder.due_at <= now,
+            )
+            .all()
+        )
+        for r in due:
+            push.notify_user(db, r.user_id, "⏰ Reminder", r.title, "/")
+            r.notified = True
+        db.commit()
+
+        # 2. New-mail alerts EVERY MINUTE for opted-in users — near-instant
+        #    "you've got mail" without waiting for the 15-min priority scan.
+        connected = (
+            db.query(Connection)
+            .filter(Connection.provider == "google", Connection.status == "connected")
+            .all()
+        )
+        for conn in connected:
+            try:
+                user = db.get(User, conn.user_id)
+                if user is not None and getattr(user, "notify_new_mail", False):
+                    priority.check_new_mail(db, user.id)
+            except Exception:
+                db.rollback()
     except Exception:
         pass
-    due = (
-        db.query(Reminder)
-        .filter(
-            Reminder.status == "pending",
-            Reminder.notified == False,  # noqa: E712
-            Reminder.due_at != "",
-            Reminder.due_at <= now,
-        )
-        .all()
-    )
-    fired = 0
-    for r in due:
-        push.notify_user(db, r.user_id, "⏰ Reminder", r.title, "/")
-        r.notified = True
-        fired += 1
-    db.commit()
-    return {"checked_at": now, "fired": fired}
+    finally:
+        db.close()
+        with _min_lock:
+            _min_running = False
+
+
+@router.post("/cron/fire-reminders")
+def fire_reminders(secret: str = Query(default="")):
+    """Called every minute by an external cron (cron-job.org). Returns instantly;
+    the pass (due reminders + new-mail alerts) runs in the background."""
+    global _min_running
+    if not settings.cron_secret or secret != settings.cron_secret:
+        raise HTTPException(403, "Forbidden")
+    with _min_lock:
+        if _min_running:
+            return {"started": False, "reason": "previous pass still running"}
+        _min_running = True
+    threading.Thread(target=_run_minute_pass, daemon=True).start()
+    return {"started": True}

@@ -31,25 +31,27 @@ Render redeploys on save. Then `/api/push/vapid-public-key` returns
 
 ---
 
-## 2. The cron (fires reminders on time)
+## 2. The two cron jobs (REQUIRED — nothing alerts without them)
 
-Render's free tier sleeps, so an **external cron** pings the endpoint every minute.
-Use a free service like **cron-job.org** or **UptimeRobot**:
+Render's free tier sleeps after 15 idle minutes, so an **external cron** must
+ping the app. Create BOTH jobs at **cron-job.org** (free):
 
-- **URL:**
-  `https://agent-forge-7tv7.onrender.com/api/cron/fire-reminders?secret=b9ed2eea20e09d37110b38804c281792`
-- **Method:** POST
-- **Schedule:** every 1 minute
+**Job 1 — every 1 minute** (reminders + new-mail alerts + keeps the server awake):
+```
+POST https://agent-forge-7tv7.onrender.com/api/cron/fire-reminders?secret=b9ed2eea20e09d37110b38804c281792
+```
 
-Each call finds reminders whose `due_at` has passed, **pushes** them, and marks
-them notified. (The ping also keeps the free Render instance awake — a nice bonus.)
+**Job 2 — every 15 minutes** (priority scan + calendar mirror + escalation):
+```
+POST https://agent-forge-7tv7.onrender.com/api/cron/scan-priority?secret=b9ed2eea20e09d37110b38804c281792
+```
 
-### Priority-inbox cron (optional, for auto-scan + push)
-Add a **second** cron job (every ~15 min) so new important emails are detected
-and pushed without opening the app:
+Both endpoints **ACK instantly** (`{"started": true}`) and do the real work in a
+background thread — so cron-job.org's 30-second timeout can never kill a pass.
+The 1-minute job doubles as the keep-alive that stops Render from sleeping.
 
-- **URL:** `https://agent-forge-7tv7.onrender.com/api/cron/scan-priority?secret=b9ed2eea20e09d37110b38804c281792`
-- **Method:** POST · **Schedule:** every 15 minutes
+Verify they're alive in the app: **Settings → Notifications → Notification
+Health** — the "checker" rows show when each last ran.
 
 Schedule this cron to run **every 15 minutes**. It does NOT scan everyone each
 time — each user picks their own cadence on the Priority page (**Never / Every
