@@ -50,6 +50,11 @@ def create_reminder(
     db.add(r)
     db.commit()
     db.refresh(r)
+    # Mirror to Google Calendar (native phone notification after the user leaves).
+    if due:
+        from app.calendar_bridge import mirror_reminder
+
+        mirror_reminder(user.id, r.title, due.isoformat(), r.alarm)
     return r
 
 
