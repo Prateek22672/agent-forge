@@ -16,8 +16,21 @@ def push_enabled() -> bool:
     return bool(settings.vapid_public_key and settings.vapid_private_key)
 
 
-def _private_key_pem() -> str:
-    return settings.vapid_private_key.replace("\\n", "\n")
+def _vapid_private_key() -> str:
+    """Return the VAPID private key in the form pywebpush actually accepts
+    (base64url raw 32-byte value). Render env may hold a PEM (with real or
+    \\n-escaped newlines) — pywebpush can't parse PEM strings, which surfaced as
+    'Could not deserialize key data'. So: if it's a PEM, convert it."""
+    raw = settings.vapid_private_key.replace("\\n", "\n").strip()
+    if "BEGIN" not in raw:
+        return raw  # already base64url/DER form
+    import base64
+
+    from cryptography.hazmat.primitives import serialization
+
+    key = serialization.load_pem_private_key(raw.encode(), password=None)
+    value = key.private_numbers().private_value.to_bytes(32, "big")
+    return base64.urlsafe_b64encode(value).rstrip(b"=").decode()
 
 
 def send_to_subscription(sub, title: str, body: str, url: str = "/") -> bool:
@@ -35,7 +48,7 @@ def send_to_subscription(sub, title: str, body: str, url: str = "/") -> bool:
         webpush(
             subscription_info=info,
             data=payload,
-            vapid_private_key=_private_key_pem(),
+            vapid_private_key=_vapid_private_key(),
             vapid_claims={"sub": settings.vapid_subject},
             ttl=60,
         )

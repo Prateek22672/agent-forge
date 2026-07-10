@@ -100,6 +100,29 @@ function Calendar() {
           </a>
         ))}
       </div>
+
+      {/* Apple Calendar (and any calendar app) via ICS subscription. */}
+      <div className="border-t border-white/10 px-4 md:px-6 py-3 flex flex-wrap items-center gap-2">
+        <div className="text-[11px] text-white/40 flex-1 min-w-[200px]">
+           Apple Calendar / other apps: subscribe to your AgentFury feed
+          (reminders + priority emails). iPhone: Settings → Apps → Calendar →
+          Accounts → Add Subscribed Calendar.
+        </div>
+        <button
+          onClick={async () => {
+            try {
+              const { url } = await api.calendarFeedUrl();
+              await navigator.clipboard.writeText(url);
+              setMsg("Feed URL copied — paste it as a subscribed calendar.");
+            } catch {
+              setMsg("Couldn't copy the feed URL.");
+            }
+          }}
+          className="border border-white/30 px-3 py-1.5 text-xs hover:border-white whitespace-nowrap"
+        >
+          Copy feed URL
+        </button>
+      </div>
     </div>
   );
 }
@@ -143,6 +166,7 @@ function Planner({ owner }) {
 
 const SCAN_FREQS = [
   ["off", "Never (manual)"],
+  ["15m", "Every 15 min"],
   ["1h", "Every hour"],
   ["5h", "Every 5 hours"],
   ["morning", "Every morning"],
@@ -155,12 +179,25 @@ function Priority({ owner }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [freq, setFreq] = useState("off");
+  const [toCal, setToCal] = useState(true);
 
   const load = () => api.listPriority().then(setItems).catch(() => setItems([]));
   useEffect(() => {
     load();
-    api.me().then((u) => setFreq(u.priority_scan_freq || "off")).catch(() => {});
+    api
+      .me()
+      .then((u) => {
+        setFreq(u.priority_scan_freq || "off");
+        setToCal(u.priority_to_calendar !== false);
+      })
+      .catch(() => {});
   }, []);
+
+  const toggleCal = async () => {
+    const next = !toCal;
+    setToCal(next);
+    await api.updateProfile({ priority_to_calendar: next }).catch(() => {});
+  };
 
   const changeFreq = async (value) => {
     setFreq(value);
@@ -188,7 +225,7 @@ function Priority({ owner }) {
     <div className="flex-1 flex flex-col min-h-0 min-w-0">
       <div className="border-b border-white/15 px-4 md:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
         <div className="font-semibold text-lg">{owner}'s Priority Inbox</div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <select
             value={freq}
             onChange={(e) => changeFreq(e.target.value)}
@@ -202,6 +239,18 @@ function Priority({ owner }) {
             ))}
           </select>
           <button
+            type="button"
+            onClick={toggleCal}
+            title="Add each new priority email to your Google Calendar with a reminder — Google Calendar then notifies you natively on your phone"
+            className={`px-3 py-1.5 text-xs border whitespace-nowrap ${
+              toCal
+                ? "bg-white text-black border-white font-semibold"
+                : "border-white/30 text-white/70 hover:border-white"
+            }`}
+          >
+            {toCal ? "📅 → Calendar on" : "→ Calendar off"}
+          </button>
+          <button
             onClick={scan}
             disabled={busy}
             className="bg-white text-black px-4 py-1.5 text-sm font-semibold hover:bg-white/85 disabled:opacity-50 whitespace-nowrap"
@@ -212,7 +261,11 @@ function Priority({ owner }) {
       </div>
       <div className="px-4 md:px-6 py-2 text-xs text-white/40 border-b border-white/10">
         Important mail — placements, interviews, deadlines — surfaced from your
-        inbox. You'll get a push when new ones land.
+        inbox. With “→ Calendar on”, each new one lands in your Google Calendar
+        with a reminder, so the Google Calendar app notifies you natively.
+        <span className="text-white/55">
+          {" "}Tip: install the Google Calendar app &amp; allow its notifications.
+        </span>
       </div>
       {msg && <div className="px-4 md:px-6 py-2 text-xs text-white/60">{msg}</div>}
       <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 space-y-2">

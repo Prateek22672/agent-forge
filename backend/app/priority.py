@@ -132,4 +132,49 @@ def scan_user(db, user_id: str, count: int = 25) -> list:
         db.add(row)
         new_rows.append(row)
     db.commit()
+
+    # Mirror new priority emails into Google Calendar (if the user opted in and
+    # granted Calendar). Google Calendar's own app then delivers a NATIVE
+    # notification for each — the most reliable alert channel on iOS/Android.
+    if new_rows:
+        _mirror_to_calendar(db, user_id, new_rows)
     return new_rows
+
+
+def _mirror_to_calendar(db, user_id: str, rows: list) -> None:
+    """Best-effort: one same-day calendar event per new priority email, with a
+    popup reminder at event time. Never raises — a calendar hiccup must not
+    break the scan."""
+    from datetime import datetime, timedelta
+
+    from app.integrations import google_oauth
+    from app.models import User
+
+    try:
+        user = db.get(User, user_id)
+        if user is not None and not getattr(user, "priority_to_calendar", True):
+            return
+        # Stagger events 10, 15, 20… minutes out so several new priorities don't
+        # collapse into one overlapping block.
+        base = datetime.utcnow() + timedelta(minutes=10)
+        for i, row in enumerate(rows):
+            start = base + timedelta(minutes=5 * i)
+            end = start + timedelta(minutes=30)
+            try:
+                google_oauth.create_event(
+                    user_id,
+                    f"⭐ Priority email: {row.subject[:80]}",
+                    start.isoformat(),
+                    end.isoformat(),
+                    description=(
+                        f"From: {row.sender}\n"
+                        f"Why it matters: {row.reason}\n\n"
+                        f"{row.snippet[:200]}\n\n"
+                        "Surfaced by AgentFury — https://agentfury.foliofyx.in"
+                    ),
+                    reminder_minutes=0,  # popup exactly at event time
+                )
+            except Exception:
+                return  # calendar not granted / API issue — skip quietly
+    except Exception:
+        pass

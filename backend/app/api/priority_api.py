@@ -56,6 +56,8 @@ def _should_scan(user: User, now_utc) -> bool:
             last = None
     mins_since = (now_utc - last).total_seconds() / 60 if last else 1e9
 
+    if freq == "15m":
+        return mins_since >= 14  # effectively every cron tick (cron runs 15-min)
     if freq == "1h":
         return mins_since >= 55
     if freq == "5h":

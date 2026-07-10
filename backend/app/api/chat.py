@@ -70,6 +70,13 @@ def chat(
     except Exception as exc:
         raise HTTPException(500, f"Agent run failed: {exc}")
 
+    # 4a. Personalization: mine this message for a durable fact -> user's Brain.
+    #     Background daemon thread — adds zero latency, works even with chat
+    #     history saving OFF (we keep the distilled fact, not the transcript).
+    from app import brain
+
+    brain.extract_fact_async(user.id, payload.message)
+
     # 4b. Suggest next tasks (best-effort). Time-bounded so a slow suggestion
     # model can never add more than a moment to the user's wait — if it doesn't
     # finish quickly we just return the reply with no chips.
