@@ -145,6 +145,21 @@ def scan_user(db, user_id: str, count: int = 25) -> list:
     return new_rows
 
 
+def check_new_mail(db, user_id: str, count: int = 10) -> None:
+    """CHEAP new-mail check (metadata fetch only, no LLM). The cron runs this for
+    every mail-alerts user on EVERY tick — independent of their priority-scan
+    frequency — so 'notify me for any new mail' works even with scans off."""
+    from app.integrations import google_oauth
+
+    if not google_oauth.is_connected(user_id):
+        return
+    try:
+        emails = google_oauth.fetch_recent(count, user_id)
+    except Exception:
+        return
+    _notify_new_mail(db, user_id, emails, set())
+
+
 def _notify_new_mail(db, user_id: str, emails: list[dict], priority_keys: set) -> None:
     """Best-effort per-mail push. `emails` is newest-first; we walk until the
     stored cursor. Priority mails are skipped (they already got a ⭐ push)."""

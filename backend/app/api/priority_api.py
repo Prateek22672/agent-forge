@@ -95,10 +95,25 @@ def cron_scan_priority(secret: str = Query(default=""), db: Session = Depends(ge
         .filter(Connection.provider == "google", Connection.status == "connected")
         .all()
     )
+    # Heartbeat: lets the app SHOW users whether this background checker is
+    # actually running (the #1 cause of "no notification came").
+    from app.security import secret_store
+
+    try:
+        secret_store.set_secret("heartbeat_scan", now_utc.isoformat())
+    except Exception:
+        pass
+
     scanned, total_new = 0, 0
     for conn in connected:
         user = db.get(User, conn.user_id)
-        if not user or not _should_scan(user, now_utc):
+        if not user:
+            continue
+        # New-mail alerts run EVERY tick for opted-in users (cheap, no LLM) —
+        # independent of their priority-scan frequency.
+        if getattr(user, "notify_new_mail", False):
+            priority.check_new_mail(db, user.id)
+        if not _should_scan(user, now_utc):
             continue
         scanned += 1
         new_rows = priority.scan_user(db, user.id)
