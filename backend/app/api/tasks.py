@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.database import get_db
 from app.memory import vector_store
-from app.models import BrainFact, Note, Reminder, User
+from app.models import AgentAction, BrainFact, Note, Reminder, User
 from app.schemas import (
+    AgentActionOut,
     BrainFactCreate,
     BrainFactOut,
     NoteCreate,
@@ -124,6 +125,20 @@ def delete_note(
     if n and n.user_id == user.id:
         db.delete(n)
         db.commit()
+
+
+# ---------- Autopilot activity ("while you were away") ----------
+@router.get("/autopilot/activity", response_model=list[AgentActionOut])
+def autopilot_activity(
+    db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return (
+        db.query(AgentAction)
+        .filter(AgentAction.user_id == user.id)
+        .order_by(AgentAction.created_at.desc())
+        .limit(60)
+        .all()
+    )
 
 
 # ---------- Brain (personal knowledge the AI recalls) ----------

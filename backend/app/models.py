@@ -74,6 +74,11 @@ class User(Base):
     notify_new_mail: Mapped[bool] = mapped_column(default=False)
     # Dedupe cursor: key of the newest inbox email we've already seen.
     last_seen_mail_key: Mapped[str] = mapped_column(String(80), default="")
+    # AUTOPILOT: the autonomous background agent (one opt-in, then no human
+    # needed — it triages mail, drafts replies, schedules, and briefs).
+    autopilot: Mapped[bool] = mapped_column(default=False)
+    autopilot_cursor: Mapped[str] = mapped_column(String(80), default="")
+    last_brief: Mapped[str] = mapped_column(String(20), default="")  # YYYY-MM-DD
     tz_offset_min: Mapped[int] = mapped_column(default=0)  # JS getTimezoneOffset()
     last_priority_scan: Mapped[str] = mapped_column(String(40), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
@@ -184,6 +189,21 @@ class PriorityEmail(Base):
     pushed: Mapped[bool] = mapped_column(default=False)
     # Second-chance alert fired (user hadn't dismissed it hours later).
     escalated: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class AgentAction(Base):
+    """One autonomous action Autopilot took on the user's behalf — the
+    'while you were away' feed that makes the agent's work visible."""
+
+    __tablename__ = "agent_actions"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    # draft_reply | reminder | calendar_event | note | brief
+    kind: Mapped[str] = mapped_column(String(40))
+    title: Mapped[str] = mapped_column(Text, default="")
+    detail: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
