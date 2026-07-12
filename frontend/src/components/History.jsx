@@ -12,6 +12,7 @@ export default function History({
 }) {
   const NAV = [
     ["chat", "Chats"],
+    ["autopilot", "Autopilot"],
     ["priority", "Priority"],
     ["planner", "Planner"],
     ["brain", "Brain"],

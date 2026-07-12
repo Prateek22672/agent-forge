@@ -118,6 +118,11 @@ def _run_scan_pass() -> None:
                 if not user:
                     continue
                 # (New-mail alerts run on the every-1-min cron, not here.)
+                # AUTOPILOT: the autonomous agent pass (triage -> act -> report).
+                if getattr(user, "autopilot", False):
+                    from app import autopilot
+
+                    autopilot.run_for_user(db, user)
                 if not _should_scan(user, now_utc):
                     continue
                 new_rows = priority.scan_user(db, user.id)

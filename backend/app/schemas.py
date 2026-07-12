@@ -37,6 +37,7 @@ class UserOut(BaseModel):
     priority_scan_freq: str = "off"
     priority_to_calendar: bool = True
     notify_new_mail: bool = False
+    autopilot: bool = False
 
 
 class ProfileUpdate(BaseModel):
@@ -47,6 +48,7 @@ class ProfileUpdate(BaseModel):
     priority_scan_freq: str | None = None  # off | 15m | 1h | 5h | morning | night | morning_night
     priority_to_calendar: bool | None = None
     notify_new_mail: bool | None = None
+    autopilot: bool | None = None
     tz_offset_min: int | None = None
 
 
@@ -188,6 +190,16 @@ class PriorityEmailOut(BaseModel):
     snippet: str
     category: str
     reason: str
+    created_at: datetime
+
+
+class AgentActionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    kind: str
+    title: str
+    detail: str
     created_at: datetime
 
 

@@ -116,6 +116,9 @@ export const api = {
   scanPriority: () => http("POST", "/priority/scan"),
   dismissPriority: (id) => http("DELETE", `/priority/${id}`),
 
+  // Autopilot
+  autopilotActivity: () => http("GET", "/autopilot/activity"),
+
   // Brain (personal knowledge)
   listBrain: () => http("GET", "/brain"),
   addBrain: (text) => http("POST", "/brain", { text }),

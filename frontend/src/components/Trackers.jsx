@@ -5,9 +5,100 @@ import { api } from "../api";
 // from chat (via the agent's tools) show up here too.
 export default function Trackers({ view, user }) {
   const firstName = (user?.name || user?.email || "Your").split(/[ @]/)[0];
+  if (view === "autopilot") return <Autopilot owner={firstName} />;
   if (view === "priority") return <Priority owner={firstName} />;
   if (view === "brain") return <Brain owner={firstName} />;
   return <Planner owner={firstName} />; // reminders + notes + calendar together
+}
+
+const ACTION_ICONS = {
+  draft_reply: "✉️",
+  reminder: "⏰",
+  calendar_event: "📅",
+  note: "📝",
+  brief: "☀️",
+};
+
+// AUTOPILOT — one switch, then the agent works alone; this page is its logbook.
+function Autopilot({ owner }) {
+  const [on, setOn] = useState(false);
+  const [items, setItems] = useState([]);
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    api.me().then((u) => setOn(u.autopilot === true)).catch(() => {});
+    api.autopilotActivity().then(setItems).catch(() => setItems([]));
+  }, []);
+
+  const toggle = async () => {
+    const next = !on;
+    setOn(next);
+    setMsg(
+      next
+        ? "Autopilot is ON. From now on I triage every new email in the background — drafting replies, catching deadlines, scheduling events — and report here."
+        : "Autopilot is OFF. I'll only act when you ask."
+    );
+    await api.updateProfile({ autopilot: next }).catch(() => {});
+  };
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0 min-w-0">
+      <div className="border-b border-white/15 px-4 md:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="font-semibold text-lg">🤖 {owner}'s Autopilot</div>
+          <div className="text-xs text-white/40">
+            The autonomous agent — one switch, no babysitting.
+          </div>
+        </div>
+        <button
+          onClick={toggle}
+          className={`px-6 py-2.5 font-semibold ${
+            on
+              ? "bg-white text-black hover:bg-white/85"
+              : "border border-white/40 text-white hover:border-white"
+          }`}
+        >
+          {on ? "Autopilot ON" : "Turn on Autopilot"}
+        </button>
+      </div>
+
+      <div className="px-4 md:px-6 py-3 border-b border-white/10 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-white/50">
+        <div className="border border-white/10 p-2.5">✉️ <b className="text-white/70">Drafts replies</b> to mail that awaits your answer — one tap to send.</div>
+        <div className="border border-white/10 p-2.5">⏰ <b className="text-white/70">Catches deadlines</b> from emails → alarm + your Google Calendar.</div>
+        <div className="border border-white/10 p-2.5">☀️ <b className="text-white/70">Briefs you each morning</b> — events, dues, unread priorities.</div>
+      </div>
+      {msg && <div className="px-4 md:px-6 py-2 text-xs text-white/60">{msg}</div>}
+
+      <div className="px-4 md:px-6 pt-3 pb-1 text-[10px] tracking-widest text-white/40">
+        WHILE YOU WERE AWAY
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-2 space-y-2">
+        {items.length === 0 && (
+          <Empty
+            text={
+              on
+                ? "Nothing yet — actions will appear here as new mail arrives."
+                : "Turn on Autopilot and this becomes the log of everything the agent did for you."
+            }
+          />
+        )}
+        {items.map((a) => (
+          <div key={a.id} className="border border-white/15 p-3 flex gap-3">
+            <div className="text-lg">{ACTION_ICONS[a.kind] || "•"}</div>
+            <div className="min-w-0">
+              <div className="text-sm font-medium break-words">{a.title}</div>
+              {a.detail && (
+                <div className="text-xs text-white/50 break-words">{a.detail}</div>
+              )}
+              <div className="text-[10px] text-white/35 mt-0.5">
+                {new Date(a.created_at).toLocaleString()}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function Calendar() {
