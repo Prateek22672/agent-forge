@@ -30,10 +30,31 @@ app. Signing in once shares your account across all three.
 2. Toggle **Developer mode** on (top-right)
 3. Click **Load unpacked**
 4. Select the `extension/` folder in this repo
-5. Click the AgentFury icon in the toolbar → sign in with your AgentFury
-   account (same one as the website)
+5. Click the AgentFury icon in the toolbar → sign in (email/password, or
+   **Continue with Google** — see one-time setup below) — same account as the
+   website
 6. Open Gmail (`mail.google.com`) → open Compose → the **✨ AGENTFURY**
    toolbar appears above the message body
+
+### One-time setup for "Continue with Google" in the extension
+
+Chrome extensions can't use the website's redirect-to-a-page OAuth flow —
+instead Chrome gives each extension its own
+`https://<extension-id>.chromiumapp.org/` redirect URI
+(`chrome.identity.launchWebAuthFlow`). That URI must be added to the SAME
+Google OAuth client the website uses:
+
+1. Load the extension unpacked (steps above) → open `chrome://extensions` →
+   note the **ID** shown under AgentFury (a long lowercase string)
+2. Go to **Google Cloud Console → APIs & Services → Credentials** → open your
+   OAuth 2.0 Client ID
+3. Under **Authorized redirect URIs**, add:
+   `https://<that-extension-id>.chromiumapp.org/`
+4. Save
+
+Once published to the Chrome Web Store, the extension gets a **permanent**
+ID (shown on the Developer Dashboard) — add that one too, so both the dev
+(unpacked) and published versions work.
 
 ## How it works
 

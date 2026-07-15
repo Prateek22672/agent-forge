@@ -13,12 +13,10 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 import json
-import os
 
 from app.auth import (
     create_token,
     get_current_user,
-    hash_password,
     sign_oauth_state,
     verify_oauth_state,
 )
@@ -26,7 +24,6 @@ from app.config import settings
 from app.database import get_db
 from app.integrations import google_oauth
 from app.models import Connection, User
-from app.seed import create_starter_agents
 
 router = APIRouter(prefix="/api/connections", tags=["connections"])
 
@@ -182,24 +179,11 @@ def google_callback(
 
     # ----- login flow: find-or-create an account from the Google identity -----
     if data.get("login"):
-        info = google_oauth.userinfo(creds)
-        email = (info.get("email") or "").strip().lower()
-        if not email:
+        from app.google_login import login_or_create_user
+
+        user, info = login_or_create_user(db, creds)
+        if user is None:
             return _back("google=error")
-        user = db.query(User).filter(User.email == email).first()
-        if not user:
-            user = User(
-                email=email,
-                name=info.get("name", ""),
-                # Random unusable password — this account signs in via Google.
-                password_hash=hash_password(os.urandom(24).hex()),
-            )
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-            create_starter_agents(db, user.id)
-        google_oauth.store_credentials(user.id, creds)
-        _upsert_google_connection(db, user.id, info)
         token = create_token(user.id)
         # Hand the session token back (browser query, or desktop deep link).
         return _back(f"token={token}&google=connected")

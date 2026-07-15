@@ -42,6 +42,18 @@ button.secondary {
 }
 button.secondary:hover { border-color: #fff; }
 
+.google-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin-bottom: 10px;
+}
+.or-divider {
+  display: flex; align-items: center; gap: 10px; margin: 4px 0 10px;
+  color: rgba(255,255,255,.35); font-size: 11px;
+}
+.or-divider::before, .or-divider::after {
+  content: ""; flex: 1; height: 1px; background: rgba(255,255,255,.15);
+}
+
 .msg { font-size: 11px; color: rgba(255,255,255,.55); margin-top: 6px; }
 .error { color: #f87171; }
 
