@@ -47,6 +47,51 @@ async function apiCall(path, { method = "GET", body, auth = true } = {}) {
   }
 }
 
+// ---------- Google sign-in via chrome.identity.launchWebAuthFlow ----------
+// Extensions can't use the website's redirect-to-a-page flow, so Chrome gives
+// this extension its own https://<ext-id>.chromiumapp.org/ redirect URI, and
+// hands the final redirect URL straight back to us in JS — no page needed.
+// Login-first, same as the website: only requests non-sensitive scopes, so
+// there's no "unverified app" warning on this button.
+async function googleLogin() {
+  const idRes = await apiCall("/auth/google/client-id", { auth: false });
+  if (!idRes.ok || !idRes.data?.configured) {
+    return { ok: false, error: "Google sign-in isn't configured on the server." };
+  }
+  const redirectUri = chrome.identity.getRedirectURL();
+  const authUrl =
+    "https://accounts.google.com/o/oauth2/v2/auth?" +
+    new URLSearchParams({
+      client_id: idRes.data.client_id,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: "openid email profile",
+      prompt: "select_account",
+    }).toString();
+
+  let responseUrl;
+  try {
+    responseUrl = await chrome.identity.launchWebAuthFlow({
+      url: authUrl,
+      interactive: true,
+    });
+  } catch (e) {
+    return { ok: false, error: "Google sign-in was cancelled or blocked." };
+  }
+  if (!responseUrl) return { ok: false, error: "Google sign-in was cancelled." };
+
+  const code = new URL(responseUrl).searchParams.get("code");
+  if (!code) return { ok: false, error: "Google didn't return an auth code." };
+
+  const r = await apiCall("/auth/google/extension-token", {
+    method: "POST",
+    body: { code, redirect_uri: redirectUri },
+    auth: false,
+  });
+  if (r.ok) await setToken(r.data.access_token);
+  return r;
+}
+
 // Single message hub — popup.js and content-gmail.js both talk through this.
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   (async () => {
@@ -59,6 +104,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         });
         if (r.ok) await setToken(r.data.access_token);
         sendResponse(r);
+        return;
+      }
+      case "GOOGLE_LOGIN": {
+        sendResponse(await googleLogin());
         return;
       }
       case "GET_TOKEN_STATUS": {

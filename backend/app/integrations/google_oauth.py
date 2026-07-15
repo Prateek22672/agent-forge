@@ -83,18 +83,22 @@ def _client_config() -> dict:
     }
 
 
-def build_auth_url(state: str, include_data: bool = False) -> str:
+def build_auth_url(
+    state: str, include_data: bool = False, redirect_uri: str | None = None
+) -> str:
     """Return the Google consent-screen URL.
 
     `include_data=False` (sign-in) requests only login scopes → no warning.
     `include_data=True` (connect Gmail/Calendar) adds the sensitive scopes, and
-    `include_granted_scopes` makes it incremental (keeps the login grant)."""
+    `include_granted_scopes` makes it incremental (keeps the login grant).
+    `redirect_uri` overrides the default — used by the browser extension, which
+    gets its own `https://<ext-id>.chromiumapp.org/` redirect from Chrome."""
     from google_auth_oauthlib.flow import Flow
 
     flow = Flow.from_client_config(
         _client_config(),
         scopes=get_scopes(include_data),
-        redirect_uri=settings.oauth_redirect_uri,
+        redirect_uri=redirect_uri or settings.oauth_redirect_uri,
     )
     auth_url, _ = flow.authorization_url(
         access_type="offline",       # so we get a refresh token
@@ -107,9 +111,11 @@ def build_auth_url(state: str, include_data: bool = False) -> str:
     return auth_url
 
 
-def complete_flow(code: str):
+def complete_flow(code: str, redirect_uri: str | None = None):
     """Exchange the auth code for OAuth credentials (does NOT persist yet — the
     caller may need the profile first to decide which user to store under).
+    `redirect_uri` MUST match whatever was used to request the code (the
+    browser extension uses its own chromiumapp.org redirect).
 
     We request the broad scope set so the exchange accepts either a login-only or
     a login+data grant. CRITICAL: under relaxed scope checking, `credentials.scopes`
@@ -119,7 +125,9 @@ def complete_flow(code: str):
     from google_auth_oauthlib.flow import Flow
 
     flow = Flow.from_client_config(
-        _client_config(), scopes=SCOPES, redirect_uri=settings.oauth_redirect_uri
+        _client_config(),
+        scopes=SCOPES,
+        redirect_uri=redirect_uri or settings.oauth_redirect_uri,
     )
     flow.fetch_token(code=code)
     creds = flow.credentials
