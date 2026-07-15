@@ -1,0 +1,67 @@
+* { box-sizing: border-box; border-radius: 0 !important; }
+html, body {
+  width: 360px;
+  min-height: 200px;
+  margin: 0;
+  background: #000;
+  color: #fff;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 13px;
+}
+#app { display: flex; flex-direction: column; }
+
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,.15);
+}
+.brand { font-weight: 700; letter-spacing: .15em; font-size: 12px; }
+.tabs { display: flex; gap: 4px; padding: 8px; border-bottom: 1px solid rgba(255,255,255,.1); }
+.tab {
+  flex: 1; text-align: center; padding: 7px 4px; font-size: 11px; cursor: pointer;
+  border: 1px solid rgba(255,255,255,.2); color: rgba(255,255,255,.7);
+}
+.tab.active { background: #fff; color: #000; font-weight: 600; border-color: #fff; }
+
+.panel { padding: 12px 14px; max-height: 420px; overflow-y: auto; }
+
+input, textarea {
+  width: 100%; background: #000; border: 1px solid rgba(255,255,255,.3);
+  color: #fff; padding: 8px; font-size: 13px; margin-bottom: 8px; outline: none;
+}
+input:focus, textarea:focus { border-color: #fff; }
+textarea { resize: vertical; min-height: 60px; }
+
+button {
+  background: #fff; color: #000; border: none; padding: 9px 14px;
+  font-weight: 600; font-size: 12px; cursor: pointer; width: 100%;
+}
+button:hover { background: rgba(255,255,255,.85); }
+button:disabled { opacity: .5; cursor: default; }
+button.secondary {
+  background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.3);
+}
+button.secondary:hover { border-color: #fff; }
+
+.msg { font-size: 11px; color: rgba(255,255,255,.55); margin-top: 6px; }
+.error { color: #f87171; }
+
+.item {
+  border: 1px solid rgba(255,255,255,.15); padding: 8px 10px; margin-bottom: 6px;
+}
+.item .title { font-size: 12px; font-weight: 600; }
+.item .sub { font-size: 11px; color: rgba(255,255,255,.5); margin-top: 2px; }
+.item .row { display: flex; gap: 6px; margin-top: 6px; }
+.item .row button { flex: 1; font-size: 11px; padding: 6px; }
+
+.empty { color: rgba(255,255,255,.35); text-align: center; padding: 20px 0; font-size: 12px; }
+
+.chat-log { max-height: 220px; overflow-y: auto; margin-bottom: 8px; }
+.bubble { padding: 7px 9px; margin-bottom: 6px; font-size: 12px; line-height: 1.4; }
+.bubble.user { background: #fff; color: #000; margin-left: 20%; }
+.bubble.ai { border: 1px solid rgba(255,255,255,.2); white-space: pre-wrap; }
+
+.footer-link {
+  text-align: center; font-size: 11px; color: rgba(255,255,255,.4);
+  padding: 8px; cursor: pointer;
+}
+.footer-link:hover { color: #fff; }
