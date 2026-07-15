@@ -26,6 +26,7 @@ from app.api import (
     push_api,
     settings_api,
     tasks,
+    write_api,
 )
 from app.config import BASE_DIR, settings
 from app.database import init_db
@@ -59,7 +60,10 @@ app.add_middleware(
     CORSMiddleware,
     # Crocs: only the configured frontend origin(s) may call the API with creds —
     # not a wildcard. Lock FRONTEND_ORIGIN to your real domain in production.
+    # Browser-extension origins (chrome-extension://<id>, moz-extension://<id>)
+    # are allowed via regex since the id varies per install/browser.
     allow_origins=[settings.frontend_origin, "http://localhost:5173", "http://localhost:8000"],
+    allow_origin_regex=r"^(chrome|moz)-extension://.*$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -87,6 +91,7 @@ app.include_router(admin.router)
 app.include_router(push_api.router)
 app.include_router(priority_api.router)
 app.include_router(calendar_api.router)
+app.include_router(write_api.router)
 
 
 @app.get("/api/health")

@@ -1,0 +1,53 @@
+.af-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  margin: 4px 0;
+  background: #000;
+  border: 1px solid rgba(255,255,255,.2);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  z-index: 9999;
+  flex-wrap: wrap;
+}
+.af-toolbar .af-label {
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  padding: 0 6px;
+}
+.af-toolbar button {
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.35);
+  border-radius: 3px;
+  padding: 4px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.af-toolbar button:hover { background: #fff; color: #000; }
+.af-toolbar button:disabled { opacity: .5; cursor: default; }
+.af-toolbar .af-status {
+  font-size: 11px;
+  color: rgba(255,255,255,.6);
+  padding: 0 4px;
+}
+.af-write-box {
+  display: none;
+  gap: 4px;
+  width: 100%;
+  margin-top: 4px;
+}
+.af-write-box.open { display: flex; }
+.af-write-box input {
+  flex: 1;
+  background: #111;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.3);
+  border-radius: 3px;
+  padding: 5px 7px;
+  font-size: 12px;
+  font-family: inherit;
+}
