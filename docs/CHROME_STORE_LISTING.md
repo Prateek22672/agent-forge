@@ -1,8 +1,12 @@
 # Chrome Web Store submission — copy-paste package
 
 Everything you need to fill in the Developer Dashboard form. Submission
-package: `dist-extension/agentfury-extension-v1.0.0.zip` (already built,
-verified — 10 files, manifest at the zip root as required).
+package: `dist-extension/agentfury-extension-v1.1.0.zip` (already built and
+verified — manifest at the zip root as required).
+
+> If you already uploaded v1.0.0, this is now **v1.1.0** — upload the new zip
+> as a new package version on the SAME item (Package tab → Upload new
+> package), you don't need to re-register.
 
 ---
 
@@ -16,7 +20,7 @@ verified — 10 files, manifest at the zip root as required).
 
 ## 2. Upload
 
-- Click **New Item** → upload `dist-extension/agentfury-extension-v1.0.0.zip`
+- Click **New Item** → upload `dist-extension/agentfury-extension-v1.1.0.zip`
 - It parses the manifest automatically (name: AgentFury, version 1.0.0)
 
 ## 3. Store listing tab — copy-paste these
@@ -28,31 +32,39 @@ AgentFury — AI Email Assistant
 
 **Summary** (max 132 chars):
 ```
-Your AI agent in the browser: correct, rewrite, or write emails in Gmail, plus quick chat, priority inbox & reminders.
+Select any text on any page to ask AgentFury about it. Plus an AI writer in Gmail compose, priority inbox & reminders.
 ```
 
 **Description:**
 ```
 AgentFury puts a personal AI assistant right in your browser.
 
-GMAIL COMPOSE TOOLBAR
-Every time you open Compose in Gmail, an AI toolbar appears above the message
-body:
+ASK ABOUT ANYTHING YOU SELECT
+Highlight text on any webpage — like you would to "Search Google for…" — and
+a small bar appears letting you ask AgentFury about it, right there. Explain
+it, summarize it, or ask your own question. Also available via right-click →
+"Ask AgentFury about…".
+
+GMAIL COMPOSE ASSISTANT
+Open Compose in Gmail and click the small AF button for:
 • Improve — fixes grammar and spelling, tightens the wording
 • Shorten — makes it punchier while keeping the key points
 • Formal / Friendly — rewrites in that tone
-• Write for me — type a one-line instruction ("politely decline and ask to
-  reschedule") and get a complete, ready-to-send draft
+• Write for me — type a one-line instruction and get a complete draft, then
+  refine it with follow-ups ("make it shorter", "more formal") before
+  inserting
 
 Nothing is ever sent automatically — you review and send it yourself with
 Gmail's own Send button.
 
 QUICK POPUP
 Click the AgentFury icon anytime for:
-• Chat with your AI assistant (research, questions, tasks)
+• Ask — a quick question to your AI assistant
 • Priority inbox — today's flagged important emails
 • Pending drafts — review and send AI-prepared replies
 • Quick reminders
+A badge on the icon and native notifications let you know when something new
+needs your attention, even without opening anything.
 
 One account, everywhere: sign in once and your data is the same across the
 AgentFury web app, desktop app, and this extension.
@@ -69,9 +81,10 @@ agentfury.foliofyx.in).
 
 **Single purpose description** (required — one sentence, exact purpose):
 ```
-AgentFury lets users correct, rewrite, or generate email text inside Gmail
-compose, and view their AI assistant's chat, priority inbox, and reminders
-from a browser popup.
+AgentFury lets users ask their AI assistant about text they select on any
+webpage, correct/rewrite/generate email text inside Gmail compose, and view
+their AI assistant's chat, priority inbox, and reminders from a browser
+popup.
 ```
 
 **Permission justifications** (paste per permission when asked):
@@ -80,10 +93,12 @@ from a browser popup.
 |---|---|
 | `storage` | Stores the user's AgentFury login session token locally so they stay signed in between browser sessions. |
 | `activeTab` | Used only when the user interacts with the extension popup on the current tab; no passive tracking. |
-| `scripting` | Reserved for injecting the compose toolbar UI into Gmail if needed beyond the static content script. |
+| `scripting` | Reserved for injecting UI beyond the static content scripts if a future feature needs it. |
 | `identity` | Used only for the "Continue with Google" sign-in button (`chrome.identity.launchWebAuthFlow`) — lets the user sign in without typing a password. |
 | `alarms` | Schedules a once-per-minute background check for new priority emails and AI-drafted replies, so the user is notified without having to open the extension. |
 | `notifications` | Shows a native OS notification when new priority mail or an AI draft is found, and displays a badge count on the toolbar icon. |
+| `contextMenus` | Adds a right-click "Ask AgentFury about…" entry when text is selected, as an alternative to the select-to-ask bar. |
+| Host/content script: `<all_urls>` | Lets the user select text on ANY page and ask their AI assistant about it (the core "select-to-ask" feature) — the same way a browser's built-in "Search Google for…" works on any selection. The content script only activates on an active text selection; it does not read page content otherwise. |
 | Host: `https://mail.google.com/*` | Required to detect Gmail's compose box and inject the AI toolbar button directly above it, and to insert AI-rewritten text back into the compose box the user is actively editing. |
 | Host: `https://agentfury.foliofyx.in/*` | The extension's own backend API — used to authenticate the user and process their AI requests (chat, email rewriting, priority inbox, reminders). |
 

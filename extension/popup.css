@@ -1,7 +1,7 @@
 * { box-sizing: border-box; }
 html, body {
-  width: 380px;
-  min-height: 200px;
+  width: 460px;
+  min-height: 260px;
   margin: 0;
   background: #0a0a0a;
   color: #f2f2f2;
@@ -30,7 +30,7 @@ html, body {
 .tab:hover { border-color: rgba(255,255,255,.35); color: #fff; }
 .tab.active { background: #fff; color: #000; font-weight: 600; border-color: #fff; }
 
-.panel { padding: 4px 14px 14px; max-height: 440px; overflow-y: auto; }
+.panel { padding: 6px 16px 16px; max-height: 560px; overflow-y: auto; }
 
 input, textarea {
   width: 100%; background: #151515; border: 1px solid rgba(255,255,255,.16); border-radius: 8px;
@@ -39,7 +39,7 @@ input, textarea {
 }
 input:focus, textarea:focus { border-color: rgba(255,255,255,.55); }
 input::placeholder, textarea::placeholder { color: rgba(255,255,255,.32); }
-textarea { resize: vertical; min-height: 70px; }
+textarea { resize: vertical; min-height: 110px; }
 
 button {
   background: #fff; color: #000; border: none; border-radius: 8px;

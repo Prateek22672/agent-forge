@@ -35,7 +35,12 @@
   box-shadow: 0 12px 32px rgba(0,0,0,.45);
   padding: 10px;
   font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+
+  opacity: 0;
+  transform: translateY(-6px) scale(.97);
+  transition: opacity .15s ease, transform .15s cubic-bezier(.2,.8,.3,1);
 }
+.af-panel.af-in { opacity: 1; transform: translateY(0) scale(1); }
 .af-panel-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 2px 4px 8px;
