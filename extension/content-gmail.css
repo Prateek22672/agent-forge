@@ -1,53 +1,70 @@
-.af-toolbar {
-  display: flex;
+/* Small launcher button, sits compactly above the compose body. */
+.af-launcher {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  margin: 6px 0;
+  justify-content: center;
+  width: auto;
+  min-width: 34px;
+  height: 26px;
+  padding: 0 10px;
+  margin: 4px 0;
   background: #0b0b0b;
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 10px;
-  box-shadow: 0 4px 14px rgba(0,0,0,.25);
-  font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
-  z-index: 9999;
-  flex-wrap: wrap;
-}
-.af-toolbar .af-label {
   color: #fff;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 999px;
+  font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: .06em;
-  padding: 0 6px;
-  opacity: .85;
+  letter-spacing: .04em;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,.2);
+  transition: background .12s, border-color .12s;
 }
-.af-toolbar button {
+.af-launcher:hover { background: #fff; color: #000; border-color: #fff; }
+
+/* Floating panel — attached to document.body, so it's never nested inside
+   Gmail's own compose <form> and can never have its clicks intercepted. */
+.af-panel {
+  position: fixed;
+  z-index: 2147483000;
+  width: 320px;
+  background: #0b0b0b;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.45);
+  padding: 10px;
+  font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+}
+.af-panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 2px 4px 8px;
+}
+.af-panel-head .af-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .08em; opacity: .8;
+}
+.af-close {
+  background: none; border: none; color: rgba(255,255,255,.6);
+  font-size: 16px; line-height: 1; cursor: pointer; padding: 2px 6px;
+}
+.af-close:hover { color: #fff; }
+
+.af-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.af-chips button {
   background: rgba(255,255,255,.06);
   color: #fff;
   border: 1px solid rgba(255,255,255,.16);
   border-radius: 999px;
-  padding: 5px 12px;
-  font-size: 12px;
+  padding: 5px 11px;
+  font-size: 11.5px;
   font-weight: 500;
   cursor: pointer;
-  font-family: inherit;
-  transition: background .12s, border-color .12s;
 }
-.af-toolbar button:hover { background: #fff; color: #000; border-color: #fff; }
-.af-toolbar button:disabled { opacity: .45; cursor: default; }
-.af-toolbar .af-status {
-  font-size: 11px;
-  color: rgba(255,255,255,.55);
-  padding: 0 4px;
-}
-.af-toolbar .af-status.af-err { color: #ff8a8a; }
-.af-write-box {
-  display: none;
-  gap: 6px;
-  width: 100%;
-  margin-top: 6px;
-}
-.af-write-box.open { display: flex; }
-.af-write-box input {
+.af-chips button:hover { background: #fff; color: #000; border-color: #fff; }
+.af-chips button:disabled { opacity: .4; cursor: default; }
+
+.af-row { display: flex; gap: 6px; margin-bottom: 6px; }
+.af-row input {
   flex: 1;
   background: #151515;
   color: #fff;
@@ -58,7 +75,54 @@
   font-family: inherit;
   outline: none;
 }
-.af-write-box input:focus { border-color: rgba(255,255,255,.5); }
-.af-write-box button {
+.af-row input:focus { border-color: rgba(255,255,255,.5); }
+.af-row button {
+  background: #fff;
+  color: #000;
+  border: none;
   border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
 }
+.af-row button:hover { opacity: .88; }
+.af-row button:disabled { opacity: .45; cursor: default; }
+
+.af-status {
+  font-size: 11px;
+  color: rgba(255,255,255,.55);
+  min-height: 14px;
+  padding: 2px 2px 4px;
+}
+.af-status.af-err { color: #ff8a8a; }
+
+.af-preview-wrap { margin-top: 4px; border-top: 1px solid rgba(255,255,255,.1); padding-top: 8px; }
+.af-preview {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 8px;
+  padding: 9px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+.af-actions { display: flex; gap: 8px; margin-top: 8px; }
+.af-actions button {
+  flex: 1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.af-actions .af-insert-btn { background: #fff; color: #000; border: none; }
+.af-actions .af-insert-btn:hover { opacity: .88; }
+.af-actions .secondary {
+  background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.22);
+}
+.af-actions .secondary:hover { border-color: rgba(255,255,255,.55); }

@@ -73,6 +73,20 @@ def polish(payload: PolishRequest, user: User = Depends(get_current_user)):
             f"already there. Output ONLY the rewritten text, nothing else.\n\nTEXT:\n{payload.text}"
         )
 
-    out = llm.invoke(prompt)
-    text = out.content if isinstance(out.content, str) else str(out.content)
-    return {"text": text.strip()}
+    # Resilience: a single Groq key can transiently rate-limit or hiccup. Retry
+    # across a few rotated keys/models instead of letting one failure surface
+    # as a raw, unhandled "Internal Server Error" to the extension.
+    last_exc: Exception | None = None
+    for _ in range(3):
+        try:
+            candidate = llm or get_fast_groq(0.4)
+            if candidate is None:
+                break
+            out = candidate.invoke(prompt)
+            text = out.content if isinstance(out.content, str) else str(out.content)
+            return {"text": text.strip()}
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            llm = None  # force a fresh (likely different-key) client next loop
+            continue
+    raise HTTPException(503, f"AI is temporarily busy — try again in a moment. ({last_exc})")
