@@ -8,23 +8,44 @@
 const COMPOSE_SELECTOR = 'div[aria-label="Message Body"][contenteditable="true"]';
 const ATTACHED = new WeakSet();
 
+// After the extension is reloaded/updated, content scripts already injected
+// into open tabs (Gmail is a long-lived SPA — the tab was never reloaded)
+// lose their connection to it: chrome.runtime becomes undefined and a raw
+// call throws. Guard every access so that's a friendly message, not a crash.
+function extensionAlive() {
+  try {
+    return !!(chrome && chrome.runtime && chrome.runtime.id);
+  } catch {
+    return false;
+  }
+}
+
 function send(msg, timeoutMs = 45000) {
   // Timeboxed so a cold backend (Render free tier can take ~50s to wake up)
   // never leaves the UI stuck on "Thinking…" forever — it always resolves.
   return new Promise((resolve) => {
+    if (!extensionAlive()) {
+      resolve({ ok: false, error: "extension_reloaded", contextInvalid: true });
+      return;
+    }
     let done = false;
     const finish = (v) => {
       if (done) return;
       done = true;
       resolve(v);
     };
-    chrome.runtime.sendMessage(msg, (r) => {
-      if (chrome.runtime.lastError) {
-        finish({ ok: false, error: chrome.runtime.lastError.message });
-        return;
-      }
-      finish(r);
-    });
+    try {
+      chrome.runtime.sendMessage(msg, (r) => {
+        if (chrome.runtime.lastError) {
+          finish({ ok: false, error: chrome.runtime.lastError.message });
+          return;
+        }
+        finish(r);
+      });
+    } catch (e) {
+      finish({ ok: false, error: String(e.message || e), contextInvalid: true });
+      return;
+    }
     setTimeout(
       () => finish({ ok: false, error: "timeout", timedOut: true }),
       timeoutMs
@@ -33,7 +54,8 @@ function send(msg, timeoutMs = 45000) {
 }
 
 // Wake a sleeping backend the moment Gmail loads, so it's likely already warm
-// by the time the user clicks a toolbar button.
+// by the time the user clicks a toolbar button. (No-op if the context is
+// already stale — extensionAlive() guards it.)
 send({ type: "WARM_UP" });
 
 function buildToolbar(composeBody) {
@@ -82,7 +104,9 @@ function buildToolbar(composeBody) {
     });
     setBusy(false);
     if (!r.ok) {
-      if (r.timedOut) {
+      if (r.contextInvalid) {
+        setStatus("AgentFury was updated — refresh this Gmail tab (F5) to keep using it.", true);
+      } else if (r.timedOut) {
         setStatus("Still waking up — click the button again, it'll be quick now.", true);
       } else if (r.status === 401) {
         setStatus("Sign in via the AgentFury extension icon first.", true);
