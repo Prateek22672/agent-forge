@@ -127,6 +127,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         sendResponse(r);
         return;
       }
+      case "WARM_UP": {
+        // Fire-and-forget ping so a cold Render free-tier instance is already
+        // waking up by the time the user actually clicks a button.
+        fetch(`${API_BASE}/health`).catch(() => {});
+        sendResponse({ ok: true });
+        return;
+      }
       default:
         sendResponse({ ok: false, error: "unknown_message" });
     }

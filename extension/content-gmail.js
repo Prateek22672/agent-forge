@@ -8,9 +8,33 @@
 const COMPOSE_SELECTOR = 'div[aria-label="Message Body"][contenteditable="true"]';
 const ATTACHED = new WeakSet();
 
-function send(msg) {
-  return new Promise((resolve) => chrome.runtime.sendMessage(msg, resolve));
+function send(msg, timeoutMs = 45000) {
+  // Timeboxed so a cold backend (Render free tier can take ~50s to wake up)
+  // never leaves the UI stuck on "Thinking…" forever — it always resolves.
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => {
+      if (done) return;
+      done = true;
+      resolve(v);
+    };
+    chrome.runtime.sendMessage(msg, (r) => {
+      if (chrome.runtime.lastError) {
+        finish({ ok: false, error: chrome.runtime.lastError.message });
+        return;
+      }
+      finish(r);
+    });
+    setTimeout(
+      () => finish({ ok: false, error: "timeout", timedOut: true }),
+      timeoutMs
+    );
+  });
 }
+
+// Wake a sleeping backend the moment Gmail loads, so it's likely already warm
+// by the time the user clicks a toolbar button.
+send({ type: "WARM_UP" });
 
 function buildToolbar(composeBody) {
   const bar = document.createElement("div");
@@ -35,7 +59,7 @@ function buildToolbar(composeBody) {
 
   const setStatus = (text, isError) => {
     status.textContent = text;
-    status.style.color = isError ? "#f87171" : "";
+    status.classList.toggle("af-err", !!isError);
   };
 
   const setBusy = (busy) => {
@@ -49,7 +73,7 @@ function buildToolbar(composeBody) {
       return;
     }
     setBusy(true);
-    setStatus("Thinking…");
+    setStatus("Thinking… (first request can take up to a minute if the server was asleep)");
     const r = await send({
       type: "API_CALL",
       path: "/write/polish",
@@ -58,10 +82,12 @@ function buildToolbar(composeBody) {
     });
     setBusy(false);
     if (!r.ok) {
-      if (r.status === 401) {
+      if (r.timedOut) {
+        setStatus("Still waking up — click the button again, it'll be quick now.", true);
+      } else if (r.status === 401) {
         setStatus("Sign in via the AgentFury extension icon first.", true);
       } else {
-        setStatus("Failed: " + (r.error || "unknown error"), true);
+        setStatus("Failed: " + (r.error || "unknown error") + " — try again.", true);
       }
       return;
     }
