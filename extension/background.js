@@ -140,3 +140,96 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   })();
   return true; // async response
 });
+
+// ---------- Ambient notifications + badge (daily-use companion) ----------
+// While Chrome is open, this extension is a always-on notifier: every minute
+// it checks for new priority mail and pending AI drafts, shows a native OS
+// notification for anything NEW (deduped via a seen-ids list), and keeps a
+// live count badge on the toolbar icon — so the user doesn't have to open
+// anything to know something needs attention. This complements (doesn't
+// replace) the PWA web push the main app already sends.
+const POLL_ALARM = "af-poll";
+
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.alarms.create(POLL_ALARM, { periodInMinutes: 1 });
+});
+chrome.runtime.onStartup.addListener(() => {
+  chrome.alarms.create(POLL_ALARM, { periodInMinutes: 1 });
+});
+
+async function getSeenIds() {
+  const { af_seen_ids } = await chrome.storage.local.get("af_seen_ids");
+  return new Set(af_seen_ids || []);
+}
+async function saveSeenIds(set) {
+  // Cap so storage never grows unbounded.
+  const arr = Array.from(set).slice(-300);
+  await chrome.storage.local.set({ af_seen_ids: arr });
+}
+
+async function pollAndNotify() {
+  const token = await getToken();
+  if (!token) {
+    chrome.action.setBadgeText({ text: "" });
+    return;
+  }
+
+  const [prio, drafts] = await Promise.all([
+    apiCall("/priority"),
+    apiCall("/emails/pending"),
+  ]);
+  if (!prio.ok && !drafts.ok) return; // offline / server asleep — try again next tick
+
+  const priorityItems = prio.ok ? prio.data : [];
+  const draftItems = drafts.ok ? drafts.data : [];
+
+  // Badge: total open items needing attention (Gmail-style unread count).
+  const total = priorityItems.length + draftItems.length;
+  chrome.action.setBadgeText({ text: total > 0 ? String(total) : "" });
+  chrome.action.setBadgeBackgroundColor({ color: "#ef4444" });
+
+  // Notify only for items we haven't already notified about.
+  const seen = await getSeenIds();
+  const freshPriority = priorityItems.filter((p) => !seen.has("p:" + p.id));
+  const freshDrafts = draftItems.filter((d) => !seen.has("d:" + d.id));
+
+  if (freshPriority.length) {
+    const first = freshPriority[0];
+    chrome.notifications.create(`af-prio-${first.id}`, {
+      type: "basic",
+      iconUrl: "icons/icon128.png",
+      title: freshPriority.length === 1 ? "⭐ Priority email" : `⭐ ${freshPriority.length} priority emails`,
+      message: freshPriority.length === 1
+        ? `${first.subject || "(no subject)"} — ${first.sender || ""}`
+        : `Newest: ${first.subject || "(no subject)"}`,
+      priority: 2,
+    });
+  }
+  if (freshDrafts.length) {
+    const first = freshDrafts[0];
+    chrome.notifications.create(`af-draft-${first.id}`, {
+      type: "basic",
+      iconUrl: "icons/icon128.png",
+      title: freshDrafts.length === 1 ? "✉️ AI drafted a reply" : `✉️ ${freshDrafts.length} drafts ready`,
+      message: `To ${first.to_addr} — review and send from the AgentFury icon.`,
+      priority: 1,
+    });
+  }
+
+  freshPriority.forEach((p) => seen.add("p:" + p.id));
+  freshDrafts.forEach((d) => seen.add("d:" + d.id));
+  if (freshPriority.length || freshDrafts.length) await saveSeenIds(seen);
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === POLL_ALARM) pollAndNotify().catch(() => {});
+});
+
+// Clicking a notification opens the app to act on it.
+chrome.notifications.onClicked.addListener(() => {
+  chrome.tabs.create({ url: "https://agentfury.foliofyx.in" });
+});
+
+// Run once shortly after the service worker wakes, so the badge is fresh
+// even before the first 1-minute alarm fires.
+pollAndNotify().catch(() => {});
