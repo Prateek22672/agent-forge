@@ -58,20 +58,52 @@ function send(msg, timeoutMs = 45000) {
 // already stale — extensionAlive() guards it.)
 send({ type: "WARM_UP" });
 
+// Best-effort read of the recipient(s) and subject around this compose box,
+// so generation isn't blind to who the email is for — this is the fix for
+// generic "Dear Project Manager" filler with no real context. Gmail renders
+// recipient chips as <span email="..." name="...">, which is the one stable
+// hook across Gmail's frequently-changing DOM; degrades to nothing if not
+// found (never breaks the core rewrite feature).
+function extractContext(composeBody) {
+  let container = composeBody;
+  for (let i = 0; i < 8 && container; i++) {
+    if (container.querySelector && container.querySelector('input[name="subjectbox"]')) break;
+    container = container.parentElement;
+  }
+  container = container || composeBody.closest('[role="dialog"]') || composeBody.parentElement;
+  if (!container) return { subject: "", recipients: [] };
+
+  const subjEl = container.querySelector('input[name="subjectbox"]');
+  const subject = subjEl ? subjEl.value || "" : "";
+
+  const recipients = [];
+  container.querySelectorAll("span[email]").forEach((s) => {
+    const email = s.getAttribute("email");
+    const name = s.getAttribute("name") || "";
+    if (email) recipients.push(name ? `${name} <${email}>` : email);
+  });
+  return { subject, recipients: recipients.slice(0, 5) };
+}
+
 function buildToolbar(composeBody) {
   const bar = document.createElement("div");
   bar.className = "af-toolbar";
+  // type="button" on every button is load-bearing: Gmail's compose body sits
+  // inside a <form>, and a button with no explicit type defaults to
+  // type="submit" — clicking it would trigger Gmail's own submit handling
+  // instead of ours, which is exactly why clicks looked like they "did
+  // nothing." Never omit type="button" here.
   bar.innerHTML = `
-    <span class="af-label">✨ AGENTFURY</span>
-    <button data-mode="improve">Improve</button>
-    <button data-mode="shorten">Shorten</button>
-    <button data-mode="formal">Formal</button>
-    <button data-mode="friendly">Friendly</button>
-    <button data-mode="write-toggle">Write for me…</button>
+    <span class="af-label">AGENTFURY</span>
+    <button type="button" data-mode="improve">Improve</button>
+    <button type="button" data-mode="shorten">Shorten</button>
+    <button type="button" data-mode="formal">Formal</button>
+    <button type="button" data-mode="friendly">Friendly</button>
+    <button type="button" data-mode="write-toggle">Write for me…</button>
     <span class="af-status"></span>
     <div class="af-write-box">
       <input type="text" placeholder="e.g. politely decline the meeting and ask to reschedule" />
-      <button data-mode="write">Generate</button>
+      <button type="button" data-mode="write">Generate</button>
     </div>
   `;
 
@@ -96,11 +128,12 @@ function buildToolbar(composeBody) {
     }
     setBusy(true);
     setStatus("Thinking… (first request can take up to a minute if the server was asleep)");
+    const { subject, recipients } = extractContext(composeBody);
     const r = await send({
       type: "API_CALL",
       path: "/write/polish",
       method: "POST",
-      body: { text, instruction: instruction || "", mode },
+      body: { text, instruction: instruction || "", mode, subject, recipients },
     });
     setBusy(false);
     if (!r.ok) {

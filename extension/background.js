@@ -198,7 +198,7 @@ async function pollAndNotify() {
     chrome.notifications.create(`af-prio-${first.id}`, {
       type: "basic",
       iconUrl: "icons/icon128.png",
-      title: freshPriority.length === 1 ? "⭐ Priority email" : `⭐ ${freshPriority.length} priority emails`,
+      title: freshPriority.length === 1 ? "Priority email" : `${freshPriority.length} priority emails`,
       message: freshPriority.length === 1
         ? `${first.subject || "(no subject)"} — ${first.sender || ""}`
         : `Newest: ${first.subject || "(no subject)"}`,
@@ -210,7 +210,7 @@ async function pollAndNotify() {
     chrome.notifications.create(`af-draft-${first.id}`, {
       type: "basic",
       iconUrl: "icons/icon128.png",
-      title: freshDrafts.length === 1 ? "✉️ AI drafted a reply" : `✉️ ${freshDrafts.length} drafts ready`,
+      title: freshDrafts.length === 1 ? "AI drafted a reply" : `${freshDrafts.length} drafts ready`,
       message: `To ${first.to_addr} — review and send from the AgentFury icon.`,
       priority: 1,
     });
