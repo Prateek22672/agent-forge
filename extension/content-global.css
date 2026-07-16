@@ -1,0 +1,115 @@
+/* Select-to-ask mini bar — appears near any text selection on any page. */
+.af-sel-bar {
+  position: absolute;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 7px;
+  background: #0b0b0b;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 999px;
+  box-shadow: 0 10px 28px rgba(0,0,0,.4);
+  font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  max-width: 380px;
+
+  /* entrance animation: fade + slide up */
+  opacity: 0;
+  transform: translateY(6px) scale(.97);
+  transition: opacity .16s ease, transform .16s cubic-bezier(.2,.8,.3,1);
+}
+.af-sel-bar.af-in { opacity: 1; transform: translateY(0) scale(1); }
+
+.af-sel-icon {
+  flex-shrink: 0;
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  background: #fff; color: #000;
+  border-radius: 50%;
+  font-size: 9px; font-weight: 800; letter-spacing: -.02em;
+}
+.af-sel-input {
+  flex: 1;
+  min-width: 120px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 12.5px;
+  outline: none;
+  font-family: inherit;
+}
+.af-sel-input::placeholder { color: rgba(255,255,255,.4); }
+
+.af-sel-chip {
+  flex-shrink: 0;
+  background: rgba(255,255,255,.07);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.af-sel-chip:hover { background: #fff; color: #000; border-color: #fff; }
+
+.af-sel-send {
+  flex-shrink: 0;
+  width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  background: #fff; color: #000;
+  border: none; border-radius: 50%;
+  font-size: 14px; font-weight: 700;
+  cursor: pointer;
+}
+.af-sel-send:hover { opacity: .85; }
+
+.af-sel-answer {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 8px;
+  width: 340px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #0b0b0b;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 12px;
+  box-shadow: 0 10px 28px rgba(0,0,0,.4);
+  padding: 11px 13px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #f2f2f2;
+
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity .14s ease, transform .14s ease;
+}
+.af-sel-answer.af-in { opacity: 1; transform: translateY(0); }
+.af-sel-answer.af-err { color: #ff8a8a; }
+
+.af-sel-answer-text { margin-bottom: 8px; }
+
+.af-sel-spin {
+  display: inline-block;
+  width: 11px; height: 11px;
+  border: 2px solid rgba(255,255,255,.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  margin-right: 7px;
+  vertical-align: -1px;
+  animation: af-spin .7s linear infinite;
+}
+@keyframes af-spin { to { transform: rotate(360deg); } }
+
+.af-copy {
+  background: transparent;
+  color: rgba(255,255,255,.65);
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 999px;
+  padding: 4px 11px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.af-copy:hover { color: #fff; border-color: rgba(255,255,255,.55); }

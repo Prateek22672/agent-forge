@@ -150,8 +150,21 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 // replace) the PWA web push the main app already sends.
 const POLL_ALARM = "af-poll";
 
+function setupContextMenu() {
+  // removeAll first — re-creating with the same id on an extension reload
+  // during development otherwise throws "duplicate id".
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: "af-ask-selection",
+      title: 'Ask AgentFury about "%s"',
+      contexts: ["selection"],
+    });
+  });
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.alarms.create(POLL_ALARM, { periodInMinutes: 1 });
+  setupContextMenu();
 });
 chrome.runtime.onStartup.addListener(() => {
   chrome.alarms.create(POLL_ALARM, { periodInMinutes: 1 });
@@ -228,6 +241,16 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // Clicking a notification opens the app to act on it.
 chrome.notifications.onClicked.addListener(() => {
   chrome.tabs.create({ url: "https://agentfury.foliofyx.in" });
+});
+
+// Right-click "Ask AgentFury about…" — relay the selection to the page's
+// content-global.js, which opens the ask bar right there.
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === "af-ask-selection" && tab?.id) {
+    chrome.tabs
+      .sendMessage(tab.id, { type: "AF_OPEN_SELECTION", text: info.selectionText || "" })
+      .catch(() => {});
+  }
 });
 
 // Run once shortly after the service worker wakes, so the badge is fresh

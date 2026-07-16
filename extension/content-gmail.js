@@ -156,6 +156,7 @@ function openPanelFor(launcher, composeBody) {
   `;
   document.body.appendChild(panel);
   openPanel = panel;
+  requestAnimationFrame(() => panel.classList.add("af-in"));
 
   // Position below the launcher, clamped to the viewport.
   const r = launcher.getBoundingClientRect();
