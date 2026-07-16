@@ -28,6 +28,10 @@
   position: fixed;
   z-index: 2147483000;
   width: 320px;
+  /* Never let the panel grow taller than the viewport — scroll internally
+     instead of pushing Insert/Discard off-screen with no way to reach them. */
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
   background: #0b0b0b;
   color: #fff;
   border: 1px solid rgba(255,255,255,.14);
@@ -116,7 +120,16 @@
   overflow-y: auto;
   margin-bottom: 8px;
 }
-.af-actions { display: flex; gap: 8px; margin-top: 8px; }
+.af-actions {
+  display: flex; gap: 8px; margin-top: 8px;
+  /* Stays visible at the bottom of the panel even while the preview text
+     above it is scrolled — never leaves Insert/Discard unreachable. */
+  position: sticky;
+  bottom: -10px;
+  background: #0b0b0b;
+  padding: 8px 0 10px;
+  margin-bottom: -10px;
+}
 .af-actions button {
   flex: 1;
   border-radius: 8px;
