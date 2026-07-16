@@ -1,24 +1,40 @@
-// AgentFury extension popup — login, quick chat (Assistant), pending drafts,
+// AgentFury extension popup — login, a one-shot Quick Ask, pending drafts,
 // priority inbox, and a quick reminder — all through the background worker.
+//
+// DESIGN NOTE: Chrome extension popups fully unload every time they close
+// (no state survives), so a "persistent chat" here would be an illusion —
+// history would silently vanish the moment the user clicks away. Instead this
+// popup does one-shot Q&A for quick asks, and links out to the full web app
+// (agentfury.foliofyx.in) for real multi-turn conversations, Autopilot, and
+// the Planner — where state actually persists.
 
 const app = document.getElementById("app");
 const WEB_URL = "https://agentfury.foliofyx.in";
 
-let state = {
-  user: null,
-  tab: "chat",
-  assistantAgentId: null,
-  chatLog: [],
-  conversationId: null,
-};
+let state = { user: null, tab: "ask" };
 
-function send(msg) {
-  return new Promise((resolve) => chrome.runtime.sendMessage(msg, resolve));
+function send(msg, timeoutMs = 45000) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => {
+      if (done) return;
+      done = true;
+      resolve(v);
+    };
+    chrome.runtime.sendMessage(msg, (r) => {
+      if (chrome.runtime.lastError) {
+        finish({ ok: false, error: chrome.runtime.lastError.message });
+        return;
+      }
+      finish(r);
+    });
+    setTimeout(() => finish({ ok: false, error: "timeout", timedOut: true }), timeoutMs);
+  });
 }
-const api = (path, method = "GET", body) =>
-  send({ type: "API_CALL", path, method, body });
+const api = (path, method = "GET", body) => send({ type: "API_CALL", path, method, body });
 
 async function init() {
+  send({ type: "WARM_UP" }); // wake a sleeping backend early
   const status = await send({ type: "GET_TOKEN_STATUS" });
   if (status.ok) {
     state.user = status.user;
@@ -31,7 +47,7 @@ async function init() {
 // ---------- Login screen ----------
 function renderLogin() {
   app.innerHTML = `
-    <div class="header"><span class="brand">AGENTFURY</span></div>
+    <div class="header"><span class="brand"><span class="dot"></span>AGENTFURY</span></div>
     <div class="panel">
       <button id="googleBtn" class="google-btn">
         <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
@@ -49,20 +65,17 @@ function renderLogin() {
       <div class="msg" id="loginMsg"></div>
       <div class="footer-link" id="openWeb">New here? Open AgentFury to sign up →</div>
     </div>`;
-  document.getElementById("openWeb").onclick = () =>
-    chrome.tabs.create({ url: WEB_URL });
+  document.getElementById("openWeb").onclick = () => chrome.tabs.create({ url: WEB_URL });
 
   const msgEl = document.getElementById("loginMsg");
 
   document.getElementById("googleBtn").onclick = async () => {
     msgEl.textContent = "Opening Google sign-in…";
     msgEl.className = "msg";
-    const r = await send({ type: "GOOGLE_LOGIN" });
-    if (r.ok) {
-      init();
-    } else {
-      msgEl.textContent =
-        typeof r.error === "string" ? r.error : "Google sign-in failed.";
+    const r = await send({ type: "GOOGLE_LOGIN" }, 90000); // Google flow needs longer
+    if (r.ok) init();
+    else {
+      msgEl.textContent = typeof r.error === "string" ? r.error : "Google sign-in failed.";
       msgEl.className = "msg error";
     }
   };
@@ -73,11 +86,11 @@ function renderLogin() {
     msgEl.textContent = "Signing in…";
     msgEl.className = "msg";
     const r = await send({ type: "LOGIN", email, password });
-    if (r.ok) {
-      init();
-    } else {
-      msgEl.textContent =
-        typeof r.error === "string" ? r.error : "Login failed — check your credentials.";
+    if (r.ok) init();
+    else {
+      msgEl.textContent = r.timedOut
+        ? "The server was waking up — try again, it'll be quick now."
+        : typeof r.error === "string" ? r.error : "Login failed — check your credentials.";
       msgEl.className = "msg error";
     }
   };
@@ -87,16 +100,23 @@ function renderLogin() {
 function renderApp() {
   app.innerHTML = `
     <div class="header">
-      <span class="brand">AGENTFURY</span>
-      <span class="footer-link" id="logout" style="padding:0">Logout</span>
+      <span class="brand"><span class="dot"></span>AGENTFURY</span>
+      <div style="display:flex; align-items:center; gap:12px">
+        <a class="openFull" id="openFull" href="#">Open full app ↗</a>
+        <span class="footer-link" id="logout" style="padding:0">Logout</span>
+      </div>
     </div>
     <div class="tabs">
-      <div class="tab" data-tab="chat">Chat</div>
+      <div class="tab" data-tab="ask">Ask</div>
       <div class="tab" data-tab="priority">Priority</div>
       <div class="tab" data-tab="drafts">Drafts</div>
       <div class="tab" data-tab="remind">Remind</div>
     </div>
     <div class="panel" id="panel"></div>`;
+  document.getElementById("openFull").onclick = (e) => {
+    e.preventDefault();
+    chrome.tabs.create({ url: WEB_URL });
+  };
   document.getElementById("logout").onclick = async () => {
     await send({ type: "LOGOUT" });
     init();
@@ -109,69 +129,71 @@ function renderApp() {
   });
   document.querySelector(`.tab[data-tab="${state.tab}"]`).classList.add("active");
 
-  if (state.tab === "chat") renderChat();
+  if (state.tab === "ask") renderAsk();
   else if (state.tab === "priority") renderPriority();
   else if (state.tab === "drafts") renderDrafts();
   else if (state.tab === "remind") renderRemind();
 }
 
-// ---------- Chat tab ----------
-async function renderChat() {
+// ---------- Ask tab: one-shot Q&A (no fake persistence) ----------
+let assistantAgentId = null;
+
+async function renderAsk() {
   const panel = document.getElementById("panel");
-  panel.innerHTML = `<div class="chat-log" id="log"></div>
-    <textarea id="input" placeholder="Ask AgentFury…"></textarea>
-    <button id="sendBtn">Send</button>`;
-  paintChatLog();
+  panel.innerHTML = `
+    <div id="answerWrap"></div>
+    <textarea id="input" placeholder="Ask AgentFury anything…"></textarea>
+    <button id="askBtn">Ask</button>
+    <div class="msg" id="askMsg">For back-and-forth conversations, memory, and Autopilot, use the full app.</div>`;
 
-  if (!state.assistantAgentId) {
-    const r = await api("/agents");
-    if (r.ok) {
-      const assistant = r.data.find((a) => a.name === "Assistant") || r.data[0];
-      state.assistantAgentId = assistant?.id || null;
-    }
-  }
-
-  const send_ = async () => {
+  const ask = async () => {
     const input = document.getElementById("input");
     const text = input.value.trim();
-    if (!text || !state.assistantAgentId) return;
-    input.value = "";
-    state.chatLog.push({ role: "user", content: text });
-    paintChatLog();
-    const btn = document.getElementById("sendBtn");
+    if (!text) return;
+    const btn = document.getElementById("askBtn");
+    const msgEl = document.getElementById("askMsg");
+    const answerWrap = document.getElementById("answerWrap");
     btn.disabled = true;
-    btn.textContent = "…";
-    const r = await api(`/agents/${state.assistantAgentId}/chat`, "POST", {
-      message: text,
-      conversation_id: state.conversationId,
-    });
-    btn.disabled = false;
-    btn.textContent = "Send";
-    if (r.ok) {
-      state.conversationId = r.data.conversation_id;
-      state.chatLog.push({ role: "ai", content: r.data.reply });
-    } else {
-      state.chatLog.push({ role: "ai", content: "⚠ " + (r.error || "Something went wrong.") });
+    btn.textContent = "Thinking…";
+    msgEl.textContent = "First request can take a bit if the server was asleep.";
+    msgEl.className = "msg";
+
+    if (!assistantAgentId) {
+      const r = await api("/agents");
+      if (r.ok) {
+        const assistant = r.data.find((a) => a.name === "Assistant") || r.data[0];
+        assistantAgentId = assistant?.id || null;
+      }
     }
-    paintChatLog();
+    if (!assistantAgentId) {
+      btn.disabled = false;
+      btn.textContent = "Ask";
+      msgEl.textContent = "Couldn't load your assistant — try Open full app.";
+      msgEl.className = "msg error";
+      return;
+    }
+
+    const r = await api(`/agents/${assistantAgentId}/chat`, "POST", { message: text });
+    btn.disabled = false;
+    btn.textContent = "Ask";
+    if (r.ok) {
+      answerWrap.innerHTML = `<div class="answer-box">${escapeHtml(r.data.reply)}</div>`;
+      msgEl.textContent = "";
+      input.value = "";
+    } else {
+      msgEl.textContent = r.timedOut
+        ? "Still waking up — click Ask again, it'll be quick now."
+        : "⚠ " + (r.error || "Something went wrong.");
+      msgEl.className = "msg error";
+    }
   };
-  document.getElementById("sendBtn").onclick = send_;
+  document.getElementById("askBtn").onclick = ask;
   document.getElementById("input").addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      send_();
+      ask();
     }
   });
-}
-function paintChatLog() {
-  const log = document.getElementById("log");
-  if (!log) return;
-  log.innerHTML = state.chatLog.length
-    ? state.chatLog
-        .map((m) => `<div class="bubble ${m.role}">${escapeHtml(m.content)}</div>`)
-        .join("")
-    : `<div class="empty">Ask anything — research, email, reminders…</div>`;
-  log.scrollTop = log.scrollHeight;
 }
 
 // ---------- Priority tab ----------
@@ -180,7 +202,9 @@ async function renderPriority() {
   panel.innerHTML = `<div class="empty">Loading…</div>`;
   const r = await api("/priority");
   if (!r.ok) {
-    panel.innerHTML = `<div class="empty">Couldn't load. Open the app to check your connection.</div>`;
+    panel.innerHTML = `<div class="empty">${
+      r.timedOut ? "Server was asleep — reopen this tab in a moment." : "Couldn't load. Open the app to check your connection."
+    }</div>`;
     return;
   }
   if (!r.data.length) {

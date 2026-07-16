@@ -1,12 +1,14 @@
 .af-toolbar {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 6px;
-  margin: 4px 0;
-  background: #000;
-  border: 1px solid rgba(255,255,255,.2);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  gap: 6px;
+  padding: 8px 10px;
+  margin: 6px 0;
+  background: #0b0b0b;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.25);
+  font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   z-index: 9999;
   flex-wrap: wrap;
 }
@@ -14,40 +16,49 @@
   color: #fff;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: .08em;
+  letter-spacing: .06em;
   padding: 0 6px;
+  opacity: .85;
 }
 .af-toolbar button {
-  background: transparent;
+  background: rgba(255,255,255,.06);
   color: #fff;
-  border: 1px solid rgba(255,255,255,.35);
-  border-radius: 3px;
-  padding: 4px 9px;
-  font-size: 11px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
   font-family: inherit;
+  transition: background .12s, border-color .12s;
 }
-.af-toolbar button:hover { background: #fff; color: #000; }
-.af-toolbar button:disabled { opacity: .5; cursor: default; }
+.af-toolbar button:hover { background: #fff; color: #000; border-color: #fff; }
+.af-toolbar button:disabled { opacity: .45; cursor: default; }
 .af-toolbar .af-status {
   font-size: 11px;
-  color: rgba(255,255,255,.6);
+  color: rgba(255,255,255,.55);
   padding: 0 4px;
 }
+.af-toolbar .af-status.af-err { color: #ff8a8a; }
 .af-write-box {
   display: none;
-  gap: 4px;
+  gap: 6px;
   width: 100%;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 .af-write-box.open { display: flex; }
 .af-write-box input {
   flex: 1;
-  background: #111;
+  background: #151515;
   color: #fff;
-  border: 1px solid rgba(255,255,255,.3);
-  border-radius: 3px;
-  padding: 5px 7px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 8px;
+  padding: 7px 10px;
   font-size: 12px;
   font-family: inherit;
+  outline: none;
+}
+.af-write-box input:focus { border-color: rgba(255,255,255,.5); }
+.af-write-box button {
+  border-radius: 8px;
 }
