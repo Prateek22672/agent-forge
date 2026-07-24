@@ -13,7 +13,7 @@ export default function GoogleConsentModal({ onContinue, onCancel }) {
   ];
   return (
     <div className="fixed inset-0 z-50 bg-black/85 flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="border border-white/25 bg-black w-full max-w-md p-5 sm:p-6 my-auto max-h-[94vh] overflow-y-auto">
+      <div className="border border-white/25 bg-black w-full max-w-md p-5 sm:p-6 my-auto max-h-[94vh] overflow-y-auto rounded-2xl">
         <div className="flex items-center gap-2 mb-1">
           <CrocsMark size={20} />
           <span className="text-[10px] tracking-widest text-white/40">CROCS SECURED</span>
@@ -26,14 +26,14 @@ export default function GoogleConsentModal({ onContinue, onCancel }) {
 
         <div className="space-y-2 mb-4">
           {access.map(([t, d]) => (
-            <div key={t} className="border border-white/15 p-3">
+            <div key={t} className="border border-white/15 p-3 rounded-lg">
               <div className="text-sm font-medium">{t}</div>
               <div className="text-xs text-white/50 mt-0.5">{d}</div>
             </div>
           ))}
         </div>
 
-        <div className="border border-white/15 p-3 mb-4">
+        <div className="border border-white/15 p-3 mb-4 rounded-lg">
           <div className="text-[11px] tracking-widest text-white/40 mb-1">OUR PROMISE</div>
           <ul className="text-xs text-white/55 space-y-1 list-disc pl-4">
             <li>Never used to train any model.</li>
@@ -43,7 +43,7 @@ export default function GoogleConsentModal({ onContinue, onCancel }) {
         </div>
 
         {/* Visual walkthrough of Google's safety screen so users aren't lost. */}
-        <div className="border border-white/15 p-3 mb-4">
+        <div className="border border-white/15 p-3 mb-4 rounded-lg">
           <div className="text-[11px] tracking-widest text-white/40 mb-2">
             WHAT YOU'LL SEE NEXT — &amp; WHAT TO CLICK
           </div>
@@ -61,7 +61,7 @@ export default function GoogleConsentModal({ onContinue, onCancel }) {
           <img
             src="/gwarn-step1.png"
             alt="Click Advanced on Google's screen"
-            className="w-full border border-white/15 mb-3"
+            className="w-full border border-white/15 mb-3 rounded-lg"
             loading="lazy"
           />
 
@@ -74,7 +74,7 @@ export default function GoogleConsentModal({ onContinue, onCancel }) {
           <img
             src="/gwarn-step2.png"
             alt="Click Go to AgentFury (unsafe)"
-            className="w-full border border-white/15"
+            className="w-full border border-white/15 rounded-lg"
             loading="lazy"
           />
 

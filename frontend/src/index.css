@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Sharp black & white theme: pure black bg, white text, square edges. */
+/* Rounded black & white theme: pure black bg, white text, soft corners. */
 html,
 body,
 #root {
@@ -16,13 +16,32 @@ body {
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
-* {
-  border-radius: 0 !important; /* enforce the sharp, no-rounded look everywhere */
+/* Base radius for every interactive control — the single biggest lever for a
+   "rounded, polished" feel, applied once instead of touching every button. */
+button,
+input,
+textarea,
+select,
+a[class*="px-"] {
+  border-radius: 10px;
 }
-
-/* Exception: status dots stay circular (more specific than * so this wins). */
 .rounded-full {
   border-radius: 9999px !important;
+}
+.rounded-none {
+  border-radius: 0 !important; /* escape hatch for full-bleed layout dividers */
+}
+
+/* Smooth, consistent motion for hover/focus states across the app. */
+button,
+a,
+input,
+textarea,
+select {
+  transition: background-color .12s ease, border-color .12s ease, opacity .12s ease, transform .12s ease;
+}
+button:active {
+  transform: scale(.97);
 }
 
 ::-webkit-scrollbar {

@@ -28,14 +28,14 @@ export default function EmailConfirm({ draft, onResolved }) {
 
   if (status === "sent") {
     return (
-      <div className="border border-white/30 bg-white/5 px-4 py-3 text-sm">
+      <div className="border border-white/30 bg-white/5 px-4 py-3 text-sm rounded-xl">
         Email sent to {draft.to_addr}
       </div>
     );
   }
 
   return (
-    <div className="border border-white/40 bg-white/[0.03] p-4">
+    <div className="border border-white/40 bg-white/[0.03] p-4 rounded-xl">
       <div className="text-xs tracking-widest text-white/60 mb-2">
         CONFIRM BEFORE SENDING
       </div>

@@ -66,7 +66,7 @@ export default function SettingsModal({ onClose, onChanged, user, onLogout }) {
           onCancel={() => setShowConsent(false)}
         />
       )}
-      <div className="bg-black border border-white/30 w-full max-w-lg p-5 sm:p-6 my-auto max-h-[92vh] overflow-y-auto">
+      <div className="bg-black border border-white/30 w-full max-w-lg p-5 sm:p-6 my-auto max-h-[92vh] overflow-y-auto rounded-2xl">
         <div className="flex justify-between items-center mb-5">
           <h2 className="font-bold tracking-widest text-sm">SETTINGS</h2>
           <button onClick={onClose} className="text-white/60 hover:text-white">
@@ -110,7 +110,7 @@ export default function SettingsModal({ onClose, onChanged, user, onLogout }) {
             />
 
             {/* Privacy: save chat history */}
-            <div className="flex items-center justify-between mt-3 border border-white/15 px-3 py-2">
+            <div className="flex items-center justify-between mt-3 border border-white/15 px-3 py-2 rounded-lg">
               <div>
                 <div className="text-sm">Save chat history</div>
                 <div className="text-[11px] text-white/40">

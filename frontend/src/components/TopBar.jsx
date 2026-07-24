@@ -12,6 +12,7 @@ export default function TopBar({
   onOpenAdmin,
   onReconnectGoogle,
   onToggleSidebar,
+  onOpenSearch,
   onLogout,
 }) {
   const provider = settings?.llm_provider || "groq";
@@ -40,6 +41,18 @@ export default function TopBar({
       </div>
 
       <div className="flex items-center gap-2 md:gap-3 text-xs min-w-0">
+        <button
+          onClick={onOpenSearch}
+          className="flex items-center gap-1.5 border border-white/25 px-2.5 py-1 text-white/60 hover:border-white hover:text-white"
+          title="Search (Ctrl/Cmd+K)"
+        >
+          <span>⌕</span>
+          <span className="hidden sm:inline">Search</span>
+          <kbd className="hidden lg:inline text-[9px] text-white/35 border border-white/15 rounded px-1">
+            ⌘K
+          </kbd>
+        </button>
+
         <span className="hidden sm:inline border border-white/25 px-2 py-1 tracking-wide">
           {providerLabel}
         </span>
