@@ -159,7 +159,16 @@
     bar.querySelectorAll(".af-sel-chip").forEach((c) => {
       c.onclick = () => ask(c.dataset.q);
     });
-    bar.addEventListener("mousedown", (e) => e.stopPropagation());
+    bar.addEventListener("mousedown", (e) => {
+      // Clicking anywhere (Explain/Summarize/send) normally collapses the
+      // page's native text-selection highlight, since the click target is
+      // outside the original selected range — preventDefault stops that, so
+      // the highlight stays visible the whole time the bar is open. The
+      // input still needs its normal mousedown behavior so it can be clicked
+      // into and typed in.
+      if (e.target !== input) e.preventDefault();
+      e.stopPropagation();
+    });
   }
 
   document.addEventListener("mouseup", (e) => {
