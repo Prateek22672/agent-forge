@@ -41,14 +41,14 @@ export default function ConnectionStatus({ connections, onReconnect }) {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 border border-white/25 px-2 py-1 hover:border-white"
+        className="flex items-center gap-2 border border-white/25 px-2 py-1 hover:border-white rounded-full"
       >
         <span className={`inline-block w-2 h-2 rounded-full ${overall}`} />
         <span className="max-w-[180px] truncate">{label}</span>
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-1 w-64 border border-white/25 bg-black z-50 p-3 text-left">
+        <div className="absolute right-0 mt-1 w-64 border border-white/25 bg-black z-50 p-3 text-left rounded-xl">
           <div className="text-[10px] tracking-widest text-white/40 mb-2">
             GOOGLE SERVICES
           </div>

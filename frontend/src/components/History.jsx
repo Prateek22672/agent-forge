@@ -54,7 +54,7 @@ export default function History({
             {conversations.map((c) => (
               <div
                 key={c.id}
-                className={`group w-full px-3 py-2 border text-sm cursor-pointer ${
+                className={`group w-full px-3 py-2 border rounded-xl text-sm cursor-pointer ${
                   activeId === c.id
                     ? "border-white bg-white/10"
                     : "border-transparent hover:border-white/20"

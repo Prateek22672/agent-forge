@@ -13,6 +13,7 @@ import { startersFor } from "../suggestions";
 import { startAlarm, stopAlarm } from "../alarm";
 import { enablePush } from "../push";
 import GoogleConsentModal from "./GoogleConsentModal";
+import SearchPalette from "./SearchPalette";
 
 // The authenticated app: ChatGPT-style single input + capability badges +
 // history sidebar. Everything here is scoped to the logged-in user.
@@ -36,6 +37,7 @@ export default function ChatApp({ user, onLogout }) {
   const [pendingEmails, setPendingEmails] = useState([]);
   const [alarmReminder, setAlarmReminder] = useState(null); // ringing alarm
   const [showConsent, setShowConsent] = useState(false); // Google connect explainer
+  const [showSearch, setShowSearch] = useState(false); // Cmd/Ctrl+K palette
   const [showConnectInvite, setShowConnectInvite] = useState(false); // one-time nudge
 
   const loadPending = () =>
@@ -227,6 +229,18 @@ export default function ChatApp({ user, onLogout }) {
     return () => window.removeEventListener("agentfury:connect-google", open);
   }, []);
 
+  // Global Cmd/Ctrl+K opens the search palette from anywhere in the app.
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setShowSearch((s) => !s);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // One-time invite: if Google data scopes aren't connected, gently offer it once.
   useEffect(() => {
     const g = connections?.google;
@@ -248,6 +262,7 @@ export default function ChatApp({ user, onLogout }) {
         onOpenAdmin={() => (window.location.href = "/admin")}
         onReconnectGoogle={reconnectGoogle}
         onToggleSidebar={() => setSidebarOpen((o) => !o)}
+        onOpenSearch={() => setShowSearch(true)}
         onLogout={onLogout}
       />
 
@@ -358,6 +373,18 @@ export default function ChatApp({ user, onLogout }) {
         <GoogleConsentModal
           onContinue={doReconnectGoogle}
           onCancel={() => setShowConsent(false)}
+        />
+      )}
+
+      {showSearch && (
+        <SearchPalette
+          conversations={conversations}
+          onPickConversation={(c) => {
+            pickConversation(c);
+            setSidebarOpen(false);
+          }}
+          onNavigate={(v) => setView(v)}
+          onClose={() => setShowSearch(false)}
         />
       )}
 

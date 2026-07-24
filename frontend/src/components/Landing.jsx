@@ -22,7 +22,7 @@ function Nav({ onGetStarted, onSignIn }) {
       <div className="max-w-5xl mx-auto flex items-center justify-between px-6 h-16">
         <div className="flex items-center gap-3">
           <span className="font-semibold tracking-[0.2em] text-sm">AGENTFURY</span>
-          <span className="hidden sm:flex items-center gap-1.5 text-[10px] tracking-widest text-white/40 border border-white/15 px-2 py-0.5">
+          <span className="hidden sm:flex items-center gap-1.5 text-[10px] tracking-widest text-white/40 border border-white/15 px-2 py-0.5 rounded-full">
             <CrocsMark size={13} /> CROCS SECURED
           </span>
         </div>
@@ -50,7 +50,7 @@ function Hero({ onGetStarted, onSignIn }) {
         <Strands colors={["#ffffff", "#9a9a9a", "#ffffff"]} count={5} saturation={0} glow={2.2} amplitude={1} />
       </div>
       <div className="relative max-w-5xl mx-auto px-6 py-28 text-center">
-        <div className="inline-block text-[11px] tracking-[0.25em] text-white/45 border border-white/15 px-3 py-1 mb-8">
+        <div className="inline-block text-[11px] tracking-[0.25em] text-white/45 border border-white/15 px-3 py-1 mb-8 rounded-full">
           PERSONAL AI WORKFORCE
         </div>
         <h1 className="text-5xl md:text-7xl font-semibold leading-[1.04] tracking-tight">

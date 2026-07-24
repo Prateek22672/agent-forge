@@ -38,7 +38,7 @@ export default function AgentForm({ existing, onSaved, onCancel }) {
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-20">
-      <div className="bg-black border border-white/30 w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+      <div className="bg-black border border-white/30 w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 rounded-2xl">
         <h2 className="font-bold tracking-widest text-sm mb-5">
           {existing ? "EDIT CAPABILITY" : "NEW CAPABILITY"}
         </h2>

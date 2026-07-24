@@ -32,7 +32,7 @@ export default function AdminPanel({ onClose, standalone = false }) {
         className={
           standalone
             ? "max-w-4xl mx-auto"
-            : "bg-black border border-white/30 w-full max-w-3xl max-h-[90vh] overflow-y-auto"
+            : "bg-black border border-white/30 w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl"
         }
       >
         <div className="flex items-center justify-between border-b border-white/15 px-6 py-4">
@@ -137,7 +137,7 @@ function KeyGroup({ title, provider, group, onChanged }) {
   };
 
   return (
-    <div className="border border-white/15 p-4">
+    <div className="border border-white/15 p-4 rounded-xl">
       <div className="flex items-center justify-between mb-3">
         <div className="font-semibold text-sm">{title}</div>
         <div className="text-xs text-white/40">{group.count} active</div>
@@ -146,12 +146,12 @@ function KeyGroup({ title, provider, group, onChanged }) {
         {group.keys.map((k) => (
           <div
             key={k.suffix}
-            className="flex items-center justify-between text-sm border border-white/10 px-3 py-2"
+            className="flex items-center justify-between text-sm border border-white/10 px-3 py-2 rounded-lg"
           >
             <span className="font-mono">{k.masked}</span>
             <span className="flex items-center gap-3 text-xs text-white/50">
               <span>{k.requests} reqs</span>
-              <span className="uppercase text-[10px] border border-white/20 px-1">
+              <span className="uppercase text-[10px] border border-white/20 px-1 rounded">
                 {k.source}
               </span>
               {k.removable && (
@@ -198,13 +198,13 @@ function Users({ users, onChanged }) {
       {users.map((u) => (
         <div
           key={u.id}
-          className="flex items-center justify-between border border-white/10 px-3 py-2 text-sm"
+          className="flex items-center justify-between border border-white/10 px-3 py-2 text-sm rounded-lg"
         >
           <div>
             <div>
               <span>{u.email}</span>
               {u.is_admin && (
-                <span className="ml-2 text-[10px] border border-white/25 px-1 uppercase">
+                <span className="ml-2 text-[10px] border border-white/25 px-1 uppercase rounded">
                   admin
                 </span>
               )}

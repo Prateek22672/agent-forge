@@ -24,7 +24,7 @@ export default function Composer({
             <button
               key={s}
               onClick={() => onPickSuggestion?.(s)}
-              className="px-3 py-1 text-xs border border-white/25 text-white/80 hover:border-white hover:bg-white/5"
+              className="px-3 py-1 text-xs border border-white/25 text-white/80 hover:border-white hover:bg-white/5 rounded-full"
             >
               {s}
             </button>
@@ -39,7 +39,7 @@ export default function Composer({
             key={a.id}
             onClick={() => onPickAgent(a.id)}
             title={a.description}
-            className={`px-3 py-1 text-xs border ${
+            className={`px-3 py-1 text-xs border rounded-full ${
               activeAgentId === a.id
                 ? "bg-white text-black border-white font-semibold"
                 : "border-white/30 text-white/80 hover:border-white"
@@ -50,7 +50,7 @@ export default function Composer({
         ))}
         <button
           onClick={onNewAgent}
-          className="px-3 py-1 text-xs border border-dashed border-white/30 text-white/60 hover:border-white"
+          className="px-3 py-1 text-xs border border-dashed border-white/30 text-white/60 hover:border-white rounded-full"
         >
           + New capability
         </button>
