@@ -44,6 +44,21 @@ async function init() {
   }
 }
 
+// Live refresh: when the highlight bar saves a reminder/note/brain fact on
+// some other tab, that broadcasts here — if we're currently looking at the
+// affected tab, re-render it so the new item shows up without the user
+// having to switch tabs and back.
+const KIND_TO_TAB = { remind: "remind" }; // note/brain don't have a dedicated tab yet
+try {
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type !== "AF_DATA_CHANGED") return;
+    const affected = KIND_TO_TAB[msg.kind];
+    if (affected && state.tab === affected) renderApp();
+  });
+} catch {
+  /* not running in an extension context somehow — ignore */
+}
+
 // ---------- Login screen ----------
 function renderLogin() {
   app.innerHTML = `
@@ -289,9 +304,17 @@ function renderRemind() {
 }
 
 // ---------- Settings tab ----------
-function renderExtSettings() {
+async function renderExtSettings() {
   const panel = document.getElementById("panel");
   panel.innerHTML = `
+    <div class="item" id="googleItem">
+      <div class="title">Google account</div>
+      <div class="sub" id="googleSub">Checking…</div>
+      <div class="row">
+        <button id="googleBtn" disabled>…</button>
+      </div>
+      <div class="msg" id="googleMsg"></div>
+    </div>
     <div class="item">
       <div class="title">Select-to-ask</div>
       <div class="sub">Show a small AI bar when you highlight text on any page (including Gmail).</div>
@@ -299,22 +322,51 @@ function renderExtSettings() {
         <button id="selectToggle" class="secondary">…</button>
       </div>
     </div>
-    <div class="msg">Takes effect immediately on open tabs — no refresh needed.</div>`;
+    <div class="msg">Toggle takes effect immediately on open tabs — no refresh needed.</div>`;
 
   const btn = document.getElementById("selectToggle");
   const paint = (enabled) => {
     btn.textContent = enabled ? "On — tap to turn off" : "Off — tap to turn on";
   };
-
   chrome.storage.local.get("af_select_enabled", (r) => {
     paint(r.af_select_enabled !== false); // default: on
   });
-
   btn.onclick = () => {
     chrome.storage.local.get("af_select_enabled", (r) => {
       const next = !(r.af_select_enabled !== false);
       chrome.storage.local.set({ af_select_enabled: next }, () => paint(next));
     });
+  };
+
+  // Google connection status + the button that actually grants Gmail/Calendar
+  // (sign-in alone never does — that's intentional, to keep sign-in warning-free).
+  const gSub = document.getElementById("googleSub");
+  const gBtn = document.getElementById("googleBtn");
+  const gMsg = document.getElementById("googleMsg");
+
+  const r = await api("/connections");
+  const services = r.ok ? r.data?.google?.services : null;
+  const connected = !!services?.gmail_read;
+  gSub.textContent = connected
+    ? "Gmail & Calendar connected — Priority and Drafts will work."
+    : "Not connected yet — Priority and Drafts need this to read your inbox.";
+  gBtn.disabled = false;
+  gBtn.textContent = connected ? "Reconnect Google" : "Connect Google (Gmail & Calendar)";
+
+  gBtn.onclick = async () => {
+    gBtn.disabled = true;
+    gMsg.textContent = "Opening Google…";
+    gMsg.className = "msg";
+    const cr = await send({ type: "GOOGLE_CONNECT" }, 90000);
+    gBtn.disabled = false;
+    if (cr.ok) {
+      gMsg.textContent = "Connected! Google may have shown an “unverified app” warning — that's expected for a new app; choosing Advanced → Continue is safe.";
+      gMsg.className = "msg";
+      renderExtSettings();
+    } else {
+      gMsg.textContent = typeof cr.error === "string" ? cr.error : "Couldn't connect Google.";
+      gMsg.className = "msg error";
+    }
   };
 }
 
