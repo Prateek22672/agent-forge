@@ -1,7 +1,7 @@
 """Auth endpoints: signup, login, and 'who am I'."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.auth import (
@@ -23,6 +23,7 @@ from app.schemas import (
 )
 from app.seed import create_starter_agents
 from app.security.ratelimit import rate_limit
+from app.telemetry import client_source, record_login
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -54,6 +55,7 @@ def google_login_configured():
 @router.post("/signup", response_model=TokenOut, status_code=201)
 def signup(
     payload: SignupRequest,
+    request: Request,
     db: Session = Depends(get_db),
     _: None = Depends(_signup_limit),
 ):
@@ -73,12 +75,14 @@ def signup(
     db.refresh(user)
     # Give the new account its three starter capabilities.
     create_starter_agents(db, user.id)
+    record_login(db, user, client_source(request), method="signup")
     return TokenOut(access_token=create_token(user.id), user=UserOut.model_validate(user))
 
 
 @router.post("/login", response_model=TokenOut)
 def login(
     payload: LoginRequest,
+    request: Request,
     db: Session = Depends(get_db),
     _: None = Depends(_login_limit),
 ):
@@ -86,6 +90,7 @@ def login(
     user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(401, "Invalid email or password.")
+    record_login(db, user, client_source(request), method="password")
     return TokenOut(access_token=create_token(user.id), user=UserOut.model_validate(user))
 
 

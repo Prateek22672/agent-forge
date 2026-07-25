@@ -81,6 +81,40 @@ async def crocs_security_headers(request, call_next):
     resp.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     return resp
 
+
+@app.middleware("http")
+async def telemetry_middleware(request, call_next):
+    """Records 5xx responses and unhandled exceptions to the admin error log,
+    plus how long the request took. Never lets telemetry itself break a
+    request — any failure here is swallowed."""
+    import time
+
+    from app.telemetry import client_source, record_error
+
+    start = time.monotonic()
+    try:
+        resp = await call_next(request)
+    except Exception as exc:
+        duration_ms = int((time.monotonic() - start) * 1000)
+        try:
+            record_error(
+                client_source(request), request.method, request.url.path,
+                500, f"{type(exc).__name__}: {exc}", duration_ms,
+            )
+        except Exception:
+            pass
+        raise
+    duration_ms = int((time.monotonic() - start) * 1000)
+    if resp.status_code >= 500:
+        try:
+            record_error(
+                client_source(request), request.method, request.url.path,
+                resp.status_code, "", duration_ms,
+            )
+        except Exception:
+            pass
+    return resp
+
 app.include_router(auth_api.router)
 app.include_router(agents.router)
 app.include_router(chat.router)

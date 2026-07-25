@@ -184,6 +184,9 @@ def google_callback(
         user, info = login_or_create_user(db, creds)
         if user is None:
             return _back("google=error")
+        from app.telemetry import record_login
+
+        record_login(db, user, "desktop" if desktop else "web", method="google")
         token = create_token(user.id)
         # Hand the session token back (browser query, or desktop deep link).
         return _back(f"token={token}&google=connected")
