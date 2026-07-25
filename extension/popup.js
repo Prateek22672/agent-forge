@@ -188,13 +188,44 @@ function renderApp() {
 // ---------- Ask tab: one-shot Q&A (no fake persistence) ----------
 let assistantAgentId = null;
 
+const ICONS = {
+  priority:
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 17l-5.6 3.1 1.4-6.3-4.8-4.3 6.4-.6z"/></svg>',
+  drafts:
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>',
+  remind:
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>',
+  settings:
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.9 7.9 0 000-2l2-1.5-2-3.4-2.4.7a8 8 0 00-1.7-1L15 3h-4l-.3 2.4a8 8 0 00-1.7 1l-2.4-.7-2 3.4L6.6 11a7.9 7.9 0 000 2l-2 1.5 2 3.4 2.4-.7a8 8 0 001.7 1L11 21h4l.3-2.4a8 8 0 001.7-1l2.4.7 2-3.4z"/></svg>',
+};
+
 async function renderAsk() {
   const panel = document.getElementById("panel");
+  const first = (state.user?.name || state.user?.email || "").split(/[\s@]/)[0];
   panel.innerHTML = `
+    <div class="af-welcome">
+      <div class="af-welcome-title">Welcome${first ? ", " + escapeHtml(first) : ""}</div>
+      <div class="af-welcome-sub">Your AI agent for email, reminders, and more.</div>
+    </div>
+    <div class="af-section-label">Tools</div>
+    <div class="tools-grid">
+      <button type="button" class="tool-tile" data-tab="priority">${ICONS.priority}<span>Priority</span></button>
+      <button type="button" class="tool-tile" data-tab="drafts">${ICONS.drafts}<span>Drafts</span></button>
+      <button type="button" class="tool-tile" data-tab="remind">${ICONS.remind}<span>Remind</span></button>
+      <button type="button" class="tool-tile" data-tab="settings">${ICONS.settings}<span>Settings</span></button>
+    </div>
+    <div class="af-section-label">Quick ask</div>
     <div id="answerWrap"></div>
     <textarea id="input" placeholder="Ask AgentFury anything…"></textarea>
     <button id="askBtn">Ask</button>
     <div class="msg" id="askMsg">For back-and-forth conversations, memory, and Autopilot, use the full app.</div>`;
+
+  panel.querySelectorAll(".tool-tile").forEach((t) => {
+    t.onclick = () => {
+      state.tab = t.dataset.tab;
+      renderApp();
+    };
+  });
 
   const ask = async () => {
     const input = document.getElementById("input");
