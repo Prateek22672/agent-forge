@@ -128,7 +128,7 @@
     showAnswer(r2.data.reply, false);
   }
 
-  function showBar(rect, prefill) {
+  function showBar(rect, prefill, autoFocus) {
     removeBar();
     bar = document.createElement("div");
     bar.className = "af-sel-bar";
@@ -147,7 +147,11 @@
 
     const input = bar.querySelector(".af-sel-input");
     if (prefill) input.value = prefill;
-    input.focus();
+    // Only steal keyboard focus when explicitly opened to ask (right-click
+    // menu). On a plain text selection, focusing our input would hijack
+    // Ctrl+C — the browser copies from whatever has focus, so the page's
+    // highlighted text would silently fail to copy. Leave focus on the page.
+    if (autoFocus) input.focus();
 
     bar.querySelector(".af-sel-send").onclick = () => ask(input.value.trim());
     input.addEventListener("keydown", (e) => {
@@ -206,7 +210,7 @@
             /* keep fallback */
           }
         }
-        showBar(rect, "");
+        showBar(rect, "", true);
       }
     });
   } catch {
