@@ -38,10 +38,12 @@ import threading
 from app import keys as key_manager
 from app import usage
 
-# Round-robin over the CURRENT Groq key pool (env + admin-added). Read fresh on
+# Round-robin over the CURRENT key pool (env + admin-added), read fresh on
 # every call so keys added from the admin panel take effect immediately.
 _key_lock = threading.Lock()
 _key_idx = 0
+_gemini_key_lock = threading.Lock()
+_gemini_key_idx = 0
 
 
 def _next_groq_key() -> str:
@@ -90,8 +92,17 @@ def _cached_gemini(model: str, temperature: float, api_key: str):
 
 
 def _gemini_key() -> str | None:
+    """Round-robin over the Gemini key pool, same as Groq — previously this
+    always returned the first key, so extra Gemini keys added in the admin
+    panel never actually got used."""
+    global _gemini_key_idx
     pool = key_manager.gemini_keys()
-    return pool[0] if pool else None
+    if not pool:
+        return None
+    with _gemini_key_lock:
+        key = pool[_gemini_key_idx % len(pool)]
+        _gemini_key_idx += 1
+    return key
 
 
 def gemini_available() -> bool:
