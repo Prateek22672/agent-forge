@@ -4,15 +4,18 @@
 
 const API_BASE = "https://agentfury.foliofyx.in/api";
 
-// The toolbar icon opens the SIDE PANEL (chrome.sidePanel) instead of a
-// dropdown popup. A side panel is a native browser surface — like DevTools or
-// the bookmarks bar — rendered entirely outside the webpage's DOM, so no site
-// can detect, inspect, block, or interfere with it. It also stays open and
-// keeps its state while you browse, unlike a popup that fully unloads the
-// instant it loses focus.
-chrome.sidePanel
-  .setPanelBehavior({ openPanelOnActionClick: true })
-  .catch(() => {});
+// The toolbar icon toggles a FLOATING panel injected into the current page
+// (content-panel.js) — a draggable overlay card, like Monica/Grammarly's
+// assistant window, instead of a dropdown popup that vanishes the instant it
+// loses focus. Clicking the icon just relays the toggle to the active tab's
+// content script, which owns the actual panel DOM.
+chrome.action.onClicked.addListener((tab) => {
+  if (!tab.id) return;
+  chrome.tabs.sendMessage(tab.id, { type: "AF_TOGGLE_PANEL" }).catch(() => {
+    // No content script on this page (chrome:// pages, the Web Store, a tab
+    // that predates install) — nothing we can do there.
+  });
+});
 
 async function getToken() {
   const { af_token } = await chrome.storage.local.get("af_token");

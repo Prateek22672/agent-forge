@@ -15,15 +15,12 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "AgentFury — click to open the side panel"
-  },
-  "side_panel": {
-    "default_path": "sidepanel.html"
+    "default_title": "AgentFury — click to open"
   },
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["storage", "activeTab", "scripting", "identity", "alarms", "notifications", "contextMenus", "sidePanel"],
+  "permissions": ["storage", "activeTab", "scripting", "identity", "alarms", "notifications", "contextMenus"],
   "host_permissions": [
     "https://agentfury.foliofyx.in/*",
     "https://mail.google.com/*"
@@ -37,9 +34,15 @@
     },
     {
       "matches": ["<all_urls>"],
-      "js": ["content-global.js"],
-      "css": ["content-global.css"],
+      "js": ["content-global.js", "content-panel.js"],
+      "css": ["content-global.css", "content-panel.css"],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["sidepanel.html", "popup.css", "popup.js"],
+      "matches": ["<all_urls>"]
     }
   ]
 }
