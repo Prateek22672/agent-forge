@@ -1,0 +1,81 @@
+.af-float-panel {
+  position: fixed;
+  top: 70px;
+  right: 20px;
+  width: 380px;
+  height: 620px;
+  max-height: calc(100vh - 40px);
+  z-index: 2147483647; /* always above page content */
+  background: #0a0a0a;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+
+  opacity: 0;
+  transform: translateY(-8px) scale(0.97);
+  transition: opacity 0.15s ease, transform 0.15s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.af-float-panel.af-in {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+.af-float-panel.af-dragging {
+  transition: none;
+  user-select: none;
+}
+.af-float-panel.af-minimized {
+  height: auto;
+}
+.af-float-panel.af-minimized .af-float-frame {
+  display: none;
+}
+
+.af-float-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #111;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: move;
+  flex-shrink: 0;
+}
+.af-float-title {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.af-float-actions {
+  display: flex;
+  gap: 4px;
+}
+.af-float-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+.af-float-btn:hover {
+  background: #fff;
+  color: #000;
+}
+
+.af-float-frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: #0a0a0a;
+}
