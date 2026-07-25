@@ -49,6 +49,40 @@
 
   send({ type: "WARM_UP" });
 
+  // Some sites disable copy/paste (block the native "copy"/"paste" events,
+  // or preventDefault on Ctrl+C/Ctrl+V) to stop people lifting content off
+  // the page. That blocking targets the page's own DOM events — it can't
+  // reach the OS clipboard directly. So for anything of ours (the selection
+  // bar's input, the quick-capture note box) we bypass the page entirely and
+  // talk to the Clipboard API ourselves.
+  function forceCopy(text) {
+    if (!text) return Promise.resolve(false);
+    return navigator.clipboard
+      .writeText(text)
+      .then(() => true)
+      .catch(() => false);
+  }
+
+  function enablePasteBypass(el) {
+    el.addEventListener("keydown", (e) => {
+      const key = (e.key || "").toLowerCase();
+      if ((e.ctrlKey || e.metaKey) && key === "v") {
+        navigator.clipboard
+          .readText()
+          .then((text) => {
+            if (text == null) return;
+            const start = el.selectionStart ?? el.value.length;
+            const end = el.selectionEnd ?? el.value.length;
+            el.value = el.value.slice(0, start) + text + el.value.slice(end);
+            const caret = start + text.length;
+            el.setSelectionRange(caret, caret);
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+          })
+          .catch(() => {});
+      }
+    });
+  }
+
   let bar = null;
   let assistantAgentId = null;
   let lastSelectionText = "";
@@ -285,6 +319,7 @@
 
     const input = captureCard.querySelector(".af-capture-input");
     const msg = captureCard.querySelector(".af-capture-msg");
+    enablePasteBypass(input);
     input.focus();
 
     captureCard.querySelector(".af-capture-save").onclick = async () => {
@@ -367,6 +402,7 @@
       <div class="af-sel-chips">
         <button type="button" class="af-sel-chip" data-q="Explain this simply.">Explain</button>
         <button type="button" class="af-sel-chip" data-q="Summarize this concisely.">Summarize</button>
+        <button type="button" class="af-sel-chip" data-copy="1" title="Copy this text — works even on sites that block copying">Copy</button>
         <button type="button" class="af-sel-chip af-sel-action" data-action="remind" title="Add this as a reminder">Remind</button>
         <button type="button" class="af-sel-chip af-sel-action" data-action="note" title="Save this to your Notes — great for study highlights">Note</button>
         <button type="button" class="af-sel-chip af-sel-action" data-action="brain" title="Save this to your Brain (personalizes the AI)">Brain</button>
@@ -376,6 +412,7 @@
     requestAnimationFrame(() => bar.classList.add("af-in"));
 
     const input = bar.querySelector(".af-sel-input");
+    enablePasteBypass(input);
     if (prefill) input.value = prefill;
     // Only steal keyboard focus when explicitly opened to ask (right-click
     // menu). On a plain text selection, focusing our input would hijack
@@ -396,6 +433,16 @@
     bar.querySelectorAll(".af-sel-action[data-action]").forEach((c) => {
       c.onclick = () => quickAction(c.dataset.action);
     });
+    const copyChip = bar.querySelector(".af-sel-chip[data-copy]");
+    if (copyChip) {
+      copyChip.onclick = async () => {
+        const ok = await forceCopy(lastSelectionText);
+        copyChip.textContent = ok ? "Copied" : "Couldn't copy";
+        setTimeout(() => {
+          if (copyChip) copyChip.textContent = "Copy";
+        }, 1400);
+      };
+    }
     bar.addEventListener("mousedown", (e) => {
       // Clicking anywhere (Explain/Summarize/send) normally collapses the
       // page's native text-selection highlight, since the click target is
