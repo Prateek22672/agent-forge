@@ -111,6 +111,7 @@ function renderApp() {
       <div class="tab" data-tab="priority">Priority</div>
       <div class="tab" data-tab="drafts">Drafts</div>
       <div class="tab" data-tab="remind">Remind</div>
+      <div class="tab" data-tab="settings" title="Settings">⚙</div>
     </div>
     <div class="panel" id="panel"></div>`;
   document.getElementById("openFull").onclick = (e) => {
@@ -133,6 +134,7 @@ function renderApp() {
   else if (state.tab === "priority") renderPriority();
   else if (state.tab === "drafts") renderDrafts();
   else if (state.tab === "remind") renderRemind();
+  else if (state.tab === "settings") renderExtSettings();
 }
 
 // ---------- Ask tab: one-shot Q&A (no fake persistence) ----------
@@ -283,6 +285,36 @@ function renderRemind() {
       document.getElementById("title").value = "";
       document.getElementById("when").value = "";
     }
+  };
+}
+
+// ---------- Settings tab ----------
+function renderExtSettings() {
+  const panel = document.getElementById("panel");
+  panel.innerHTML = `
+    <div class="item">
+      <div class="title">Select-to-ask</div>
+      <div class="sub">Show a small AI bar when you highlight text on any page (including Gmail).</div>
+      <div class="row">
+        <button id="selectToggle" class="secondary">…</button>
+      </div>
+    </div>
+    <div class="msg">Takes effect immediately on open tabs — no refresh needed.</div>`;
+
+  const btn = document.getElementById("selectToggle");
+  const paint = (enabled) => {
+    btn.textContent = enabled ? "On — tap to turn off" : "Off — tap to turn on";
+  };
+
+  chrome.storage.local.get("af_select_enabled", (r) => {
+    paint(r.af_select_enabled !== false); // default: on
+  });
+
+  btn.onclick = () => {
+    chrome.storage.local.get("af_select_enabled", (r) => {
+      const next = !(r.af_select_enabled !== false);
+      chrome.storage.local.set({ af_select_enabled: next }, () => paint(next));
+    });
   };
 }
 
