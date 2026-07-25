@@ -53,18 +53,27 @@
   let assistantAgentId = null;
   let lastSelectionText = "";
 
-  // Select-to-ask can be turned off from the popup (Settings). Cached locally
-  // and kept live via storage.onChanged, so toggling it takes effect on every
-  // open tab immediately — no page refresh needed for this particular setting.
+  // Select-to-ask and the floating bubble can both be turned off from the
+  // popup (Settings). Cached locally and kept live via storage.onChanged, so
+  // toggling takes effect on every open tab immediately — no refresh needed.
   let selectEnabled = true;
+  let bubbleEnabled = true;
   try {
-    chrome.storage.local.get("af_select_enabled", (r) => {
+    chrome.storage.local.get(["af_select_enabled", "af_bubble_enabled"], (r) => {
       if (typeof r.af_select_enabled === "boolean") selectEnabled = r.af_select_enabled;
+      if (typeof r.af_bubble_enabled === "boolean") bubbleEnabled = r.af_bubble_enabled;
+      if (bubbleEnabled) mountBubble();
     });
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === "local" && "af_select_enabled" in changes) {
+      if (area !== "local") return;
+      if ("af_select_enabled" in changes) {
         selectEnabled = changes.af_select_enabled.newValue !== false;
         if (!selectEnabled) removeBar();
+      }
+      if ("af_bubble_enabled" in changes) {
+        bubbleEnabled = changes.af_bubble_enabled.newValue !== false;
+        if (bubbleEnabled) mountBubble();
+        else unmountBubble();
       }
     });
   } catch {
@@ -238,6 +247,109 @@
     }
   }
 
+  // ---------- Persistent bubble (always visible — the point is discovery) ----
+  // Requiring a toolbar-icon click means most students never find the
+  // extension again after installing it. A small always-on bubble in the
+  // corner of every page is a constant, low-friction reminder that AgentFury
+  // is right there — click it to jot down whatever they're stuck on, without
+  // needing the full side panel.
+  let bubble = null;
+  let captureCard = null;
+
+  function closeCapture() {
+    if (captureCard) {
+      captureCard.remove();
+      captureCard = null;
+    }
+  }
+
+  function openCapture() {
+    if (captureCard) {
+      closeCapture();
+      return;
+    }
+    captureCard = document.createElement("div");
+    captureCard.className = "af-capture-card";
+    captureCard.innerHTML = `
+      <div class="af-capture-title">Stuck on something here?</div>
+      <div class="af-capture-sub">Jot it down — it's saved to your Notes for later.</div>
+      <textarea class="af-capture-input" placeholder="e.g. don't understand how this formula works…"></textarea>
+      <div class="af-capture-row">
+        <button type="button" class="af-capture-save">Save note</button>
+        <a class="af-capture-open" href="#">Open AgentFury ↗</a>
+      </div>
+      <div class="af-capture-msg"></div>
+    `;
+    document.body.appendChild(captureCard);
+    requestAnimationFrame(() => captureCard.classList.add("af-in"));
+
+    const input = captureCard.querySelector(".af-capture-input");
+    const msg = captureCard.querySelector(".af-capture-msg");
+    input.focus();
+
+    captureCard.querySelector(".af-capture-save").onclick = async () => {
+      const text = input.value.trim();
+      if (!text) return;
+      msg.textContent = "Saving…";
+      msg.className = "af-capture-msg";
+      const title = (document.title || "Note").slice(0, 200);
+      const r = await send({
+        type: "API_CALL",
+        path: "/notes",
+        method: "POST",
+        body: { title, content: text.slice(0, 4000) },
+      });
+      if (!r.ok) {
+        msg.textContent = friendlyError(r);
+        msg.className = "af-capture-msg af-err";
+        return;
+      }
+      msg.textContent = "✓ Saved to your Notes.";
+      input.value = "";
+      try {
+        chrome.runtime.sendMessage({ type: "AF_DATA_CHANGED", kind: "note" }).catch(() => {});
+      } catch {
+        /* best effort */
+      }
+      setTimeout(closeCapture, 900);
+    };
+
+    captureCard.querySelector(".af-capture-open").onclick = (e) => {
+      e.preventDefault();
+      try {
+        chrome.runtime.sendMessage({ type: "AF_OPEN_PANEL" }).catch(() => {});
+      } catch {
+        /* if opening the panel isn't possible here, the click still closed nothing — fine */
+      }
+    };
+
+    captureCard.addEventListener("mousedown", (e) => e.stopPropagation());
+  }
+
+  function mountBubble() {
+    if (bubble || !bubbleEnabled) return;
+    bubble = document.createElement("button");
+    bubble.type = "button";
+    bubble.className = "af-bubble";
+    bubble.title = "AgentFury — note a difficulty, or click the toolbar icon for the full assistant";
+    bubble.textContent = "AF";
+    bubble.onclick = openCapture;
+    document.body.appendChild(bubble);
+    requestAnimationFrame(() => bubble.classList.add("af-in"));
+  }
+
+  function unmountBubble() {
+    closeCapture();
+    if (bubble) {
+      bubble.remove();
+      bubble = null;
+    }
+  }
+
+  document.addEventListener("mousedown", (e) => {
+    if (captureCard && !captureCard.contains(e.target) && e.target !== bubble) closeCapture();
+  });
+
   function showBar(rect, prefill, autoFocus) {
     if (!selectEnabled) return; // turned off in the popup — single choke point
     removeBar();
@@ -315,7 +427,10 @@
     if (bar && !bar.contains(e.target)) removeBar();
   });
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") removeBar();
+    if (e.key === "Escape") {
+      removeBar();
+      closeCapture();
+    }
   });
 
   // Right-click → "Ask AgentFury about…" (background.js relays the selection here).

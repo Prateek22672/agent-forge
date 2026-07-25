@@ -316,13 +316,34 @@ async function renderExtSettings() {
       <div class="msg" id="googleMsg"></div>
     </div>
     <div class="item">
+      <div class="title">Floating helper bubble</div>
+      <div class="sub">A small AF button in the corner of every page — click it to quickly save a note (great for jotting down what you're stuck on while studying).</div>
+      <div class="row">
+        <button id="bubbleToggle" class="secondary">…</button>
+      </div>
+    </div>
+    <div class="item">
       <div class="title">Select-to-ask</div>
       <div class="sub">Show a small AI bar when you highlight text on any page (including Gmail).</div>
       <div class="row">
         <button id="selectToggle" class="secondary">…</button>
       </div>
     </div>
-    <div class="msg">Toggle takes effect immediately on open tabs — no refresh needed.</div>`;
+    <div class="msg">Toggles take effect immediately on open tabs — no refresh needed.</div>`;
+
+  const bBtn = document.getElementById("bubbleToggle");
+  const paintBubble = (enabled) => {
+    bBtn.textContent = enabled ? "On — tap to turn off" : "Off — tap to turn on";
+  };
+  chrome.storage.local.get("af_bubble_enabled", (r) => {
+    paintBubble(r.af_bubble_enabled !== false); // default: on
+  });
+  bBtn.onclick = () => {
+    chrome.storage.local.get("af_bubble_enabled", (r) => {
+      const next = !(r.af_bubble_enabled !== false);
+      chrome.storage.local.set({ af_bubble_enabled: next }, () => paintBubble(next));
+    });
+  };
 
   const btn = document.getElementById("selectToggle");
   const paint = (enabled) => {
