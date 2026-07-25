@@ -71,11 +71,52 @@
     /* extension context not ready yet — defaults to enabled */
   }
 
+  let highlightOverlay = null;
+
+  function clearHighlightOverlay() {
+    if (highlightOverlay) {
+      highlightOverlay.remove();
+      highlightOverlay = null;
+    }
+  }
+
+  // Paint our OWN highlight boxes over the selected text instead of relying on
+  // the browser's native selection staying visible. Necessary because many
+  // sites (React/virtualized feeds like X, infinite-scroll pages, etc.)
+  // re-render their DOM on their own schedule, which silently collapses the
+  // native Selection — even though nothing we do touches it. Our overlay is
+  // independent of that: once drawn, it stays until we explicitly clear it.
+  function drawHighlightOverlay(range) {
+    clearHighlightOverlay();
+    let rects;
+    try {
+      rects = range.getClientRects();
+    } catch {
+      return;
+    }
+    if (!rects || !rects.length) return;
+    const container = document.createElement("div");
+    container.className = "af-sel-highlight";
+    for (const r of rects) {
+      if (r.width < 1 || r.height < 1) continue;
+      const box = document.createElement("div");
+      box.className = "af-sel-highlight-box";
+      box.style.top = `${window.scrollY + r.top}px`;
+      box.style.left = `${window.scrollX + r.left}px`;
+      box.style.width = `${r.width}px`;
+      box.style.height = `${r.height}px`;
+      container.appendChild(box);
+    }
+    document.body.appendChild(container);
+    highlightOverlay = container;
+  }
+
   function removeBar() {
     if (bar) {
       bar.remove();
       bar = null;
     }
+    clearHighlightOverlay();
   }
 
   function clampPosition(rect) {
@@ -201,8 +242,9 @@
       const text = sel ? sel.toString().trim() : "";
       if (text.length > 2 && text.length < 6000) {
         lastSelectionText = text;
-        const rect = sel.getRangeAt(0).getBoundingClientRect();
-        showBar(rect);
+        const range = sel.getRangeAt(0);
+        showBar(range.getBoundingClientRect());
+        drawHighlightOverlay(range); // survives even if the page later clears its own selection
       } else if (!text) {
         removeBar();
       }
@@ -224,7 +266,9 @@
         const sel = window.getSelection();
         if (sel && sel.rangeCount) {
           try {
-            rect = sel.getRangeAt(0).getBoundingClientRect();
+            const range = sel.getRangeAt(0);
+            rect = range.getBoundingClientRect();
+            drawHighlightOverlay(range);
           } catch {
             /* keep fallback */
           }
