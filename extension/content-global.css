@@ -1,3 +1,19 @@
+/* Our own highlight, painted over the selected text and independent of the
+   page's native selection — stays visible even if the site's own JS (React
+   re-renders, virtualized feeds, etc.) clears the browser's real selection. */
+.af-sel-highlight {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none; /* never blocks clicks/selection on the page beneath */
+  z-index: 2147482999; /* just under the bar */
+}
+.af-sel-highlight-box {
+  position: absolute;
+  background: rgba(124, 92, 255, .38);
+  border-radius: 2px;
+}
+
 /* Select-to-ask mini bar — appears near any text selection on any page. */
 .af-sel-bar {
   position: absolute;
