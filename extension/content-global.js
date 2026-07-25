@@ -53,6 +53,24 @@
   let assistantAgentId = null;
   let lastSelectionText = "";
 
+  // Select-to-ask can be turned off from the popup (Settings). Cached locally
+  // and kept live via storage.onChanged, so toggling it takes effect on every
+  // open tab immediately — no page refresh needed for this particular setting.
+  let selectEnabled = true;
+  try {
+    chrome.storage.local.get("af_select_enabled", (r) => {
+      if (typeof r.af_select_enabled === "boolean") selectEnabled = r.af_select_enabled;
+    });
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === "local" && "af_select_enabled" in changes) {
+        selectEnabled = changes.af_select_enabled.newValue !== false;
+        if (!selectEnabled) removeBar();
+      }
+    });
+  } catch {
+    /* extension context not ready yet — defaults to enabled */
+  }
+
   function removeBar() {
     if (bar) {
       bar.remove();
@@ -129,6 +147,7 @@
   }
 
   function showBar(rect, prefill, autoFocus) {
+    if (!selectEnabled) return; // turned off in the popup — single choke point
     removeBar();
     bar = document.createElement("div");
     bar.className = "af-sel-bar";
