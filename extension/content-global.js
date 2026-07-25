@@ -367,9 +367,9 @@
       <div class="af-sel-chips">
         <button type="button" class="af-sel-chip" data-q="Explain this simply.">Explain</button>
         <button type="button" class="af-sel-chip" data-q="Summarize this concisely.">Summarize</button>
-        <button type="button" class="af-sel-chip af-sel-action" data-action="remind" title="Add this as a reminder">⏰ Remind</button>
-        <button type="button" class="af-sel-chip af-sel-action" data-action="note" title="Save this to your Notes — great for study highlights">📝 Note</button>
-        <button type="button" class="af-sel-chip af-sel-action" data-action="brain" title="Save this to your Brain (personalizes the AI)">🧠 Brain</button>
+        <button type="button" class="af-sel-chip af-sel-action" data-action="remind" title="Add this as a reminder">Remind</button>
+        <button type="button" class="af-sel-chip af-sel-action" data-action="note" title="Save this to your Notes — great for study highlights">Note</button>
+        <button type="button" class="af-sel-chip af-sel-action" data-action="brain" title="Save this to your Brain (personalizes the AI)">Brain</button>
       </div>
     `;
     document.body.appendChild(bar);
