@@ -187,6 +187,26 @@
     showAnswer(r2.data.reply, false);
   }
 
+  // One-click actions that DON'T ask the AI anything — they just save the
+  // selection straight into your account. This is the thing generic
+  // "select and ask AI" extensions can't offer: it's plugged into the same
+  // backend as your Planner and Brain, so it actually DOES something for you
+  // instead of only answering a question.
+  async function quickAction(kind) {
+    if (!lastSelectionText) return;
+    const title = lastSelectionText.slice(0, 300);
+    showAnswer(kind === "remind" ? "Adding to your reminders…" : "Saving to your Brain…", false, true);
+    const r =
+      kind === "remind"
+        ? await send({ type: "API_CALL", path: "/reminders", method: "POST", body: { title, remind_at: "" } })
+        : await send({ type: "API_CALL", path: "/brain", method: "POST", body: { text: title } });
+    if (!r.ok) {
+      showAnswer(friendlyError(r), true);
+      return;
+    }
+    showAnswer(kind === "remind" ? "✓ Added to your Reminders." : "✓ Saved to your Brain.", false);
+  }
+
   function showBar(rect, prefill, autoFocus) {
     if (!selectEnabled) return; // turned off in the popup — single choke point
     removeBar();
@@ -196,11 +216,17 @@
     bar.style.top = `${pos.top}px`;
     bar.style.left = `${pos.left}px`;
     bar.innerHTML = `
-      <span class="af-sel-icon">AF</span>
-      <input type="text" class="af-sel-input" placeholder="Ask AgentFury about this…" />
-      <button type="button" class="af-sel-chip" data-q="Explain this simply.">Explain</button>
-      <button type="button" class="af-sel-chip" data-q="Summarize this concisely.">Summarize</button>
-      <button type="button" class="af-sel-send" title="Ask">→</button>
+      <div class="af-sel-row">
+        <span class="af-sel-icon">AF</span>
+        <input type="text" class="af-sel-input" placeholder="Ask AgentFury about this…" />
+        <button type="button" class="af-sel-send" title="Ask">→</button>
+      </div>
+      <div class="af-sel-chips">
+        <button type="button" class="af-sel-chip" data-q="Explain this simply.">Explain</button>
+        <button type="button" class="af-sel-chip" data-q="Summarize this concisely.">Summarize</button>
+        <button type="button" class="af-sel-chip af-sel-action" data-action="remind" title="Add this as a reminder">⏰ Remind</button>
+        <button type="button" class="af-sel-chip af-sel-action" data-action="brain" title="Save this to your Brain">🧠 Save</button>
+      </div>
     `;
     document.body.appendChild(bar);
     requestAnimationFrame(() => bar.classList.add("af-in"));
@@ -220,8 +246,11 @@
         ask(input.value.trim());
       }
     });
-    bar.querySelectorAll(".af-sel-chip").forEach((c) => {
+    bar.querySelectorAll(".af-sel-chip[data-q]").forEach((c) => {
       c.onclick = () => ask(c.dataset.q);
+    });
+    bar.querySelectorAll(".af-sel-action[data-action]").forEach((c) => {
+      c.onclick = () => quickAction(c.dataset.action);
     });
     bar.addEventListener("mousedown", (e) => {
       // Clicking anywhere (Explain/Summarize/send) normally collapses the

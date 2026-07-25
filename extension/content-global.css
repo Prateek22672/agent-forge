@@ -14,20 +14,23 @@
   border-radius: 2px;
 }
 
-/* Select-to-ask mini bar — appears near any text selection on any page. */
+/* Select-to-ask mini bar — appears near any text selection on any page.
+   Two rows: input+ask on top, action chips below (wraps cleanly regardless
+   of how many chips there are). */
 .af-sel-bar {
   position: absolute;
   z-index: 2147483000;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 6px;
-  padding: 6px 7px;
+  padding: 7px 8px;
   background: #0b0b0b;
   border: 1px solid rgba(255,255,255,.14);
-  border-radius: 999px;
+  border-radius: 16px;
   box-shadow: 0 10px 28px rgba(0,0,0,.4);
   font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   max-width: 380px;
+  min-width: 300px;
 
   /* entrance animation: fade + slide up */
   opacity: 0;
@@ -35,6 +38,9 @@
   transition: opacity .16s ease, transform .16s cubic-bezier(.2,.8,.3,1);
 }
 .af-sel-bar.af-in { opacity: 1; transform: translateY(0) scale(1); }
+
+.af-sel-row { display: flex; align-items: center; gap: 6px; }
+.af-sel-chips { display: flex; flex-wrap: wrap; gap: 5px; padding-left: 28px; }
 
 .af-sel-icon {
   flex-shrink: 0;
@@ -69,6 +75,11 @@
   white-space: nowrap;
 }
 .af-sel-chip:hover { background: #fff; color: #000; border-color: #fff; }
+.af-sel-action {
+  background: rgba(124, 92, 255, .18);
+  border-color: rgba(124, 92, 255, .4);
+}
+.af-sel-action:hover { background: #7c5cff; color: #fff; border-color: #7c5cff; }
 
 .af-sel-send {
   flex-shrink: 0;

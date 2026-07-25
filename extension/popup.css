@@ -1,6 +1,6 @@
 * { box-sizing: border-box; }
 html, body {
-  width: 460px;
+  width: 100%;
   min-height: 260px;
   margin: 0;
   background: #0a0a0a;
@@ -9,6 +9,17 @@ html, body {
   font-size: 13px;
 }
 #app { display: flex; flex-direction: column; }
+
+/* Docked in the browser's side panel — fill the full height the panel gives
+   us, rather than the fixed-size dropdown box a popup used to be. */
+body.af-sidepanel,
+body.af-sidepanel #app {
+  height: 100vh;
+}
+body.af-sidepanel .panel {
+  flex: 1;
+  max-height: none;
+}
 
 .header {
   display: flex; align-items: center; justify-content: space-between;
