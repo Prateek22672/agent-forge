@@ -158,9 +158,22 @@ async function googleConnect() {
 }
 
 // Single message hub — popup.js and content-gmail.js both talk through this.
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     switch (msg.type) {
+      case "AF_OPEN_PANEL": {
+        // Best-effort: opening the side panel programmatically needs a fresh
+        // user gesture in some Chrome versions. This is called right from a
+        // click handler in the page, so it usually works; if Chrome refuses,
+        // we just fail quietly — the toolbar icon always works as a fallback.
+        try {
+          if (sender?.tab?.id) await chrome.sidePanel.open({ tabId: sender.tab.id });
+          sendResponse({ ok: true });
+        } catch (e) {
+          sendResponse({ ok: false, error: String(e.message || e) });
+        }
+        return;
+      }
       case "LOGIN": {
         const r = await apiCall("/auth/login", {
           method: "POST",
