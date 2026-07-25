@@ -4,6 +4,16 @@
 
 const API_BASE = "https://agentfury.foliofyx.in/api";
 
+// The toolbar icon opens the SIDE PANEL (chrome.sidePanel) instead of a
+// dropdown popup. A side panel is a native browser surface — like DevTools or
+// the bookmarks bar — rendered entirely outside the webpage's DOM, so no site
+// can detect, inspect, block, or interfere with it. It also stays open and
+// keeps its state while you browse, unlike a popup that fully unloads the
+// instant it loses focus.
+chrome.sidePanel
+  .setPanelBehavior({ openPanelOnActionClick: true })
+  .catch(() => {});
+
 async function getToken() {
   const { af_token } = await chrome.storage.local.get("af_token");
   return af_token || null;
