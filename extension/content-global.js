@@ -190,21 +190,43 @@
   // One-click actions that DON'T ask the AI anything — they just save the
   // selection straight into your account. This is the thing generic
   // "select and ask AI" extensions can't offer: it's plugged into the same
-  // backend as your Planner and Brain, so it actually DOES something for you
-  // instead of only answering a question.
+  // backend as your Planner, Notes, and Brain, so it actually DOES something
+  // for you instead of only answering a question. "Save note" in particular
+  // is the study use case: highlight a passage on any article/site and it
+  // lands in your Notes for review later — a web clipper, basically free.
   async function quickAction(kind) {
     if (!lastSelectionText) return;
-    const title = lastSelectionText.slice(0, 300);
-    showAnswer(kind === "remind" ? "Adding to your reminders…" : "Saving to your Brain…", false, true);
-    const r =
-      kind === "remind"
-        ? await send({ type: "API_CALL", path: "/reminders", method: "POST", body: { title, remind_at: "" } })
-        : await send({ type: "API_CALL", path: "/brain", method: "POST", body: { text: title } });
+    const labels = {
+      remind: "Adding to your reminders…",
+      brain: "Saving to your Brain…",
+      note: "Saving note…",
+    };
+    showAnswer(labels[kind] || "Saving…", false, true);
+
+    let r;
+    if (kind === "remind") {
+      const title = lastSelectionText.slice(0, 300);
+      r = await send({ type: "API_CALL", path: "/reminders", method: "POST", body: { title, remind_at: "" } });
+    } else if (kind === "brain") {
+      const text = lastSelectionText.slice(0, 300);
+      r = await send({ type: "API_CALL", path: "/brain", method: "POST", body: { text } });
+    } else {
+      // note: keep the page title so a saved snippet is traceable back to
+      // its source later — the full text goes in the note body.
+      const title = (document.title || "Note").slice(0, 200);
+      const content = lastSelectionText.slice(0, 4000);
+      r = await send({ type: "API_CALL", path: "/notes", method: "POST", body: { title, content } });
+    }
     if (!r.ok) {
       showAnswer(friendlyError(r), true);
       return;
     }
-    showAnswer(kind === "remind" ? "✓ Added to your Reminders." : "✓ Saved to your Brain.", false);
+    const done = {
+      remind: "✓ Added to your Reminders.",
+      brain: "✓ Saved to your Brain.",
+      note: "✓ Saved to your Notes.",
+    };
+    showAnswer(done[kind] || "✓ Saved.", false);
   }
 
   function showBar(rect, prefill, autoFocus) {
@@ -225,7 +247,8 @@
         <button type="button" class="af-sel-chip" data-q="Explain this simply.">Explain</button>
         <button type="button" class="af-sel-chip" data-q="Summarize this concisely.">Summarize</button>
         <button type="button" class="af-sel-chip af-sel-action" data-action="remind" title="Add this as a reminder">⏰ Remind</button>
-        <button type="button" class="af-sel-chip af-sel-action" data-action="brain" title="Save this to your Brain">🧠 Save</button>
+        <button type="button" class="af-sel-chip af-sel-action" data-action="note" title="Save this to your Notes — great for study highlights">📝 Note</button>
+        <button type="button" class="af-sel-chip af-sel-action" data-action="brain" title="Save this to your Brain (personalizes the AI)">🧠 Brain</button>
       </div>
     `;
     document.body.appendChild(bar);
