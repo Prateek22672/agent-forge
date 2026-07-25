@@ -102,6 +102,61 @@ async function googleLogin() {
   return r;
 }
 
+// ---------- Connect Google (Gmail/Calendar) — same mechanism as sign-in, but
+// requests the sensitive data scopes and forces the consent screen. This is
+// what makes Priority/Drafts actually work from the extension — sign-in alone
+// only grants login scopes, on purpose (no "unverified app" warning for the
+// common case). Opens in a real browser window (Chrome's own account picker),
+// same as the sign-in flow — not an embedded/hidden webview.
+async function googleConnect() {
+  const idRes = await apiCall("/auth/google/client-id", { auth: false });
+  if (!idRes.ok || !idRes.data?.configured) {
+    return { ok: false, error: "Google isn't configured on the server." };
+  }
+  const redirectUri = chrome.identity.getRedirectURL();
+  const dataScopes = [
+    "openid",
+    "email",
+    "profile",
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/calendar.events",
+  ].join(" ");
+  const authUrl =
+    "https://accounts.google.com/o/oauth2/v2/auth?" +
+    new URLSearchParams({
+      client_id: idRes.data.client_id,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: dataScopes,
+      access_type: "offline",
+      include_granted_scopes: "true",
+      prompt: "consent", // Google's "unverified app" screen appears here — expected
+    }).toString();
+
+  let responseUrl;
+  try {
+    responseUrl = await chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true });
+  } catch (e) {
+    return { ok: false, error: "Connection was cancelled or blocked." };
+  }
+  if (!responseUrl) return { ok: false, error: "Connection was cancelled." };
+
+  const code = new URL(responseUrl).searchParams.get("code");
+  if (!code) return { ok: false, error: "Google didn't return an auth code." };
+
+  // Reuses the same exchange endpoint as sign-in — it finds your existing
+  // account by email and upgrades its stored Google credentials, then hands
+  // back a fresh session token for the same account.
+  const r = await apiCall("/auth/google/extension-token", {
+    method: "POST",
+    body: { code, redirect_uri: redirectUri },
+    auth: false,
+  });
+  if (r.ok) await setToken(r.data.access_token);
+  return r;
+}
+
 // Single message hub — popup.js and content-gmail.js both talk through this.
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   (async () => {
@@ -118,6 +173,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       }
       case "GOOGLE_LOGIN": {
         sendResponse(await googleLogin());
+        return;
+      }
+      case "GOOGLE_CONNECT": {
+        sendResponse(await googleConnect());
         return;
       }
       case "GET_TOKEN_STATUS": {

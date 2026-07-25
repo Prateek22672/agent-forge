@@ -227,6 +227,15 @@
       note: "✓ Saved to your Notes.",
     };
     showAnswer(done[kind] || "✓ Saved.", false);
+
+    // Tell the side panel (if open) to refresh — otherwise a reminder/note
+    // saved from the highlight bar wouldn't show up there until you manually
+    // switch tabs and back.
+    try {
+      chrome.runtime.sendMessage({ type: "AF_DATA_CHANGED", kind }).catch(() => {});
+    } catch {
+      /* extension context not ready — the side panel just won't auto-refresh this once */
+    }
   }
 
   function showBar(rect, prefill, autoFocus) {
