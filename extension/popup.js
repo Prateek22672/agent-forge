@@ -13,6 +13,17 @@ const WEB_URL = "https://agentfury.foliofyx.in";
 
 let state = { user: null, tab: "ask" };
 
+// Theme: dark by default, light optional. Applied to <html data-af-theme="…">
+// before anything renders, and kept live so toggling in Settings updates
+// immediately without a reopen.
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-af-theme", theme === "light" ? "light" : "dark");
+}
+chrome.storage.local.get("af_theme", (r) => applyTheme(r.af_theme));
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && "af_theme" in changes) applyTheme(changes.af_theme.newValue);
+});
+
 function send(msg, timeoutMs = 45000) {
   return new Promise((resolve) => {
     let done = false;
@@ -62,7 +73,12 @@ try {
 // ---------- Login screen ----------
 function renderLogin() {
   app.innerHTML = `
-    <div class="header"><span class="brand"><span class="dot"></span>AGENTFURY</span></div>
+    <div class="header">
+      <span class="brand">
+        <span class="brand-mark">AF</span>
+        <span class="brand-name">AgentFury</span>
+      </span>
+    </div>
     <div class="panel">
       <button id="googleBtn" class="google-btn">
         <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
@@ -112,13 +128,23 @@ function renderLogin() {
 }
 
 // ---------- Main app ----------
+function initials(user) {
+  const src = (user?.name || user?.email || "?").trim();
+  const parts = src.split(/\s+/);
+  const s = parts.length > 1 ? parts[0][0] + parts[1][0] : src.slice(0, 2);
+  return s.toUpperCase();
+}
+
 function renderApp() {
   app.innerHTML = `
     <div class="header">
-      <span class="brand"><span class="dot"></span>AGENTFURY</span>
-      <div style="display:flex; align-items:center; gap:12px">
-        <a class="openFull" id="openFull" href="#">Open full app ↗</a>
-        <span class="footer-link" id="logout" style="padding:0">Logout</span>
+      <span class="brand">
+        <span class="brand-mark">AF</span>
+        <span class="brand-name">AgentFury</span>
+      </span>
+      <div class="header-right">
+        <button id="themeToggle" class="iconBtn" title="Switch theme">…</button>
+        <span class="avatar" title="${escapeHtml(state.user?.email || "")}">${initials(state.user)}</span>
       </div>
     </div>
     <div class="tabs">
@@ -126,17 +152,24 @@ function renderApp() {
       <div class="tab" data-tab="priority">Priority</div>
       <div class="tab" data-tab="drafts">Drafts</div>
       <div class="tab" data-tab="remind">Remind</div>
-      <div class="tab" data-tab="settings" title="Settings">⚙</div>
+      <div class="tab" data-tab="settings" title="Settings">Settings</div>
     </div>
     <div class="panel" id="panel"></div>`;
-  document.getElementById("openFull").onclick = (e) => {
-    e.preventDefault();
-    chrome.tabs.create({ url: WEB_URL });
+
+  const themeBtn = document.getElementById("themeToggle");
+  chrome.storage.local.get("af_theme", (r) => {
+    const current = r.af_theme === "light" ? "light" : "dark";
+    themeBtn.textContent = current === "dark" ? "Light" : "Dark";
+  });
+  themeBtn.onclick = () => {
+    chrome.storage.local.get("af_theme", (r) => {
+      const next = r.af_theme === "light" ? "dark" : "light";
+      chrome.storage.local.set({ af_theme: next }, () => {
+        themeBtn.textContent = next === "dark" ? "Light" : "Dark";
+      });
+    });
   };
-  document.getElementById("logout").onclick = async () => {
-    await send({ type: "LOGOUT" });
-    init();
-  };
+
   document.querySelectorAll(".tab").forEach((el) => {
     el.onclick = () => {
       state.tab = el.dataset.tab;
@@ -307,6 +340,14 @@ function renderRemind() {
 async function renderExtSettings() {
   const panel = document.getElementById("panel");
   panel.innerHTML = `
+    <div class="item">
+      <div class="title">Account</div>
+      <div class="sub">${escapeHtml(state.user?.name || state.user?.email || "")}</div>
+      <div class="row">
+        <button id="openFull" class="secondary">Open full app ↗</button>
+        <button id="logout" class="secondary">Logout</button>
+      </div>
+    </div>
     <div class="item" id="googleItem">
       <div class="title">Google account</div>
       <div class="sub" id="googleSub">Checking…</div>
@@ -357,6 +398,12 @@ async function renderExtSettings() {
       const next = !(r.af_select_enabled !== false);
       chrome.storage.local.set({ af_select_enabled: next }, () => paint(next));
     });
+  };
+
+  document.getElementById("openFull").onclick = () => chrome.tabs.create({ url: WEB_URL });
+  document.getElementById("logout").onclick = async () => {
+    await send({ type: "LOGOUT" });
+    init();
   };
 
   // Google connection status + the button that actually grants Gmail/Calendar
