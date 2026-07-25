@@ -77,6 +77,8 @@ def _ensure_columns() -> None:
             "last_brief": "VARCHAR(20) DEFAULT ''",
             "tz_offset_min": "INTEGER DEFAULT 0",
             "last_priority_scan": "VARCHAR(40) DEFAULT ''",
+            "last_login_at": "TIMESTAMP WITH TIME ZONE" if is_pg else "TIMESTAMP",
+            "last_login_source": "VARCHAR(20) DEFAULT ''",
         },
         "reminders": {
             "due_at": "VARCHAR(40) DEFAULT ''",

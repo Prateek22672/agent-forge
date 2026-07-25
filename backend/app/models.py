@@ -81,7 +81,41 @@ class User(Base):
     last_brief: Mapped[str] = mapped_column(String(20), default="")  # YYYY-MM-DD
     tz_offset_min: Mapped[int] = mapped_column(default=0)  # JS getTimezoneOffset()
     last_priority_scan: Mapped[str] = mapped_column(String(40), default="")
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_login_source: Mapped[str] = mapped_column(String(20), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class LoginEvent(Base):
+    """One successful sign-in, so the admin panel can show how many people are
+    actually using the platform day to day and from which surface (web,
+    extension, desktop) — not just how many accounts exist."""
+
+    __tablename__ = "login_events"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    source: Mapped[str] = mapped_column(String(20), default="web")  # web|extension|desktop
+    method: Mapped[str] = mapped_column(String(20), default="password")  # password|google
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class ErrorLog(Base):
+    """A server-side error worth an admin's attention (5xx responses, unhandled
+    exceptions). Kept lightweight and self-trimming (see app/error_log.py) — this
+    is meant for "is something on fire right now", not a full APM stack."""
+
+    __tablename__ = "error_logs"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    source: Mapped[str] = mapped_column(String(20), default="web")  # web|extension|desktop|unknown
+    method: Mapped[str] = mapped_column(String(10), default="")
+    path: Mapped[str] = mapped_column(String(300), default="")
+    status_code: Mapped[int] = mapped_column(default=500)
+    message: Mapped[str] = mapped_column(Text, default="")
+    duration_ms: Mapped[int] = mapped_column(default=0)
+    user_id: Mapped[str] = mapped_column(String(32), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
 
 
 class Agent(Base):

@@ -61,9 +61,11 @@ def extension_token(
         raise HTTPException(400, f"Google sign-in failed: {exc}")
 
     from app.google_login import login_or_create_user
+    from app.telemetry import record_login
 
     user, _info = login_or_create_user(db, creds)
     if user is None:
         raise HTTPException(400, "Google didn't return an email for this account.")
+    record_login(db, user, "extension", method="google")
     token = create_token(user.id)
     return TokenOut(access_token=token, user=user)

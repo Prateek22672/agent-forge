@@ -28,7 +28,7 @@ async function clearToken() {
 }
 
 async function apiCall(path, { method = "GET", body, auth = true } = {}) {
-  const headers = { "Content-Type": "application/json" };
+  const headers = { "Content-Type": "application/json", "X-AF-Client": "extension" };
   if (auth) {
     const token = await getToken();
     if (!token) return { ok: false, status: 401, error: "not_logged_in" };

@@ -17,7 +17,7 @@ from app import usage
 from app.auth import create_admin_token, require_admin, verify_password
 from app.config import settings
 from app.database import get_db
-from app.models import User
+from app.models import ErrorLog, LoginEvent, User
 from app.security.ratelimit import rate_limit
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -75,6 +75,10 @@ def _key_rows(provider: str, env_keys: list[str], all_keys: list[str], stats: di
 def insights(
     db: Session = Depends(get_db), admin: str = Depends(require_admin)
 ):
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import func
+
     from app.config import settings
 
     stats = usage.snapshot()
@@ -82,6 +86,39 @@ def insights(
     gemini_env = [settings.gemini_api_key] if settings.gemini_api_key else []
     groq_all = key_manager.groq_keys()
     gemini_all = key_manager.gemini_keys()
+
+    now = datetime.now(timezone.utc)
+    day_ago = now - timedelta(days=1)
+    week_ago = now - timedelta(days=7)
+
+    logins_today = db.query(LoginEvent).filter(LoginEvent.created_at >= day_ago).count()
+    logins_7d = db.query(LoginEvent).filter(LoginEvent.created_at >= week_ago).count()
+    by_source_rows = (
+        db.query(LoginEvent.source, func.count(LoginEvent.id))
+        .filter(LoginEvent.created_at >= week_ago)
+        .group_by(LoginEvent.source)
+        .all()
+    )
+    active_users_7d = (
+        db.query(func.count(func.distinct(LoginEvent.user_id)))
+        .filter(LoginEvent.created_at >= week_ago)
+        .scalar()
+        or 0
+    )
+
+    errors_24h = db.query(ErrorLog).filter(ErrorLog.created_at >= day_ago).count()
+    recent_errors = (
+        db.query(ErrorLog).order_by(ErrorLog.created_at.desc()).limit(20).all()
+    )
+    # Slowest endpoints in the last 24h — where to look first for lag complaints.
+    slow_rows = (
+        db.query(ErrorLog.path, func.avg(ErrorLog.duration_ms), func.count(ErrorLog.id))
+        .filter(ErrorLog.created_at >= day_ago, ErrorLog.duration_ms > 0)
+        .group_by(ErrorLog.path)
+        .order_by(func.avg(ErrorLog.duration_ms).desc())
+        .limit(10)
+        .all()
+    )
 
     return {
         "totals": {
@@ -99,7 +136,52 @@ def insights(
             "keys": _key_rows("gemini", gemini_env, gemini_all, stats),
         },
         "users_count": db.query(User).count(),
+        "engagement": {
+            "logins_today": logins_today,
+            "logins_7d": logins_7d,
+            "active_users_7d": active_users_7d,
+            "by_source_7d": {src: n for src, n in by_source_rows},
+        },
+        "health": {
+            "errors_24h": errors_24h,
+            "recent_errors": [
+                {
+                    "source": e.source,
+                    "method": e.method,
+                    "path": e.path,
+                    "status_code": e.status_code,
+                    "message": e.message,
+                    "duration_ms": e.duration_ms,
+                    "created_at": e.created_at,
+                }
+                for e in recent_errors
+            ],
+            "slowest_endpoints_24h": [
+                {"path": p, "avg_ms": round(avg or 0), "count": n} for p, avg, n in slow_rows
+            ],
+        },
     }
+
+
+@router.get("/users/recent-logins")
+def recent_logins(db: Session = Depends(get_db), admin: str = Depends(require_admin)):
+    """Who's actually using AgentFury lately — last 50 logins, newest first."""
+    rows = (
+        db.query(LoginEvent, User)
+        .join(User, LoginEvent.user_id == User.id)
+        .order_by(LoginEvent.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    return [
+        {
+            "email": u.email,
+            "source": ev.source,
+            "method": ev.method,
+            "created_at": ev.created_at,
+        }
+        for ev, u in rows
+    ]
 
 
 @router.post("/keys")

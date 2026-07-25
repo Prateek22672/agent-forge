@@ -6,6 +6,7 @@ import { api } from "../api";
 export default function AdminPanel({ onClose, standalone = false }) {
   const [data, setData] = useState(null);
   const [users, setUsers] = useState([]);
+  const [logins, setLogins] = useState([]);
   const [tab, setTab] = useState("keys");
   const [err, setErr] = useState("");
 
@@ -15,9 +16,12 @@ export default function AdminPanel({ onClose, standalone = false }) {
       return null;
     }));
     setUsers(await api.adminUsers().catch(() => []));
+    setLogins(await api.adminRecentLogins().catch(() => []));
   };
   useEffect(() => {
     load();
+    const id = setInterval(load, 30000); // keep insights fresh without a manual refresh
+    return () => clearInterval(id);
   }, []);
 
   return (
@@ -48,15 +52,19 @@ export default function AdminPanel({ onClose, standalone = false }) {
         {data && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-white/10 m-4 md:m-6">
             <Stat label="Total calls" value={data.totals.all_calls} />
-            <Stat label="Groq calls" value={data.totals.groq_calls} />
-            <Stat label="Gemini calls" value={data.totals.gemini_calls} />
             <Stat label="Users" value={data.users_count} />
+            <Stat label="Active (7d)" value={data.engagement?.active_users_7d} />
+            <Stat
+              label="Errors (24h)"
+              value={data.health?.errors_24h}
+              alert={data.health?.errors_24h > 0}
+            />
           </div>
         )}
 
         {/* Tabs */}
         <div className="flex gap-2 px-6">
-          {["keys", "users"].map((t) => (
+          {["keys", "users", "insights"].map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -95,17 +103,112 @@ export default function AdminPanel({ onClose, standalone = false }) {
           {tab === "users" && (
             <Users users={users} onChanged={load} />
           )}
+
+          {tab === "insights" && data && (
+            <Insights data={data} logins={logins} />
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function Stat({ label, value }) {
+function Stat({ label, value, alert = false }) {
   return (
     <div className="bg-black px-4 py-3">
-      <div className="text-2xl font-bold">{value ?? 0}</div>
+      <div className={`text-2xl font-bold ${alert ? "text-red-400" : ""}`}>{value ?? 0}</div>
       <div className="text-[11px] text-white/40">{label}</div>
+    </div>
+  );
+}
+
+function Insights({ data, logins }) {
+  const eng = data.engagement || {};
+  const health = data.health || {};
+  const bySource = eng.by_source_7d || {};
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="font-semibold text-sm mb-2">Logins</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-white/10">
+          <Stat label="Today" value={eng.logins_today} />
+          <Stat label="Last 7 days" value={eng.logins_7d} />
+          <Stat label="Extension (7d)" value={bySource.extension} />
+          <Stat label="Web (7d)" value={bySource.web} />
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-sm mb-2">Recent logins</div>
+        <div className="space-y-1 max-h-56 overflow-y-auto">
+          {logins.length === 0 && (
+            <div className="text-xs text-white/40">No logins recorded yet.</div>
+          )}
+          {logins.map((l, i) => (
+            <div
+              key={i}
+              className="flex items-center justify-between text-sm border border-white/10 px-3 py-2 rounded-lg"
+            >
+              <span>{l.email}</span>
+              <span className="flex items-center gap-2 text-xs text-white/50">
+                <span className="uppercase text-[10px] border border-white/20 px-1 rounded">
+                  {l.source}
+                </span>
+                <span>{new Date(l.created_at).toLocaleString()}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-sm mb-2">
+          Slowest endpoints (24h)
+        </div>
+        <div className="space-y-1">
+          {(health.slowest_endpoints_24h || []).length === 0 && (
+            <div className="text-xs text-white/40">No slow-endpoint data in the last 24h.</div>
+          )}
+          {(health.slowest_endpoints_24h || []).map((s, i) => (
+            <div
+              key={i}
+              className="flex items-center justify-between text-sm border border-white/10 px-3 py-2 rounded-lg font-mono"
+            >
+              <span>{s.path}</span>
+              <span className="text-xs text-white/50">
+                {s.avg_ms}ms avg · {s.count} reqs
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-sm mb-2">
+          Recent errors <span className="text-white/40 font-normal">({health.errors_24h} in last 24h)</span>
+        </div>
+        <div className="space-y-1 max-h-64 overflow-y-auto">
+          {(health.recent_errors || []).length === 0 && (
+            <div className="text-xs text-white/40">No errors logged. Clean.</div>
+          )}
+          {(health.recent_errors || []).map((e, i) => (
+            <div key={i} className="border border-white/10 px-3 py-2 rounded-lg text-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-red-400">
+                  {e.method} {e.path} · {e.status_code}
+                </span>
+                <span className="text-xs text-white/40">
+                  {new Date(e.created_at).toLocaleString()}
+                </span>
+              </div>
+              {e.message && (
+                <div className="text-xs text-white/50 mt-1 break-words">{e.message}</div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

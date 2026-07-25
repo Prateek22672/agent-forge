@@ -137,6 +137,7 @@ export const api = {
   adminRemoveKey: (provider, suffix) =>
     ahttp("DELETE", `/admin/keys/${provider}/${suffix}`),
   adminUsers: () => ahttp("GET", "/admin/users"),
+  adminRecentLogins: () => ahttp("GET", "/admin/users/recent-logins"),
   adminSetAdmin: (id, is_admin) => ahttp("PATCH", `/admin/users/${id}`, { is_admin }),
   adminDeleteUser: (id) => ahttp("DELETE", `/admin/users/${id}`),
 
