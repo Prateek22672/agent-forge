@@ -460,7 +460,7 @@
     setTimeout(() => {
       const sel = window.getSelection();
       const text = sel ? sel.toString().trim() : "";
-      if (text.length > 2 && text.length < 6000) {
+      if (text.length > 2 && text.length < 6000 && sel.rangeCount > 0) {
         lastSelectionText = text;
         const range = sel.getRangeAt(0);
         showBar(range.getBoundingClientRect());

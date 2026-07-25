@@ -236,11 +236,11 @@ function setupContextMenu() {
   // removeAll first — re-creating with the same id on an extension reload
   // during development otherwise throws "duplicate id".
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({
-      id: "af-ask-selection",
-      title: 'Ask AgentFury about "%s"',
-      contexts: ["selection"],
-    });
+    void chrome.runtime.lastError; // clear any pending error, nothing to act on
+    chrome.contextMenus.create(
+      { id: "af-ask-selection", title: 'Ask AgentFury about "%s"', contexts: ["selection"] },
+      () => void chrome.runtime.lastError // e.g. duplicate id on a fast reload — non-fatal, avoids console spam
+    );
   });
 }
 
@@ -336,5 +336,15 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 });
 
 // Run once shortly after the service worker wakes, so the badge is fresh
-// even before the first 1-minute alarm fires.
-pollAndNotify().catch(() => {});
+// even before the first 1-minute alarm fires. MV3 service workers are killed
+// after ~30s idle and re-woken by ANY event (a message, an alarm, opening the
+// panel), which re-runs this top-level script every time — without a
+// throttle this call alone could hit the API many times a minute during
+// active browsing, not once. Skip it if we already polled recently.
+const MIN_POLL_GAP_MS = 20000;
+(async () => {
+  const { af_last_poll } = await chrome.storage.local.get("af_last_poll");
+  if (af_last_poll && Date.now() - af_last_poll < MIN_POLL_GAP_MS) return;
+  await chrome.storage.local.set({ af_last_poll: Date.now() });
+  pollAndNotify().catch(() => {});
+})();

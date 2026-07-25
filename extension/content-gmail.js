@@ -196,9 +196,14 @@ function openPanelFor(launcher, composeBody) {
     setStatus("");
   };
   panel.querySelector(".af-insert-btn").onclick = () => {
-    composeBody.focus();
-    document.execCommand("selectAll", false, null);
-    document.execCommand("insertText", false, previewText);
+    try {
+      composeBody.focus();
+      document.execCommand("selectAll", false, null);
+      document.execCommand("insertText", false, previewText);
+    } catch {
+      // execCommand is deprecated and can throw in some Gmail iframe states —
+      // don't let that leave the panel stuck open with no way to dismiss it.
+    }
     closePanel();
   };
 
@@ -273,6 +278,11 @@ function openPanelFor(launcher, composeBody) {
 
 function attach(composeBody) {
   if (ATTACHED.has(composeBody)) return;
+  // Gmail can tear the compose DOM down (e.g. discard/close) between the
+  // MutationObserver firing and this running — skip rather than throw, or
+  // scan()'s forEach aborts partway and other compose boxes never get a
+  // launcher either.
+  if (!composeBody.parentElement) return;
   ATTACHED.add(composeBody);
 
   const launcher = document.createElement("button");
