@@ -59,7 +59,7 @@ async function init() {
 // some other tab, that broadcasts here — if we're currently looking at the
 // affected tab, re-render it so the new item shows up without the user
 // having to switch tabs and back.
-const KIND_TO_TAB = { remind: "remind" }; // note/brain don't have a dedicated tab yet
+const KIND_TO_TAB = { remind: "remind", note: "notes" }; // brain has no dedicated tab yet
 try {
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type !== "AF_DATA_CHANGED") return;
@@ -152,6 +152,7 @@ function renderApp() {
       <div class="tab" data-tab="priority">Priority</div>
       <div class="tab" data-tab="drafts">Drafts</div>
       <div class="tab" data-tab="remind">Remind</div>
+      <div class="tab" data-tab="notes">Notes</div>
       <div class="tab" data-tab="settings" title="Settings">Settings</div>
     </div>
     <div class="panel" id="panel"></div>`;
@@ -182,6 +183,7 @@ function renderApp() {
   else if (state.tab === "priority") renderPriority();
   else if (state.tab === "drafts") renderDrafts();
   else if (state.tab === "remind") renderRemind();
+  else if (state.tab === "notes") renderNotes();
   else if (state.tab === "settings") renderExtSettings();
 }
 
@@ -197,6 +199,8 @@ const ICONS = {
     '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>',
   settings:
     '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.9 7.9 0 000-2l2-1.5-2-3.4-2.4.7a8 8 0 00-1.7-1L15 3h-4l-.3 2.4a8 8 0 00-1.7 1l-2.4-.7-2 3.4L6.6 11a7.9 7.9 0 000 2l-2 1.5 2 3.4 2.4-.7a8 8 0 001.7 1L11 21h4l.3-2.4a8 8 0 001.7-1l2.4.7 2-3.4z"/></svg>',
+  notes:
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9 12h6M9 16h6"/></svg>',
 };
 
 async function renderAsk() {
@@ -212,6 +216,7 @@ async function renderAsk() {
       <button type="button" class="tool-tile" data-tab="priority">${ICONS.priority}<span>Priority</span></button>
       <button type="button" class="tool-tile" data-tab="drafts">${ICONS.drafts}<span>Drafts</span></button>
       <button type="button" class="tool-tile" data-tab="remind">${ICONS.remind}<span>Remind</span></button>
+      <button type="button" class="tool-tile" data-tab="notes">${ICONS.notes}<span>Notes</span></button>
       <button type="button" class="tool-tile" data-tab="settings">${ICONS.settings}<span>Settings</span></button>
     </div>
     <div class="af-section-label">Quick ask</div>
@@ -344,14 +349,60 @@ async function renderDrafts() {
   });
 }
 
-// ---------- Remind tab (quick add) ----------
-function renderRemind() {
+// ---------- Remind tab (add form + the actual list — this was missing
+// entirely before, which is why saved reminders never "showed up") ----------
+async function renderRemind() {
   const panel = document.getElementById("panel");
   panel.innerHTML = `
     <input id="title" placeholder="Remind me to…" />
     <input id="when" placeholder="when (e.g. today 9 PM)" />
     <button id="addBtn">Add reminder</button>
-    <div class="msg" id="remMsg"></div>`;
+    <div class="msg" id="remMsg"></div>
+    <div class="af-section-label">Your reminders</div>
+    <div id="remList"><div class="empty">Loading…</div></div>`;
+
+  const loadList = async () => {
+    const list = document.getElementById("remList");
+    const r = await api("/reminders");
+    if (!r.ok) {
+      list.innerHTML = `<div class="empty">Couldn't load — try Open full app.</div>`;
+      return;
+    }
+    const items = (r.data || []).filter((it) => it.status !== "done").concat(
+      (r.data || []).filter((it) => it.status === "done")
+    );
+    if (!items.length) {
+      list.innerHTML = `<div class="empty">No reminders yet.</div>`;
+      return;
+    }
+    list.innerHTML = items
+      .map(
+        (it) => `
+      <div class="item">
+        <div class="title"${it.status === "done" ? ' style="text-decoration:line-through;opacity:.5"' : ""}>${escapeHtml(it.title)}</div>
+        ${it.remind_at ? `<div class="sub">${escapeHtml(it.remind_at)}</div>` : ""}
+        <div class="row">
+          <button type="button" class="secondary toggleBtn" data-id="${it.id}">${it.status === "done" ? "Undo" : "Done"}</button>
+          <button type="button" class="secondary delBtn" data-id="${it.id}">Delete</button>
+        </div>
+      </div>`
+      )
+      .join("");
+    list.querySelectorAll(".toggleBtn").forEach((b) => {
+      b.onclick = async () => {
+        await api(`/reminders/${b.dataset.id}`, "PATCH");
+        loadList();
+      };
+    });
+    list.querySelectorAll(".delBtn").forEach((b) => {
+      b.onclick = async () => {
+        await api(`/reminders/${b.dataset.id}`, "DELETE");
+        loadList();
+      };
+    });
+  };
+  loadList();
+
   document.getElementById("addBtn").onclick = async () => {
     const title = document.getElementById("title").value.trim();
     const when = document.getElementById("when").value.trim();
@@ -363,6 +414,68 @@ function renderRemind() {
     if (r.ok) {
       document.getElementById("title").value = "";
       document.getElementById("when").value = "";
+      loadList();
+    }
+  };
+}
+
+// ---------- Notes tab — was completely invisible before: the highlight bar
+// could SAVE a note, but there was nowhere in the extension to ever see it. ----------
+async function renderNotes() {
+  const panel = document.getElementById("panel");
+  panel.innerHTML = `
+    <input id="noteTitle" placeholder="Note title (optional)" />
+    <textarea id="noteContent" placeholder="Write a note…" style="min-height:70px"></textarea>
+    <button id="addNoteBtn">Add note</button>
+    <div class="msg" id="noteMsg"></div>
+    <div class="af-section-label">Your notes</div>
+    <div id="noteList"><div class="empty">Loading…</div></div>`;
+
+  const loadList = async () => {
+    const list = document.getElementById("noteList");
+    const r = await api("/notes");
+    if (!r.ok) {
+      list.innerHTML = `<div class="empty">Couldn't load — try Open full app.</div>`;
+      return;
+    }
+    const items = r.data || [];
+    if (!items.length) {
+      list.innerHTML = `<div class="empty">No notes yet — highlight text on any page and tap "Note".</div>`;
+      return;
+    }
+    list.innerHTML = items
+      .map(
+        (n) => `
+      <div class="item">
+        <div class="title">${escapeHtml(n.title || "Note")}</div>
+        <div class="sub">${escapeHtml((n.content || "").slice(0, 140))}</div>
+        <div class="row">
+          <button type="button" class="secondary delNote" data-id="${n.id}">Delete</button>
+        </div>
+      </div>`
+      )
+      .join("");
+    list.querySelectorAll(".delNote").forEach((b) => {
+      b.onclick = async () => {
+        await api(`/notes/${b.dataset.id}`, "DELETE");
+        loadList();
+      };
+    });
+  };
+  loadList();
+
+  document.getElementById("addNoteBtn").onclick = async () => {
+    const title = document.getElementById("noteTitle").value.trim();
+    const content = document.getElementById("noteContent").value.trim();
+    const msgEl = document.getElementById("noteMsg");
+    if (!title && !content) return;
+    const r = await api("/notes", "POST", { title, content });
+    msgEl.textContent = r.ok ? "Saved." : "Couldn't save — " + (r.error || "");
+    msgEl.className = r.ok ? "msg" : "msg error";
+    if (r.ok) {
+      document.getElementById("noteTitle").value = "";
+      document.getElementById("noteContent").value = "";
+      loadList();
     }
   };
 }
