@@ -201,6 +201,8 @@ const ICONS = {
     '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.9 7.9 0 000-2l2-1.5-2-3.4-2.4.7a8 8 0 00-1.7-1L15 3h-4l-.3 2.4a8 8 0 00-1.7 1l-2.4-.7-2 3.4L6.6 11a7.9 7.9 0 000 2l-2 1.5 2 3.4 2.4-.7a8 8 0 001.7 1L11 21h4l.3-2.4a8 8 0 001.7-1l2.4.7 2-3.4z"/></svg>',
   notes:
     '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9 12h6M9 16h6"/></svg>',
+  send:
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>',
 };
 
 async function renderAsk() {
@@ -221,8 +223,10 @@ async function renderAsk() {
     </div>
     <div class="af-section-label">Quick ask</div>
     <div id="answerWrap"></div>
-    <textarea id="input" placeholder="Ask AgentFury anything…"></textarea>
-    <button id="askBtn">Ask</button>
+    <div class="af-ask-row">
+      <textarea id="input" placeholder="Ask AgentFury anything…" rows="1"></textarea>
+      <button id="askBtn" class="af-ask-send" title="Ask" aria-label="Ask">${ICONS.send}</button>
+    </div>
     <div class="msg" id="askMsg">For back-and-forth conversations, memory, and Autopilot, use the full app.</div>`;
 
   panel.querySelectorAll(".tool-tile").forEach((t) => {
@@ -240,7 +244,7 @@ async function renderAsk() {
     const msgEl = document.getElementById("askMsg");
     const answerWrap = document.getElementById("answerWrap");
     btn.disabled = true;
-    btn.textContent = "Thinking…";
+    btn.classList.add("af-loading");
     msgEl.textContent = "First request can take a bit if the server was asleep.";
     msgEl.className = "msg";
 
@@ -253,7 +257,7 @@ async function renderAsk() {
     }
     if (!assistantAgentId) {
       btn.disabled = false;
-      btn.textContent = "Ask";
+      btn.classList.remove("af-loading");
       msgEl.textContent = "Couldn't load your assistant — try Open full app.";
       msgEl.className = "msg error";
       return;
@@ -261,7 +265,7 @@ async function renderAsk() {
 
     const r = await api(`/agents/${assistantAgentId}/chat`, "POST", { message: text });
     btn.disabled = false;
-    btn.textContent = "Ask";
+    btn.classList.remove("af-loading");
     if (r.ok) {
       answerWrap.innerHTML = `<div class="answer-box">${escapeHtml(r.data.reply)}</div>`;
       msgEl.textContent = "";
@@ -274,11 +278,16 @@ async function renderAsk() {
     }
   };
   document.getElementById("askBtn").onclick = ask;
-  document.getElementById("input").addEventListener("keydown", (e) => {
+  const inputEl = document.getElementById("input");
+  inputEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       ask();
     }
+  });
+  inputEl.addEventListener("input", () => {
+    inputEl.style.height = "auto";
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px";
   });
 }
 
