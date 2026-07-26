@@ -597,9 +597,16 @@
   // retargeted to `afHost` by the time a document-level listener sees it —
   // the browser doesn't reveal which internal element was actually clicked.
   // So "was this an outside click" is just: did it NOT land on our host.
-  document.addEventListener("mousedown", (e) => {
-    if (captureCard && e.target !== afHost) closeCapture();
-  });
+  // Capture phase for the same reason as the selection listeners below —
+  // a page that stops mousedown propagation would otherwise leave this card
+  // permanently un-dismissable.
+  window.addEventListener(
+    "mousedown",
+    (e) => {
+      if (captureCard && e.target !== afHost) closeCapture();
+    },
+    true
+  );
 
   function showBar(rect, prefill, autoFocus) {
     if (!selectEnabled || privacyMode) return; // single choke point for both switches
@@ -671,30 +678,53 @@
     });
   }
 
-  document.addEventListener("mouseup", (e) => {
-    if (bar && e.target === afHost) return;
-    setTimeout(() => {
-      const sel = window.getSelection();
-      const text = sel ? sel.toString().trim() : "";
-      if (text.length > 2 && text.length < 6000 && sel.rangeCount > 0) {
-        lastSelectionText = text;
-        const range = sel.getRangeAt(0);
-        showBar(range.getBoundingClientRect());
-        drawHighlightOverlay(range); // survives even if the page later clears its own selection
-      } else if (!text) {
+  // All three listen on `window` in the CAPTURE phase, not bubble-phase on
+  // `document`. Capture flows outermost-inward, so these run before any
+  // handler the page attached to a nested element — and app-like sites
+  // (ChatGPT, Gmail, most React apps with their own selection or context-menu
+  // logic) routinely call stopPropagation() on mouseup, which silently
+  // prevented a bubble-phase document listener from ever firing. Plain
+  // content pages don't intercept, which is why this only broke on the sites
+  // people most want the feature on.
+  window.addEventListener(
+    "mouseup",
+    (e) => {
+      if (bar && e.target === afHost) return;
+      // Deferred a tick: in capture phase the browser may not have finalized
+      // the Selection yet, and this also lets the page's own handlers run
+      // first so we read the selection they leave behind, not an interim one.
+      setTimeout(() => {
+        const sel = window.getSelection();
+        const text = sel ? sel.toString().trim() : "";
+        if (text.length > 2 && text.length < 6000 && sel.rangeCount > 0) {
+          lastSelectionText = text;
+          const range = sel.getRangeAt(0);
+          showBar(range.getBoundingClientRect());
+          drawHighlightOverlay(range); // survives even if the page later clears its own selection
+        } else if (!text) {
+          removeBar();
+        }
+      }, 0);
+    },
+    true
+  );
+  window.addEventListener(
+    "mousedown",
+    (e) => {
+      if (bar && e.target !== afHost) removeBar();
+    },
+    true
+  );
+  window.addEventListener(
+    "keydown",
+    (e) => {
+      if (e.key === "Escape") {
         removeBar();
+        closeCapture();
       }
-    }, 0);
-  });
-  document.addEventListener("mousedown", (e) => {
-    if (bar && e.target !== afHost) removeBar();
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      removeBar();
-      closeCapture();
-    }
-  });
+    },
+    true
+  );
   // The bar and highlight are viewport-positioned, so once the page scrolls
   // they no longer line up with the text they refer to — dismiss instead of
   // letting them drift. Capture phase so it also catches scrolling inside a
