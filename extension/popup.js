@@ -155,7 +155,30 @@ function renderApp() {
       <div class="tab" data-tab="notes">Notes</div>
       <div class="tab" data-tab="settings" title="Settings">Settings</div>
     </div>
+    <div id="privacyBanner"></div>
     <div class="panel" id="panel"></div>`;
+
+  // Privacy mode silently removes the on-page UI everywhere, which looks
+  // exactly like "the extension broke" if you forgot it was on. Always show a
+  // dismissible-by-fixing banner while it's active, and keep it live so it
+  // appears/disappears the moment the mode is toggled from anywhere.
+  const banner = document.getElementById("privacyBanner");
+  const paintBanner = (on) => {
+    banner.innerHTML = on
+      ? `<div class="af-banner">
+           Privacy mode is ON — the on-page bar and bubble are hidden on every site.
+           <button type="button" id="bannerOff">Turn off</button>
+         </div>`
+      : "";
+    const off = document.getElementById("bannerOff");
+    if (off) off.onclick = () => chrome.storage.local.set({ af_privacy_mode: false });
+  };
+  chrome.storage.local.get("af_privacy_mode", (r) => paintBanner(r.af_privacy_mode === true));
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && "af_privacy_mode" in changes) {
+      paintBanner(changes.af_privacy_mode.newValue === true);
+    }
+  });
 
   const themeBtn = document.getElementById("themeToggle");
   chrome.storage.local.get("af_theme", (r) => {

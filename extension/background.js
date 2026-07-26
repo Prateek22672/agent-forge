@@ -279,9 +279,15 @@ async function pollAndNotify() {
   const draftItems = drafts.ok ? drafts.data : [];
 
   // Badge: total open items needing attention (Gmail-style unread count).
+  // Skipped while privacy mode is on — that badge slot is showing "off", and
+  // overwriting it here would erase the only toolbar-level clue that the
+  // on-page UI is intentionally hidden.
+  const { af_privacy_mode } = await chrome.storage.local.get("af_privacy_mode");
   const total = priorityItems.length + draftItems.length;
-  chrome.action.setBadgeText({ text: total > 0 ? String(total) : "" });
-  chrome.action.setBadgeBackgroundColor({ color: "#ef4444" });
+  if (af_privacy_mode !== true) {
+    chrome.action.setBadgeText({ text: total > 0 ? String(total) : "" });
+    chrome.action.setBadgeBackgroundColor({ color: "#ef4444" });
+  }
 
   // Notify only for items we haven't already notified about.
   const seen = await getSeenIds();
@@ -326,11 +332,29 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.commands.onCommand.addListener(async (command) => {
   if (command !== "toggle-privacy") return;
   const { af_privacy_mode } = await chrome.storage.local.get("af_privacy_mode");
-  const next = !af_privacy_mode;
-  await chrome.storage.local.set({ af_privacy_mode: next });
-  chrome.action.setBadgeText({ text: next ? "off" : "" });
-  chrome.action.setBadgeBackgroundColor({ color: "#6b7280" });
+  await chrome.storage.local.set({ af_privacy_mode: !af_privacy_mode });
 });
+
+// Badge the toolbar icon whenever privacy mode changes, from ANY source (the
+// shortcut above, the Settings toggle, the panel banner). Driven off the
+// storage change rather than each call site, so no path can flip the mode
+// without the indicator following — the failure mode otherwise is a user who
+// forgot it's on and thinks the extension is broken.
+function paintPrivacyBadge(on) {
+  chrome.action.setBadgeText({ text: on ? "off" : "" });
+  chrome.action.setBadgeBackgroundColor({ color: "#6b7280" });
+  chrome.action.setTitle({
+    title: on
+      ? "AgentFury — privacy mode ON (on-page UI hidden). Alt+Shift+H to turn off."
+      : "AgentFury — click to open the side panel",
+  });
+}
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && "af_privacy_mode" in changes) {
+    paintPrivacyBadge(changes.af_privacy_mode.newValue === true);
+  }
+});
+chrome.storage.local.get("af_privacy_mode", (r) => paintPrivacyBadge(r.af_privacy_mode === true));
 
 // Clicking a notification opens the app to act on it.
 chrome.notifications.onClicked.addListener(() => {
