@@ -38,6 +38,8 @@ class UserOut(BaseModel):
     priority_to_calendar: bool = True
     notify_new_mail: bool = False
     autopilot: bool = False
+    # Admin-sent warning, surfaced in-app until acknowledged (see /auth/notice).
+    notice: str = ""
 
 
 class ProfileUpdate(BaseModel):

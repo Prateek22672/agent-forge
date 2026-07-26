@@ -27,6 +27,7 @@ from app.api import (
     push_api,
     settings_api,
     tasks,
+    telemetry_api,
     write_api,
 )
 from app.config import BASE_DIR, settings
@@ -128,6 +129,7 @@ app.include_router(priority_api.router)
 app.include_router(calendar_api.router)
 app.include_router(write_api.router)
 app.include_router(ext_auth_api.router)
+app.include_router(telemetry_api.router)
 
 
 @app.get("/api/health")

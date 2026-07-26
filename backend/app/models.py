@@ -83,6 +83,16 @@ class User(Base):
     last_priority_scan: Mapped[str] = mapped_column(String(40), default="")
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_login_source: Mapped[str] = mapped_column(String(20), default="")
+    # Manual-review suspension (see BypassEvent below) — set by an admin after
+    # reviewing flagged activity, never automatically. Suspended users can't
+    # log in until an admin lifts it.
+    is_suspended: Mapped[bool] = mapped_column(default=False)
+    suspended_reason: Mapped[str] = mapped_column(Text, default="")
+    suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # A warning an admin sent after review — shown in-app on next load, and
+    # cleared once the user acknowledges it. A softer step than suspension.
+    notice: Mapped[str] = mapped_column(Text, default="")
+    notice_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
@@ -97,6 +107,24 @@ class LoginEvent(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
     source: Mapped[str] = mapped_column(String(20), default="web")  # web|extension|desktop
     method: Mapped[str] = mapped_column(String(20), default="password")  # password|google
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class BypassEvent(Base):
+    """A record that the extension's anti-copy-block override actually fired
+    on some site — i.e. the site tried to block copying and we neutralized
+    it. This is a REPORTING signal for human review, not an automated
+    judgment: most hits are ordinary (news sites, blogs) and totally fine.
+    It exists so an admin can spot a pattern — e.g. one account repeatedly
+    hitting a site that requires consented screen-monitoring — and decide
+    whether to suspend the account manually. We never act on this
+    automatically."""
+
+    __tablename__ = "bypass_events"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    domain: Mapped[str] = mapped_column(String(200), default="", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
 
 

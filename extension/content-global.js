@@ -141,10 +141,35 @@
   //     page's script ran. stopImmediatePropagation() there stops the page's
   //     own blocking handler from ever firing, without needing to know
   //     anything about how the site implemented the block.
+  // Best-effort signal for admin review (see docs on BypassEvent in the
+  // backend): does this page look like it's DELIBERATELY blocking copying,
+  // as opposed to an ordinary page a user happened to copy something on?
+  // Sites almost never set user-select: none on their whole body/root
+  // unless copy-blocking is intentional — cheap, one-time-per-page check,
+  // computed before we apply our own override so it reflects the page's
+  // original intent. This is a reporting signal only, never an automatic
+  // judgment — see app/models.py BypassEvent for the full rationale.
+  function reportIfLooksBlocked() {
+    try {
+      const cs = getComputedStyle(document.body || document.documentElement);
+      const blocked = cs.userSelect === "none" || cs.webkitUserSelect === "none";
+      if (!blocked) return;
+      send({
+        type: "API_CALL",
+        path: "/telemetry/bypass-event",
+        method: "POST",
+        body: { domain: location.hostname },
+      });
+    } catch {
+      /* best effort — never let telemetry break the actual feature */
+    }
+  }
+
   let copyPasteRestored = false;
   function restoreCopyPaste() {
     if (!selectEnabled || copyPasteRestored) return;
     copyPasteRestored = true;
+    reportIfLooksBlocked();
 
     const style = document.createElement("style");
     style.id = "af-restore-select";

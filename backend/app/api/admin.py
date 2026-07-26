@@ -17,7 +17,7 @@ from app import usage
 from app.auth import create_admin_token, require_admin, verify_password
 from app.config import settings
 from app.database import get_db
-from app.models import ErrorLog, LoginEvent, User
+from app.models import BypassEvent, ErrorLog, LoginEvent, User
 from app.security.ratelimit import rate_limit
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -184,6 +184,118 @@ def recent_logins(db: Session = Depends(get_db), admin: str = Depends(require_ad
     ]
 
 
+@router.get("/flagged-users")
+def flagged_users(db: Session = Depends(get_db), admin: str = Depends(require_admin)):
+    """Accounts whose extension has repeatedly hit sites that try to block
+    copying, grouped by user with their top domains — for manual review, NOT
+    an automatic verdict. Most hits here are completely ordinary (any news
+    site, blog, or forum with basic copy-protection triggers this ). What's
+    worth a human look is a account with a very high count concentrated on
+    ONE domain, especially one you have reason to think uses consented
+    screen-monitoring (a student explicitly told to share their screen)."""
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import func
+
+    since = datetime.now(timezone.utc) - timedelta(days=30)
+    rows = (
+        db.query(
+            BypassEvent.user_id,
+            BypassEvent.domain,
+            func.count(BypassEvent.id).label("hits"),
+            func.max(BypassEvent.created_at).label("last_hit"),
+        )
+        .filter(BypassEvent.created_at >= since)
+        .group_by(BypassEvent.user_id, BypassEvent.domain)
+        .order_by(func.count(BypassEvent.id).desc())
+        .limit(500)
+        .all()
+    )
+    by_user: dict[str, dict] = {}
+    for user_id, domain, hits, last_hit in rows:
+        entry = by_user.setdefault(user_id, {"user_id": user_id, "total_hits": 0, "domains": []})
+        entry["total_hits"] += hits
+        entry["domains"].append({"domain": domain, "hits": hits, "last_hit": last_hit})
+
+    users_by_id = {
+        u.id: u
+        for u in db.query(User).filter(User.id.in_(by_user.keys())).all()
+    } if by_user else {}
+
+    out = []
+    for user_id, entry in by_user.items():
+        u = users_by_id.get(user_id)
+        if not u:
+            continue
+        entry["domains"].sort(key=lambda d: d["hits"], reverse=True)
+        out.append(
+            {
+                **entry,
+                "email": u.email,
+                "name": u.name,
+                "is_suspended": u.is_suspended,
+                "suspended_reason": u.suspended_reason,
+            }
+        )
+    out.sort(key=lambda e: e["total_hits"], reverse=True)
+    return out
+
+
+class SuspendUser(BaseModel):
+    suspended: bool
+    reason: str = ""
+
+
+@router.patch("/users/{user_id}/suspend")
+def suspend_user(
+    user_id: str,
+    payload: SuspendUser,
+    db: Session = Depends(get_db),
+    admin: str = Depends(require_admin),
+):
+    """Manual review action only — never called automatically. Suspending
+    blocks login (see auth_api.py / ext_auth_api.py / connections.py) until
+    an admin lifts it here again."""
+    from datetime import datetime, timezone
+
+    if user_id == admin:
+        raise HTTPException(400, "You can't suspend the account you're logged in as.")
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+    user.is_suspended = payload.suspended
+    user.suspended_reason = payload.reason.strip()[:2000] if payload.suspended else ""
+    user.suspended_at = datetime.now(timezone.utc) if payload.suspended else None
+    db.commit()
+    return {"id": user.id, "is_suspended": user.is_suspended}
+
+
+class SendNotice(BaseModel):
+    message: str
+
+
+@router.patch("/users/{user_id}/notice")
+def send_notice(
+    user_id: str,
+    payload: SendNotice,
+    db: Session = Depends(get_db),
+    admin: str = Depends(require_admin),
+):
+    """Send (or clear, with an empty message) an in-app warning notice. The
+    softer alternative to suspending — the user sees it next time they open
+    the app and has to acknowledge it, but keeps their access."""
+    from datetime import datetime, timezone
+
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+    msg = payload.message.strip()[:2000]
+    user.notice = msg
+    user.notice_at = datetime.now(timezone.utc) if msg else None
+    db.commit()
+    return {"id": user.id, "notice": user.notice}
+
+
 @router.post("/keys")
 def add_key(payload: AddKey, admin: str = Depends(require_admin)):
     if payload.provider not in ("groq", "gemini"):
@@ -236,6 +348,7 @@ def list_users(db: Session = Depends(get_db), admin: str = Depends(require_admin
                 "email": u.email,
                 "name": u.name,
                 "is_admin": u.is_admin,
+                "is_suspended": u.is_suspended,
                 "created_at": u.created_at,
                 "agents": agent_count,
                 "chats": chat_count,

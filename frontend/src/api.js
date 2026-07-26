@@ -140,6 +140,11 @@ export const api = {
   adminRecentLogins: () => ahttp("GET", "/admin/users/recent-logins"),
   adminSetAdmin: (id, is_admin) => ahttp("PATCH", `/admin/users/${id}`, { is_admin }),
   adminDeleteUser: (id) => ahttp("DELETE", `/admin/users/${id}`),
+  adminFlaggedUsers: () => ahttp("GET", "/admin/flagged-users"),
+  adminSuspendUser: (id, suspended, reason = "") =>
+    ahttp("PATCH", `/admin/users/${id}/suspend`, { suspended, reason }),
+  adminSendNotice: (id, message) =>
+    ahttp("PATCH", `/admin/users/${id}/notice`, { message }),
 
   // Settings (model provider toggle)
   getSettings: () => http("GET", "/settings"),

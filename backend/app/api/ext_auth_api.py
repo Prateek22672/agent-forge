@@ -66,6 +66,13 @@ def extension_token(
     user, _info = login_or_create_user(db, creds)
     if user is None:
         raise HTTPException(400, "Google didn't return an email for this account.")
+    if user.is_suspended:
+        raise HTTPException(
+            403,
+            "This account is suspended pending review"
+            + (f": {user.suspended_reason}" if user.suspended_reason else ".")
+            + " Contact support if you believe this is a mistake.",
+        )
     record_login(db, user, "extension", method="google")
     token = create_token(user.id)
     return TokenOut(access_token=token, user=user)

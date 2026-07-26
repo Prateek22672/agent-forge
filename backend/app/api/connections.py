@@ -184,6 +184,8 @@ def google_callback(
         user, info = login_or_create_user(db, creds)
         if user is None:
             return _back("google=error")
+        if user.is_suspended:
+            return _back("google=suspended")
         from app.telemetry import record_login
 
         record_login(db, user, "desktop" if desktop else "web", method="google")

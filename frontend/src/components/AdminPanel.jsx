@@ -7,6 +7,7 @@ export default function AdminPanel({ onClose, standalone = false }) {
   const [data, setData] = useState(null);
   const [users, setUsers] = useState([]);
   const [logins, setLogins] = useState([]);
+  const [flagged, setFlagged] = useState([]);
   const [tab, setTab] = useState("keys");
   const [err, setErr] = useState("");
 
@@ -17,6 +18,7 @@ export default function AdminPanel({ onClose, standalone = false }) {
     }));
     setUsers(await api.adminUsers().catch(() => []));
     setLogins(await api.adminRecentLogins().catch(() => []));
+    setFlagged(await api.adminFlaggedUsers().catch(() => []));
   };
   useEffect(() => {
     load();
@@ -64,7 +66,7 @@ export default function AdminPanel({ onClose, standalone = false }) {
 
         {/* Tabs */}
         <div className="flex gap-2 px-6">
-          {["keys", "users", "insights"].map((t) => (
+          {["keys", "users", "review", "insights"].map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -103,6 +105,8 @@ export default function AdminPanel({ onClose, standalone = false }) {
           {tab === "users" && (
             <Users users={users} onChanged={load} />
           )}
+
+          {tab === "review" && <Review flagged={flagged} onChanged={load} />}
 
           {tab === "insights" && data && (
             <Insights data={data} logins={logins} />
@@ -290,6 +294,96 @@ function KeyGroup({ title, provider, group, onChanged }) {
         </button>
       </div>
       {msg && <div className="text-xs mt-2 text-white/70">{msg}</div>}
+    </div>
+  );
+}
+
+// Accounts whose extension hit copy-blocking sites. NOT an accusation —
+// ordinary sites trigger this constantly. What's worth a look is a high count
+// concentrated on one domain you have reason to be concerned about.
+function Review({ flagged, onChanged }) {
+  return (
+    <div className="space-y-3">
+      <div className="text-xs text-white/40">
+        Accounts whose extension encountered copy-blocking pages (last 30 days).
+        Most entries are ordinary sites — review the domains before acting.
+      </div>
+      {!flagged.length && (
+        <div className="text-white/30 text-sm py-8 text-center">
+          Nothing flagged.
+        </div>
+      )}
+      {flagged.map((f) => (
+        <div key={f.user_id} className="border border-white/10 rounded-lg p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm">
+                {f.email}
+                {f.is_suspended && (
+                  <span className="ml-2 text-[10px] border border-red-400/50 text-red-400 px-1 uppercase rounded">
+                    suspended
+                  </span>
+                )}
+              </div>
+              <div className="text-[11px] text-white/40 mt-0.5">
+                {f.total_hits} hits across {f.domains.length} domain
+                {f.domains.length === 1 ? "" : "s"}
+              </div>
+              <div className="mt-2 space-y-0.5">
+                {f.domains.slice(0, 5).map((d) => (
+                  <div key={d.domain} className="text-[11px] text-white/55">
+                    {d.domain || "(unknown)"} — {d.hits}
+                    <span className="text-white/30">
+                      {" "}
+                      · last {new Date(d.last_hit).toLocaleDateString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {f.suspended_reason && (
+                <div className="text-[11px] text-red-400/80 mt-2">
+                  Reason: {f.suspended_reason}
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col gap-2 text-xs shrink-0">
+              <button
+                onClick={async () => {
+                  const message = prompt(`Notice to send to ${f.email}:`);
+                  if (!message) return;
+                  await api.adminSendNotice(f.user_id, message).catch(() => {});
+                  onChanged();
+                }}
+                className="text-white/50 hover:text-white whitespace-nowrap"
+              >
+                send notice
+              </button>
+              <button
+                onClick={async () => {
+                  if (f.is_suspended) {
+                    await api.adminSuspendUser(f.user_id, false).catch(() => {});
+                    onChanged();
+                    return;
+                  }
+                  const reason = prompt(
+                    `Suspend ${f.email}? They won't be able to log in until you lift it.\n\nReason (shown to them):`
+                  );
+                  if (reason === null) return;
+                  await api.adminSuspendUser(f.user_id, true, reason).catch(() => {});
+                  onChanged();
+                }}
+                className={
+                  f.is_suspended
+                    ? "text-green-400/70 hover:text-green-400 whitespace-nowrap"
+                    : "text-white/40 hover:text-red-400 whitespace-nowrap"
+                }
+              >
+                {f.is_suspended ? "reinstate" : "suspend"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
