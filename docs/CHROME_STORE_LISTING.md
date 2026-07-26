@@ -1,10 +1,10 @@
 # Chrome Web Store submission — copy-paste package
 
 Everything you need to fill in the Developer Dashboard form. Submission
-package: `dist-extension/agentfury-extension-v1.11.0.zip` (already built and
+package: `dist-extension/agentfury-extension-v1.12.0.zip` (already built and
 verified — manifest at the zip root as required).
 
-> If you already have an item uploaded, this is now **v1.11.0** — upload the
+> If you already have an item uploaded, this is now **v1.12.0** — upload the
 > new zip as a new package version on the SAME item (Package tab → Upload new
 > package), you don't need to re-register.
 
@@ -20,7 +20,7 @@ verified — manifest at the zip root as required).
 
 ## 2. Upload
 
-- Click **New Item** → upload `dist-extension/agentfury-extension-v1.11.0.zip`
+- Click **New Item** → upload `dist-extension/agentfury-extension-v1.12.0.zip`
 - It parses the manifest automatically (name: AgentFury, version 1.0.0)
 
 ## 3. Store listing tab — copy-paste these

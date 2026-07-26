@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AgentFury — Capture-privacy experiment</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 28px; max-width: 720px;
+    background: #0b0b0f; color: #f2f2f5;
+    font: 14px/1.55 -apple-system, "Segoe UI", system-ui, sans-serif;
+  }
+  h1 { font-size: 19px; margin: 0 0 4px; }
+  .sub { color: #9a9aa8; font-size: 13px; margin-bottom: 22px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em;
+       color: #8a8a98; margin: 26px 0 10px; font-weight: 700; }
+  .panel { border: 1px solid #26262f; border-radius: 12px; padding: 16px;
+           background: #131319; margin-bottom: 12px; }
+  button {
+    background: #f2f2f5; color: #0b0b0f; border: 0; border-radius: 8px;
+    padding: 10px 16px; font-weight: 650; font-size: 13px; cursor: pointer;
+    font-family: inherit;
+  }
+  button:hover { opacity: .88; }
+  button.secondary { background: transparent; color: #f2f2f5; border: 1px solid #33333f; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .state { font-size: 13px; margin-top: 14px; }
+  .state b { color: #f5c542; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+         background: #555; margin-right: 6px; vertical-align: 0; }
+  .dot.on { background: #f5c542; }
+  code { background: #1e1e27; padding: 2px 6px; border-radius: 5px; font-size: 12.5px; }
+  .note { color: #9a9aa8; font-size: 12.5px; }
+  ul { padding-left: 18px; }
+  li { margin: 4px 0; }
+  .log { font-family: ui-monospace, "Cascadia Code", monospace; font-size: 12px;
+         background: #0e0e13; border: 1px solid #26262f; border-radius: 8px;
+         padding: 10px; margin-top: 12px; max-height: 160px; overflow-y: auto;
+         white-space: pre-wrap; color: #b8b8c4; }
+</style>
+</head>
+<body>
+
+<h1>Capture-privacy experiment</h1>
+<div class="sub">
+  Experiment 2 — auto-hide the on-page overlay during a screen share this page
+  starts itself, and restore it when the share ends.
+</div>
+
+<h2>1 · Run it</h2>
+<div class="panel">
+  <div class="row">
+    <button id="startBtn">Start a screen share</button>
+    <button id="stopBtn" class="secondary" disabled>Stop share</button>
+  </div>
+  <div class="state">
+    <span class="dot" id="dot"></span>
+    Capture: <b id="capState">idle</b>
+    &nbsp;·&nbsp; Privacy mode: <b id="pmState">off</b>
+  </div>
+  <div class="log" id="log"></div>
+  <div class="note" style="margin-top:12px">
+    While the share is active, open any tab with AgentFury's on-page bar — it will
+    be gone. Stop the share and it comes back. The overlay you initiated the share
+    on will still show it, because Chrome captured the frame before this handler ran;
+    open a <i>second</i> tab to see the clean result.
+  </div>
+</div>
+
+<h2>2 · What this proves — and what it can't</h2>
+<div class="panel note">
+  <ul>
+    <li><b>This works</b> because the share is started <i>here</i>, with
+      <code>getDisplayMedia()</code>. A page can observe a capture it initiated —
+      the returned <code>MediaStreamTrack</code> fires <code>ended</code> when the
+      user stops sharing. That's the whole lifecycle this experiment rides on.</li>
+    <li><b>It does not hide the overlay from the recording pixels.</b> It
+      <i>removes</i> the overlay, so there is nothing to capture. The features are
+      off while it's hidden. Nothing in a browser can keep a rendered element
+      visible to you but absent from a recording.</li>
+    <li><b>It cannot detect an external recorder</b> (OBS, Windows Game Bar,
+      QuickTime, a proctoring client). Those never call this page's
+      <code>getDisplayMedia</code>, and no browser API reports capture started by
+      another application. So the trigger simply never fires for them.</li>
+  </ul>
+  <p style="margin-bottom:0">That last point is the boundary: auto-hide only works
+  for a share <i>you</i> start through a cooperating surface. It is a privacy
+  convenience, not a way to be covert against monitoring you didn't initiate.</p>
+</div>
+
+<script src="experiment.js"></script>
+</body>
+</html>
