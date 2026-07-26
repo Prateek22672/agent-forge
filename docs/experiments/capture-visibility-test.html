@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Screen-capture visibility experiment</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 32px;
+    background: #0b0b0f; color: #f2f2f5;
+    font: 15px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: #9a9aa8; font-size: 13px; margin-bottom: 28px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
+       color: #8a8a98; margin: 32px 0 12px; font-weight: 700; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+  .cell {
+    border: 1px solid #26262f; border-radius: 12px; padding: 14px;
+    background: #131319; min-height: 96px;
+  }
+  .cell .label { font-size: 11px; color: #8a8a98; margin-bottom: 8px;
+                 text-transform: uppercase; letter-spacing: .05em; }
+  .marker {
+    font-weight: 800; font-size: 17px; color: #0b0b0f;
+    background: #f5c542; border-radius: 8px; padding: 10px 12px;
+    display: inline-block;
+  }
+  iframe { border: 0; width: 100%; height: 54px; }
+  canvas { display: block; border-radius: 8px; }
+
+  .panel {
+    border: 1px solid #26262f; border-radius: 12px; padding: 16px;
+    background: #131319; margin-bottom: 12px;
+  }
+  button {
+    background: #f2f2f5; color: #0b0b0f; border: 0; border-radius: 8px;
+    padding: 9px 15px; font-weight: 650; font-size: 13px; cursor: pointer;
+    font-family: inherit;
+  }
+  button:hover { opacity: .88; }
+  .status { margin-top: 12px; font-size: 13px; color: #9a9aa8; }
+  .status b { color: #f2f2f5; }
+  code { background: #1e1e27; padding: 2px 6px; border-radius: 5px; font-size: 12.5px; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 8px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #26262f; }
+  th { color: #8a8a98; font-weight: 600; font-size: 11.5px;
+       text-transform: uppercase; letter-spacing: .05em; }
+  .note { color: #9a9aa8; font-size: 13px; }
+  .fixed-overlay {
+    position: fixed; bottom: 20px; right: 20px; z-index: 2147483647;
+    background: #f5c542; color: #0b0b0f; font-weight: 800;
+    padding: 12px 16px; border-radius: 10px; font-size: 15px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Screen-capture visibility experiment</h1>
+<div class="sub">
+  Each box below renders the marker <b>VISIBLE-n</b> using a different web technique.
+  Record this page three ways and check which markers appear in each recording.
+</div>
+
+<h2>1 · Rendering techniques under test</h2>
+<div class="grid">
+  <div class="cell">
+    <div class="label">A · Plain DOM</div>
+    <span class="marker">VISIBLE-A</span>
+  </div>
+
+  <div class="cell">
+    <div class="label">B · Open Shadow DOM</div>
+    <div id="shadow-open"></div>
+  </div>
+
+  <div class="cell">
+    <div class="label">C · Closed Shadow DOM</div>
+    <div id="shadow-closed"></div>
+  </div>
+
+  <div class="cell">
+    <div class="label">D · Same-origin iframe</div>
+    <iframe id="frame" title="iframe test"></iframe>
+  </div>
+
+  <div class="cell">
+    <div class="label">E · Canvas pixels</div>
+    <canvas id="cv" width="200" height="54"></canvas>
+  </div>
+
+  <div class="cell">
+    <div class="label">F · z-index 2147483647</div>
+    <span class="note">See fixed overlay, bottom-right →</span>
+  </div>
+
+  <div class="cell">
+    <div class="label">G · GPU layer (will-change)</div>
+    <span class="marker" style="will-change: transform; transform: translateZ(0)">VISIBLE-G</span>
+  </div>
+
+  <div class="cell">
+    <div class="label">H · mix-blend-mode</div>
+    <span class="marker" style="mix-blend-mode: difference">VISIBLE-H</span>
+  </div>
+</div>
+
+<h2>2 · Can this page detect that it is being recorded?</h2>
+<div class="panel">
+  <button id="startBtn">Start a capture this page initiates</button>
+  <div class="status" id="selfStatus">
+    Self-initiated capture: <b>not started</b>
+  </div>
+  <div class="status" id="externalStatus">
+    External recorder (OBS, Win+G, QuickTime, Meet/Zoom share):
+    <b>undetectable — no API exists</b>
+  </div>
+  <div class="status" style="margin-top:14px">
+    A page can observe only the <code>MediaStream</code> it obtained itself via
+    <code>getDisplayMedia()</code>. There is no event, permission, or property that
+    reports capture started by another application, because exposing that would
+    itself be a fingerprinting and anti-analysis vector.
+  </div>
+</div>
+
+<h2>3 · Record it three ways, fill this in</h2>
+<div class="panel">
+  <div class="note" style="margin-bottom:10px">
+    In Chrome, use Meet/Zoom "Share screen" or OBS, and pick each source type in turn.
+    Note which markers you can read back in the resulting video.
+  </div>
+  <table>
+    <thead>
+      <tr><th>Capture source</th><th>Markers A–H visible?</th><th>Browser UI (tabs, side panel) visible?</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Chrome Tab</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+      <tr><td>Window (whole Chrome)</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+      <tr><td>Entire Screen</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2>4 · Expected result</h2>
+<div class="panel note">
+  <p style="margin-top:0"><b>All of A–H appear in every capture type.</b> None of the
+  rendering techniques affects capture, because each one is an input to compositing,
+  and capture samples the framebuffer <i>after</i> compositing. Shadow DOM, iframes,
+  canvas, z-index and GPU layer promotion change how pixels are produced and how the
+  DOM is structured — not whether the resulting pixels exist.</p>
+
+  <p><b>The one row that differs is the last column.</b> Browser UI outside the page
+  viewport — tab strip, address bar, extension side panel — is absent under
+  <i>Tab</i> capture and present under <i>Window</i> and <i>Screen</i> capture. That is
+  not concealment: the surface was simply never inside the captured region.</p>
+
+  <p style="margin-bottom:0"><b>Capture exclusion does exist, but not for web content.</b>
+  Windows exposes <code>SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)</code>
+  and macOS exposes <code>NSWindow.sharingType = .none</code>. Both take a native
+  window handle, so they are reachable only from a desktop application, never from
+  page or extension JavaScript. This is deliberate: an overlay that a victim sees but
+  a screen-share does not is a phishing primitive, so the platform withholds it from
+  web content and grants it to password managers and DRM playback.</p>
+</div>
+
+<div class="fixed-overlay">VISIBLE-F</div>
+
+<script>
+  // B — open shadow root
+  const openHost = document.getElementById("shadow-open");
+  const openRoot = openHost.attachShadow({ mode: "open" });
+  openRoot.innerHTML =
+    '<span style="font-weight:800;font-size:17px;color:#0b0b0f;background:#f5c542;' +
+    'border-radius:8px;padding:10px 12px;display:inline-block">VISIBLE-B</span>';
+
+  // C — closed shadow root (page script cannot read .shadowRoot back)
+  const closedHost = document.getElementById("shadow-closed");
+  const closedRoot = closedHost.attachShadow({ mode: "closed" });
+  closedRoot.innerHTML =
+    '<span style="font-weight:800;font-size:17px;color:#0b0b0f;background:#f5c542;' +
+    'border-radius:8px;padding:10px 12px;display:inline-block">VISIBLE-C</span>';
+
+  // D — same-origin iframe, written via srcdoc so it works from file://
+  document.getElementById("frame").srcdoc =
+    '<body style="margin:0;background:#131319;font-family:system-ui">' +
+    '<span style="font-weight:800;font-size:17px;color:#0b0b0f;background:#f5c542;' +
+    'border-radius:8px;padding:10px 12px;display:inline-block">VISIBLE-D</span></body>';
+
+  // E — raw canvas pixels, never in the DOM as text
+  const ctx = document.getElementById("cv").getContext("2d");
+  ctx.fillStyle = "#f5c542";
+  ctx.beginPath();
+  ctx.roundRect(0, 0, 200, 54, 8);
+  ctx.fill();
+  ctx.fillStyle = "#0b0b0f";
+  ctx.font = "800 17px system-ui, sans-serif";
+  ctx.fillText("VISIBLE-E", 14, 33);
+
+  // Self-initiated capture — the ONLY capture a page can observe.
+  const selfStatus = document.getElementById("selfStatus");
+  document.getElementById("startBtn").onclick = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const track = stream.getVideoTracks()[0];
+      selfStatus.innerHTML =
+        'Self-initiated capture: <b>ACTIVE</b> — surface reported as <b>' +
+        (track.getSettings().displaySurface || "unknown") + '</b>';
+      // 'ended' fires when the user clicks Chrome's "Stop sharing" bar.
+      track.addEventListener("ended", () => {
+        selfStatus.innerHTML = "Self-initiated capture: <b>ended</b>";
+      });
+    } catch (err) {
+      selfStatus.innerHTML =
+        "Self-initiated capture: <b>declined or failed</b> (" + err.name + ")";
+    }
+  };
+</script>
+</body>
+</html>
