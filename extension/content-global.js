@@ -49,6 +49,87 @@
 
   send({ type: "WARM_UP" });
 
+  // All of our UI (bar, capture card, bubble, highlight overlay) renders
+  // inside a closed Shadow DOM instead of directly in the page. Two problems
+  // this solves at once, both reported in the wild:
+  //  1. Style bleed — some sites' global CSS (e.g. "input { background:
+  //     white }") was leaking straight into our elements, since a plain
+  //     content-script <div> appended to document.body is just another node
+  //     in the page's own cascade. A shadow boundary blocks that cascade in
+  //     both directions: page CSS can't reach in, and ours can't leak out.
+  //  2. Detectability — with `mode: "closed"`, the host element's
+  //     `.shadowRoot` property returns null to any page script, and
+  //     `document.querySelector` can't pierce the boundary at all. Page JS
+  //     can see there's a host <div> but has no way to inspect, target, or
+  //     remove what's inside it — the same property that makes the native
+  //     chrome.sidePanel undetectable, applied here to our in-page UI.
+  // Absolutely-positioned children inside the shadow tree still resolve
+  // their containing block by walking OUT through the (unpositioned) host,
+  // same as before — so all the existing scrollX/scrollY-based positioning
+  // math below needs no changes.
+  const AF_CSS_TEXT = `
+.af-sel-highlight { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 2147482999; }
+.af-sel-highlight-box { position: absolute; background: rgba(124, 92, 255, .38); border-radius: 2px; }
+.af-sel-bar { position: absolute; z-index: 2147483000; display: flex; flex-direction: column; gap: 6px; padding: 7px 8px; background: #0b0b0b; border: 1px solid rgba(255,255,255,.14); border-radius: 16px; box-shadow: 0 10px 28px rgba(0,0,0,.4); font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif; max-width: 380px; min-width: 300px; opacity: 0; transform: translateY(6px) scale(.97); transition: opacity .16s ease, transform .16s cubic-bezier(.2,.8,.3,1); box-sizing: border-box; }
+.af-sel-bar * { box-sizing: border-box; }
+.af-sel-bar.af-in { opacity: 1; transform: translateY(0) scale(1); }
+.af-sel-row { display: flex; align-items: center; gap: 6px; }
+.af-sel-chips { display: flex; flex-wrap: wrap; gap: 5px; padding-left: 28px; }
+.af-sel-icon { flex-shrink: 0; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: #fff; color: #000; border-radius: 50%; font-size: 9px; font-weight: 800; letter-spacing: -.02em; }
+.af-sel-input { flex: 1; min-width: 120px; background: transparent; border: none; color: #fff; font-size: 12.5px; outline: none; font-family: inherit; padding: 0; margin: 0; }
+.af-sel-input::placeholder { color: rgba(255,255,255,.4); }
+.af-sel-chip { flex-shrink: 0; background: rgba(255,255,255,.07); color: #fff; border: 1px solid rgba(255,255,255,.14); border-radius: 999px; padding: 4px 10px; font-size: 11px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.af-sel-chip:hover { background: #fff; color: #000; border-color: #fff; }
+.af-sel-action { background: rgba(124, 92, 255, .18); border-color: rgba(124, 92, 255, .4); }
+.af-sel-action:hover { background: #7c5cff; color: #fff; border-color: #7c5cff; }
+.af-sel-send { flex-shrink: 0; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; background: #fff; color: #000; border: none; border-radius: 50%; font-size: 14px; font-weight: 700; cursor: pointer; padding: 0; }
+.af-sel-send:hover { opacity: .85; }
+.af-sel-answer { position: absolute; top: 100%; left: 0; margin-top: 8px; width: 340px; max-height: 220px; overflow-y: auto; background: #0b0b0b; border: 1px solid rgba(255,255,255,.14); border-radius: 12px; box-shadow: 0 10px 28px rgba(0,0,0,.4); padding: 11px 13px; font-size: 12.5px; line-height: 1.55; color: #f2f2f2; opacity: 0; transform: translateY(4px); transition: opacity .14s ease, transform .14s ease; box-sizing: border-box; }
+.af-sel-answer.af-in { opacity: 1; transform: translateY(0); }
+.af-sel-answer.af-err { color: #ff8a8a; }
+.af-sel-answer-text { margin-bottom: 8px; }
+.af-sel-spin { display: inline-block; width: 11px; height: 11px; border: 2px solid rgba(255,255,255,.25); border-top-color: #fff; border-radius: 50%; margin-right: 7px; vertical-align: -1px; animation: af-spin .7s linear infinite; }
+@keyframes af-spin { to { transform: rotate(360deg); } }
+.af-copy { background: transparent; color: rgba(255,255,255,.65); border: 1px solid rgba(255,255,255,.22); border-radius: 999px; padding: 4px 11px; font-size: 11px; cursor: pointer; }
+.af-copy:hover { color: #fff; border-color: rgba(255,255,255,.55); }
+.af-bubble { position: fixed; bottom: 22px; right: 22px; z-index: 2147483000; width: 40px; height: 40px; border-radius: 50%; background: #fff; color: #000; border: none; font-size: 11px; font-weight: 800; letter-spacing: -.02em; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.35); font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif; opacity: 0; transform: scale(.8); transition: opacity .18s ease, transform .18s cubic-bezier(.2,.8,.3,1), box-shadow .12s ease; padding: 0; }
+.af-bubble.af-in { opacity: 1; transform: scale(1); }
+.af-bubble:hover { box-shadow: 0 8px 26px rgba(0,0,0,.5); transform: scale(1.06); }
+.af-capture-card { position: fixed; bottom: 72px; right: 22px; z-index: 2147483000; width: 300px; background: #0b0b0b; color: #fff; border: 1px solid rgba(255,255,255,.16); border-radius: 14px; box-shadow: 0 16px 40px rgba(0,0,0,.5); padding: 14px; font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif; opacity: 0; transform: translateY(8px) scale(.97); transition: opacity .16s ease, transform .16s cubic-bezier(.2,.8,.3,1); box-sizing: border-box; }
+.af-capture-card * { box-sizing: border-box; }
+.af-capture-card.af-in { opacity: 1; transform: translateY(0) scale(1); }
+.af-capture-title { font-size: 13px; font-weight: 700; }
+.af-capture-sub { font-size: 11px; color: rgba(255,255,255,.5); margin-top: 2px; margin-bottom: 10px; }
+.af-capture-input { width: 100%; min-height: 70px; background: #151515; border: 1px solid rgba(255,255,255,.18); border-radius: 8px; color: #fff; font-size: 12.5px; font-family: inherit; padding: 8px 10px; outline: none; resize: vertical; margin: 0; }
+.af-capture-input:focus { border-color: rgba(255,255,255,.5); }
+.af-capture-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.af-capture-save { background: #fff; color: #000; border: none; border-radius: 8px; padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.af-capture-save:hover { opacity: .88; }
+.af-capture-open { font-size: 11px; color: rgba(255,255,255,.5); text-decoration: none; }
+.af-capture-open:hover { color: #fff; }
+.af-capture-msg { font-size: 11px; color: rgba(255,255,255,.55); margin-top: 8px; min-height: 14px; }
+.af-capture-msg.af-err { color: #ff8a8a; }
+`;
+
+  let afHost = null;
+  let afRoot = null;
+  function getAfRoot() {
+    if (afRoot) return afRoot;
+    afHost = document.createElement("div");
+    // "all: initial" strips any inherited/cascaded page styling off the host
+    // itself before we lock down the handful of properties that matter —
+    // this is what stops a page's broad `div { ... !important }` rules from
+    // putting a border/background on our otherwise-invisible wrapper.
+    afHost.style.cssText =
+      "all: initial !important; position: static !important; display: block !important; margin: 0 !important; padding: 0 !important;";
+    (document.body || document.documentElement).appendChild(afHost);
+    afRoot = afHost.attachShadow({ mode: "closed" });
+    const style = document.createElement("style");
+    style.textContent = AF_CSS_TEXT;
+    afRoot.appendChild(style);
+    return afRoot;
+  }
+
   // Some sites block text SELECTION itself (not just the clipboard) — either
   // via CSS (user-select: none) or by cancelling selectstart/copy/contextmenu
   // in JS. If nothing can be selected, our bar never gets a chance to appear
@@ -181,7 +262,7 @@
       box.style.height = `${r.height}px`;
       container.appendChild(box);
     }
-    document.body.appendChild(container);
+    getAfRoot().appendChild(container);
     highlightOverlay = container;
   }
 
@@ -345,7 +426,7 @@
       </div>
       <div class="af-capture-msg"></div>
     `;
-    document.body.appendChild(captureCard);
+    getAfRoot().appendChild(captureCard);
     requestAnimationFrame(() => captureCard.classList.add("af-in"));
 
     const input = captureCard.querySelector(".af-capture-input");
@@ -400,7 +481,7 @@
     bubble.title = "AgentFury — note a difficulty, or click the toolbar icon for the full assistant";
     bubble.textContent = "AF";
     bubble.onclick = openCapture;
-    document.body.appendChild(bubble);
+    getAfRoot().appendChild(bubble);
     requestAnimationFrame(() => bubble.classList.add("af-in"));
   }
 
@@ -412,8 +493,12 @@
     }
   }
 
+  // With a closed shadow root, any click that originates inside our UI is
+  // retargeted to `afHost` by the time a document-level listener sees it —
+  // the browser doesn't reveal which internal element was actually clicked.
+  // So "was this an outside click" is just: did it NOT land on our host.
   document.addEventListener("mousedown", (e) => {
-    if (captureCard && !captureCard.contains(e.target) && e.target !== bubble) closeCapture();
+    if (captureCard && e.target !== afHost) closeCapture();
   });
 
   function showBar(rect, prefill, autoFocus) {
@@ -439,7 +524,7 @@
         <button type="button" class="af-sel-chip af-sel-action" data-action="brain" title="Save this to your Brain (personalizes the AI)">Brain</button>
       </div>
     `;
-    document.body.appendChild(bar);
+    getAfRoot().appendChild(bar);
     requestAnimationFrame(() => bar.classList.add("af-in"));
 
     const input = bar.querySelector(".af-sel-input");
@@ -487,7 +572,7 @@
   }
 
   document.addEventListener("mouseup", (e) => {
-    if (bar && bar.contains(e.target)) return;
+    if (bar && e.target === afHost) return;
     setTimeout(() => {
       const sel = window.getSelection();
       const text = sel ? sel.toString().trim() : "";
@@ -502,7 +587,7 @@
     }, 0);
   });
   document.addEventListener("mousedown", (e) => {
-    if (bar && !bar.contains(e.target)) removeBar();
+    if (bar && e.target !== afHost) removeBar();
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
