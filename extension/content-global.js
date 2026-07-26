@@ -68,9 +68,9 @@
   // same as before — so all the existing scrollX/scrollY-based positioning
   // math below needs no changes.
   const AF_CSS_TEXT = `
-.af-sel-highlight { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 2147482999; }
-.af-sel-highlight-box { position: absolute; background: rgba(124, 92, 255, .38); border-radius: 2px; }
-.af-sel-bar { position: absolute; z-index: 2147483000; display: flex; flex-direction: column; gap: 6px; padding: 7px 8px; background: #0b0b0b; border: 1px solid rgba(255,255,255,.14); border-radius: 16px; box-shadow: 0 10px 28px rgba(0,0,0,.4); font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif; max-width: 380px; min-width: 300px; opacity: 0; transform: translateY(6px) scale(.97); transition: opacity .16s ease, transform .16s cubic-bezier(.2,.8,.3,1); box-sizing: border-box; }
+.af-sel-highlight { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 2147482999; }
+.af-sel-highlight-box { position: fixed; background: rgba(124, 92, 255, .38); border-radius: 2px; }
+.af-sel-bar { position: fixed; z-index: 2147483000; display: flex; flex-direction: column; gap: 6px; padding: 7px 8px; background: #0b0b0b; border: 1px solid rgba(255,255,255,.14); border-radius: 16px; box-shadow: 0 10px 28px rgba(0,0,0,.4); font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif; max-width: 380px; min-width: 300px; opacity: 0; transform: translateY(6px) scale(.97); transition: opacity .16s ease, transform .16s cubic-bezier(.2,.8,.3,1); box-sizing: border-box; }
 .af-sel-bar * { box-sizing: border-box; }
 .af-sel-bar.af-in { opacity: 1; transform: translateY(0) scale(1); }
 .af-sel-row { display: flex; align-items: center; gap: 6px; }
@@ -128,6 +128,41 @@
     style.textContent = AF_CSS_TEXT;
     afRoot.appendChild(style);
     return afRoot;
+  }
+
+  // ---------- Privacy mode: an OFF SWITCH, not an invisibility cloak --------
+  // Removes AgentFury's UI from the page entirely, on every open tab at once
+  // (toggled from Settings or the keyboard shortcut in manifest.json). Use it
+  // when screen-sharing, presenting, or recording a tutorial and you'd rather
+  // your personal assistant not be on screen.
+  //
+  // To be precise about what this does and doesn't do: it works because the UI
+  // is genuinely GONE, not because it's concealed from a recorder. No web API
+  // can hide a rendered element from screen capture — a recorder reads the
+  // composited framebuffer, which is downstream of the DOM, Shadow DOM,
+  // iframes and z-index alike. Capture exclusion exists only at the OS
+  // compositor level (Windows SetWindowDisplayAffinity / macOS sharingType),
+  // operates on native window handles, and is deliberately unavailable to web
+  // content because an invisible-to-screenshare overlay is a phishing tool.
+  // So: while privacy mode is on, the features are off too. That's the deal.
+  let privacyMode = false;
+
+  function enterPrivacyMode() {
+    privacyMode = true;
+    removeBar();
+    closeCapture();
+    unmountBubble();
+    // Drop the shadow host itself so nothing of ours remains in the page.
+    if (afHost) {
+      afHost.remove();
+      afHost = null;
+      afRoot = null;
+    }
+  }
+
+  function exitPrivacyMode() {
+    privacyMode = false;
+    if (bubbleEnabled) mountBubble();
   }
 
   // Some sites block text SELECTION itself (not just the clipboard) — either
@@ -246,14 +281,23 @@
   let selectEnabled = true;
   let bubbleEnabled = true;
   try {
-    chrome.storage.local.get(["af_select_enabled", "af_bubble_enabled"], (r) => {
-      if (typeof r.af_select_enabled === "boolean") selectEnabled = r.af_select_enabled;
-      if (typeof r.af_bubble_enabled === "boolean") bubbleEnabled = r.af_bubble_enabled;
-      if (bubbleEnabled) mountBubble();
-      restoreCopyPaste();
-    });
+    chrome.storage.local.get(
+      ["af_select_enabled", "af_bubble_enabled", "af_privacy_mode"],
+      (r) => {
+        if (typeof r.af_select_enabled === "boolean") selectEnabled = r.af_select_enabled;
+        if (typeof r.af_bubble_enabled === "boolean") bubbleEnabled = r.af_bubble_enabled;
+        privacyMode = r.af_privacy_mode === true;
+        if (privacyMode) return; // stay fully off — don't mount anything
+        if (bubbleEnabled) mountBubble();
+        restoreCopyPaste();
+      }
+    );
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== "local") return;
+      if ("af_privacy_mode" in changes) {
+        if (changes.af_privacy_mode.newValue === true) enterPrivacyMode();
+        else exitPrivacyMode();
+      }
       if ("af_select_enabled" in changes) {
         selectEnabled = changes.af_select_enabled.newValue !== false;
         if (!selectEnabled) removeBar();
@@ -300,8 +344,8 @@
       if (r.width < 1 || r.height < 1) continue;
       const box = document.createElement("div");
       box.className = "af-sel-highlight-box";
-      box.style.top = `${window.scrollY + r.top}px`;
-      box.style.left = `${window.scrollX + r.left}px`;
+      box.style.top = `${r.top}px`;
+      box.style.left = `${r.left}px`;
       box.style.width = `${r.width}px`;
       box.style.height = `${r.height}px`;
       container.appendChild(box);
@@ -318,10 +362,18 @@
     clearHighlightOverlay();
   }
 
+  // Viewport coordinates, paired with position: fixed. Deliberately NOT
+  // absolute + scroll offsets: an absolutely-positioned element resolves
+  // against its nearest *positioned* ancestor, and on app-like sites (ChatGPT,
+  // Gmail, most React layouts) some ancestor almost always has `transform` or
+  // `position: relative`, which silently moves the containing block and puts
+  // the bar off-screen — present in the DOM, invisible to the user. `fixed`
+  // always resolves against the viewport, so getBoundingClientRect() values
+  // can be used directly and the result is identical on every site.
   function clampPosition(rect) {
-    const top = window.scrollY + rect.bottom + 8;
-    const maxLeft = window.scrollX + window.innerWidth - 380;
-    const left = window.scrollX + Math.max(8, Math.min(rect.left, Math.max(8, maxLeft)));
+    const top = rect.bottom + 8;
+    const maxLeft = window.innerWidth - 380;
+    const left = Math.max(8, Math.min(rect.left, Math.max(8, maxLeft)));
     return { top, left };
   }
 
@@ -518,7 +570,7 @@
   }
 
   function mountBubble() {
-    if (bubble || !bubbleEnabled) return;
+    if (bubble || !bubbleEnabled || privacyMode) return;
     bubble = document.createElement("button");
     bubble.type = "button";
     bubble.className = "af-bubble";
@@ -546,7 +598,7 @@
   });
 
   function showBar(rect, prefill, autoFocus) {
-    if (!selectEnabled) return; // turned off in the popup — single choke point
+    if (!selectEnabled || privacyMode) return; // single choke point for both switches
     removeBar();
     bar = document.createElement("div");
     bar.className = "af-sel-bar";
@@ -639,6 +691,11 @@
       closeCapture();
     }
   });
+  // The bar and highlight are viewport-positioned, so once the page scrolls
+  // they no longer line up with the text they refer to — dismiss instead of
+  // letting them drift. Capture phase so it also catches scrolling inside a
+  // nested scroll container, which is how most app-like sites scroll.
+  window.addEventListener("scroll", () => { if (bar) removeBar(); }, true);
 
   // Right-click → "Ask AgentFury about…" (background.js relays the selection here).
   try {

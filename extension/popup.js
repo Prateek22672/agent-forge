@@ -523,7 +523,28 @@ async function renderExtSettings() {
         <button id="selectToggle" class="secondary">…</button>
       </div>
     </div>
+    <div class="item">
+      <div class="title">Privacy mode</div>
+      <div class="sub">Removes AgentFury's on-page UI everywhere — for screen-sharing, demos, or recording. Shortcut: Alt+Shift+H. Note this turns the on-page features off while active; nothing can hide a visible element from a screen recorder.</div>
+      <div class="row">
+        <button id="privacyToggle" class="secondary">…</button>
+      </div>
+    </div>
     <div class="msg">Toggles take effect immediately on open tabs — no refresh needed.</div>`;
+
+  const pBtn = document.getElementById("privacyToggle");
+  const paintPrivacy = (on) => {
+    pBtn.textContent = on ? "Hidden — tap to show" : "Visible — tap to hide";
+  };
+  chrome.storage.local.get("af_privacy_mode", (r) => {
+    paintPrivacy(r.af_privacy_mode === true); // default: off (UI visible)
+  });
+  pBtn.onclick = () => {
+    chrome.storage.local.get("af_privacy_mode", (r) => {
+      const next = !(r.af_privacy_mode === true);
+      chrome.storage.local.set({ af_privacy_mode: next }, () => paintPrivacy(next));
+    });
+  };
 
   const bBtn = document.getElementById("bubbleToggle");
   const paintBubble = (enabled) => {
