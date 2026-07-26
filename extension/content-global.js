@@ -49,6 +49,34 @@
 
   send({ type: "WARM_UP" });
 
+  // Some sites block text SELECTION itself (not just the clipboard) — either
+  // via CSS (user-select: none) or by cancelling selectstart/copy/contextmenu
+  // in JS. If nothing can be selected, our bar never gets a chance to appear
+  // and the Copy chip has nothing to copy. Undo both, site-wide:
+  //  1. CSS override forces selection back on everywhere.
+  //  2. A capture-phase listener on `window` — the outermost point an event
+  //     passes through — runs before any listener the page attached on
+  //     document/body, in capture OR bubble phase, regardless of when the
+  //     page's script ran. stopImmediatePropagation() there stops the page's
+  //     own blocking handler from ever firing, without needing to know
+  //     anything about how the site implemented the block.
+  let copyPasteRestored = false;
+  function restoreCopyPaste() {
+    if (!selectEnabled || copyPasteRestored) return;
+    copyPasteRestored = true;
+
+    const style = document.createElement("style");
+    style.id = "af-restore-select";
+    style.textContent = `
+      * { -webkit-user-select: text !important; user-select: text !important; }
+      * { -webkit-touch-callout: default !important; }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+
+    ["selectstart", "copy", "cut", "contextmenu"].forEach((type) => {
+      window.addEventListener(type, (e) => e.stopImmediatePropagation(), true);
+    });
+  }
   // Some sites disable copy/paste (block the native "copy"/"paste" events,
   // or preventDefault on Ctrl+C/Ctrl+V) to stop people lifting content off
   // the page. That blocking targets the page's own DOM events — it can't
@@ -97,12 +125,14 @@
       if (typeof r.af_select_enabled === "boolean") selectEnabled = r.af_select_enabled;
       if (typeof r.af_bubble_enabled === "boolean") bubbleEnabled = r.af_bubble_enabled;
       if (bubbleEnabled) mountBubble();
+      restoreCopyPaste();
     });
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== "local") return;
       if ("af_select_enabled" in changes) {
         selectEnabled = changes.af_select_enabled.newValue !== false;
         if (!selectEnabled) removeBar();
+        else restoreCopyPaste();
       }
       if ("af_bubble_enabled" in changes) {
         bubbleEnabled = changes.af_bubble_enabled.newValue !== false;
@@ -112,6 +142,7 @@
     });
   } catch {
     /* extension context not ready yet — defaults to enabled */
+    restoreCopyPaste();
   }
 
   let highlightOverlay = null;
