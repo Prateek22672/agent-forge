@@ -320,6 +320,18 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === POLL_ALARM) pollAndNotify().catch(() => {});
 });
 
+// Privacy mode shortcut (Alt+Shift+H). Flipping the stored flag is all we do —
+// every content script already listens on chrome.storage.onChanged, so this
+// takes effect in every open tab at once, no messaging fan-out needed.
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command !== "toggle-privacy") return;
+  const { af_privacy_mode } = await chrome.storage.local.get("af_privacy_mode");
+  const next = !af_privacy_mode;
+  await chrome.storage.local.set({ af_privacy_mode: next });
+  chrome.action.setBadgeText({ text: next ? "off" : "" });
+  chrome.action.setBadgeBackgroundColor({ color: "#6b7280" });
+});
+
 // Clicking a notification opens the app to act on it.
 chrome.notifications.onClicked.addListener(() => {
   chrome.tabs.create({ url: "https://agentfury.foliofyx.in" });
