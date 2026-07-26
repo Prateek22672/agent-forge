@@ -48,23 +48,37 @@
   starts itself, and restore it when the share ends.
 </div>
 
-<h2>1 · Run it</h2>
+<h2>1 · Get your two proof recordings</h2>
 <div class="panel">
+  <div class="note" style="margin-bottom:12px">
+    Do this twice. Each run records your screen share to a <code>.webm</code> file you
+    can download, play back, and submit.
+    <br><br>
+    <b>Run A — baseline:</b> leave the box below <b>unchecked</b>. The AgentFury overlay
+    stays visible, so it appears in the video → proof it <i>does</i> get captured.
+    <br>
+    <b>Run B — auto-hide:</b> <b>check</b> the box. The overlay is removed the moment
+    capture starts, so it's absent from the video → proof the privacy feature removes it.
+  </div>
+  <label class="row" style="margin-bottom:12px; cursor:pointer">
+    <input type="checkbox" id="autoHide" />
+    &nbsp;Auto-hide the overlay while recording (Run B)
+  </label>
   <div class="row">
-    <button id="startBtn">Start a screen share</button>
-    <button id="stopBtn" class="secondary" disabled>Stop share</button>
+    <button id="startBtn">Start recording a screen share</button>
+    <button id="stopBtn" class="secondary" disabled>Stop &amp; save video</button>
   </div>
   <div class="state">
     <span class="dot" id="dot"></span>
     Capture: <b id="capState">idle</b>
     &nbsp;·&nbsp; Privacy mode: <b id="pmState">off</b>
   </div>
+  <div id="downloadRow" class="state"></div>
   <div class="log" id="log"></div>
   <div class="note" style="margin-top:12px">
-    While the share is active, open any tab with AgentFury's on-page bar — it will
-    be gone. Stop the share and it comes back. The overlay you initiated the share
-    on will still show it, because Chrome captured the frame before this handler ran;
-    open a <i>second</i> tab to see the clean result.
+    When Chrome's picker appears, choose <b>Entire Screen</b> (or the specific window/tab
+    that has the AgentFury overlay) so the overlay is inside the recorded region. Then
+    select some text on that page to make the bar appear while recording.
   </div>
 </div>
 
