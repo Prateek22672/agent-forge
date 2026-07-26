@@ -11,7 +11,7 @@
 //
 // Set APP_URL to your Vercel URL (or pass AGENTFURY_URL at runtime).
 
-const { app, BrowserWindow, Tray, Menu, shell, nativeImage, ipcMain } = require("electron");
+const { app, BrowserWindow, Tray, Menu, shell, nativeImage, ipcMain, globalShortcut } = require("electron");
 const path = require("path");
 
 // Custom protocol used to bring the Google sign-in back from the system browser
@@ -156,6 +156,46 @@ function showWindow() {
   }
 }
 
+// Quick-open toggle, like ChatGPT desktop's Ctrl+Space: a global hotkey that
+// summons the assistant from anywhere, and hides it again if it's already the
+// focused window — so the same key both opens and dismisses. Registered from
+// whenReady() below; the accelerator is Ctrl+Space on Windows/Linux and
+// Cmd+Space isn't used (macOS reserves it for Spotlight), so mac gets
+// Cmd+Shift+Space instead.
+function toggleQuickOpen() {
+  if (!mainWindow) {
+    createWindow();
+    return;
+  }
+  if (mainWindow.isVisible() && mainWindow.isFocused()) {
+    mainWindow.hide();
+  } else {
+    mainWindow.show();
+    mainWindow.focus();
+  }
+}
+
+function registerQuickOpen() {
+  // Try the primary accelerator, then fall back if the OS/another app already
+  // owns it (registration returns false rather than throwing).
+  const candidates =
+    process.platform === "darwin"
+      ? ["CommandOrControl+Shift+Space", "CommandOrControl+Shift+A"]
+      : ["CommandOrControl+Space", "CommandOrControl+Shift+Space", "CommandOrControl+Shift+A"];
+  for (const accel of candidates) {
+    try {
+      if (globalShortcut.register(accel, toggleQuickOpen)) {
+        console.log("Quick-open hotkey registered:", accel);
+        return accel;
+      }
+    } catch (e) {
+      /* try the next candidate */
+    }
+  }
+  console.warn("Could not register any quick-open hotkey (all taken).");
+  return null;
+}
+
 // Handle agentforge://auth?token=...&google=connected — the OAuth callback
 // redirects here after the user signs in via their real browser. We reload the
 // app with the token in the URL; the web app reads ?token= and logs in.
@@ -222,6 +262,8 @@ app.whenReady().then(() => {
     console.warn("Tray unavailable:", e.message);
   }
 
+  registerQuickOpen();
+
   // Silent auto-update from GitHub Releases (no-op in dev / if unpublished).
   try {
     const { autoUpdater } = require("electron-updater");
@@ -236,6 +278,9 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => (quitting = true));
+
+// Release the global hotkey so it doesn't linger after the app exits.
+app.on("will-quit", () => globalShortcut.unregisterAll());
 
 // Keep running in the tray when all windows are closed (that's what powers
 // background reminder notifications). Use the tray's Quit to exit fully.
