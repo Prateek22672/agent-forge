@@ -82,7 +82,36 @@
   </div>
 </div>
 
-<h2>2 · What this proves — and what it can't</h2>
+<h2>2 · The core question: visible to you, hidden in the recording?</h2>
+<div class="panel">
+  <div class="note" style="margin-bottom:12px">
+    This is the thing to settle. There are four logical states; only two can exist.
+    Your two recordings demonstrate them. The state everyone wants — <b>visible to you
+    but absent from the recording</b> — never occurs, and that impossibility is the result.
+  </div>
+  <table>
+    <thead>
+      <tr><th>State</th><th>Visible to you?</th><th>In recording?</th><th>Achievable?</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Baseline (auto-hide off) — Run A</td><td>Yes</td><td>Yes</td><td>✅ demonstrated</td></tr>
+      <tr><td>Auto-hide / privacy mode — Run B</td><td>No</td><td>No</td><td>✅ demonstrated</td></tr>
+      <tr><td>Hidden from you, in recording</td><td>No</td><td>Yes</td><td>pointless</td></tr>
+      <tr><td><b>Visible to you, NOT in recording</b></td><td>Yes</td><td>No</td><td>❌ impossible for web content</td></tr>
+    </tbody>
+  </table>
+  <p class="note" style="margin:12px 0 0">
+    Why the last row can't exist: a screen recorder samples the <b>composited
+    framebuffer</b> — the final pixels after the browser merges every layer. If a pixel
+    is on your screen, it is in that framebuffer, so any recorder of that surface sees
+    it. "Visible to you" and "in the framebuffer" are the same fact. The only capture
+    exclusion that exists (<code>SetWindowDisplayAffinity</code> on Windows,
+    <code>NSWindow.sharingType</code> on macOS) operates on a native window handle at
+    the OS compositor, which page and extension code cannot reach.
+  </p>
+</div>
+
+<h2>3 · What this proves — and what it can't</h2>
 <div class="panel note">
   <ul>
     <li><b>This works</b> because the share is started <i>here</i>, with

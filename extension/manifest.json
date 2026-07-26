@@ -3,7 +3,7 @@
   "name": "AgentFury",
   "short_name": "AgentFury",
   "description": "Your AI agent in the browser — ask about anything you select on any page, an AI writer/corrector inside Gmail compose, priority inbox, and reminders.",
-  "version": "1.13.0",
+  "version": "1.13.1",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
