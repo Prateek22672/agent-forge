@@ -552,6 +552,9 @@ async function renderExtSettings() {
       <div class="row">
         <button id="privacyToggle" class="secondary">…</button>
       </div>
+      <div class="sub" style="margin-top:8px">
+        <a href="#" id="captureLab" style="color:var(--af-muted);text-decoration:underline">Open capture-privacy experiment →</a>
+      </div>
     </div>
     <div class="msg">Toggles take effect immediately on open tabs — no refresh needed.</div>`;
 
@@ -568,6 +571,13 @@ async function renderExtSettings() {
       chrome.storage.local.set({ af_privacy_mode: next }, () => paintPrivacy(next));
     });
   };
+  const lab = document.getElementById("captureLab");
+  if (lab) {
+    lab.onclick = (e) => {
+      e.preventDefault();
+      chrome.tabs.create({ url: chrome.runtime.getURL("experiment.html") });
+    };
+  }
 
   const bBtn = document.getElementById("bubbleToggle");
   const paintBubble = (enabled) => {
