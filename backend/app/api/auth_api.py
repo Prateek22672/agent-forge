@@ -90,6 +90,13 @@ def login(
     user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(401, "Invalid email or password.")
+    if user.is_suspended:
+        raise HTTPException(
+            403,
+            "This account is suspended pending review"
+            + (f": {user.suspended_reason}" if user.suspended_reason else ".")
+            + " Contact support if you believe this is a mistake.",
+        )
     record_login(db, user, client_source(request), method="password")
     return TokenOut(access_token=create_token(user.id), user=UserOut.model_validate(user))
 
@@ -97,6 +104,14 @@ def login(
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)):
     return user
+
+
+@router.post("/notice/ack", status_code=204)
+def ack_notice(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """User acknowledged the admin's warning — clear it so it stops showing."""
+    user.notice = ""
+    user.notice_at = None
+    db.commit()
 
 
 @router.patch("/me", response_model=UserOut)

@@ -79,6 +79,11 @@ def _ensure_columns() -> None:
             "last_priority_scan": "VARCHAR(40) DEFAULT ''",
             "last_login_at": "TIMESTAMP WITH TIME ZONE" if is_pg else "TIMESTAMP",
             "last_login_source": "VARCHAR(20) DEFAULT ''",
+            "is_suspended": f"BOOLEAN DEFAULT {bool_default}",
+            "suspended_reason": "TEXT DEFAULT ''",
+            "suspended_at": "TIMESTAMP WITH TIME ZONE" if is_pg else "TIMESTAMP",
+            "notice": "TEXT DEFAULT ''",
+            "notice_at": "TIMESTAMP WITH TIME ZONE" if is_pg else "TIMESTAMP",
         },
         "reminders": {
             "due_at": "VARCHAR(40) DEFAULT ''",
