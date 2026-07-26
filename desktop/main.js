@@ -70,8 +70,13 @@ function createWindow() {
   });
 
   // If the app can't load (offline / backend asleep), show a retry screen.
-  mainWindow.webContents.on("did-fail-load", (e, code, desc, url) => {
-    if (url && url.startsWith(APP_URL)) {
+  // Guards, so it only fires for genuine failures:
+  //  • isMainFrame — ignore a failed favicon/iframe/subresource inside the app.
+  //  • code === -3 is ERR_ABORTED, which fires on normal redirects and fast
+  //    re-navigations (including our own will-redirect cancel of Google auth) —
+  //    treating it as an error would flash the retry screen spuriously.
+  mainWindow.webContents.on("did-fail-load", (e, code, desc, url, isMainFrame) => {
+    if (isMainFrame && code !== -3 && url && url.startsWith(APP_URL)) {
       const ERR =
         "data:text/html;charset=utf-8," +
         encodeURIComponent(
