@@ -157,6 +157,25 @@
     ["selectstart", "copy", "cut", "contextmenu"].forEach((type) => {
       window.addEventListener(type, (e) => e.stopImmediatePropagation(), true);
     });
+
+    // Some anti-copy scripts don't hook the copy/selectstart events at all —
+    // they listen for the Ctrl/Cmd+C keystroke directly (keydown) and react
+    // to that instead (block it, show a warning, snapshot their own DOM to
+    // "catch" the attempt, etc.). Neutralize that the same way: intercept it
+    // at the window in the capture phase, before the page's own keydown
+    // handler ever runs, so whatever it does on Ctrl+C simply doesn't fire.
+    // This does NOT call preventDefault, so the browser's normal copy still
+    // happens afterward — we're only silencing the page's own reaction to it.
+    window.addEventListener(
+      "keydown",
+      (e) => {
+        const key = (e.key || "").toLowerCase();
+        if ((e.ctrlKey || e.metaKey) && (key === "c" || key === "x")) {
+          e.stopImmediatePropagation();
+        }
+      },
+      true
+    );
   }
   // Some sites disable copy/paste (block the native "copy"/"paste" events,
   // or preventDefault on Ctrl+C/Ctrl+V) to stop people lifting content off
