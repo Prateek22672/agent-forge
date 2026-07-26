@@ -163,6 +163,10 @@
   function exitPrivacyMode() {
     privacyMode = false;
     if (bubbleEnabled) mountBubble();
+    // A page loaded while privacy mode was on skipped this during init, so
+    // apply it now — otherwise copy-restore stays dead on that tab until it
+    // is reloaded. It self-guards against running twice.
+    restoreCopyPaste();
   }
 
   // Some sites block text SELECTION itself (not just the clipboard) — either
