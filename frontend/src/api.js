@@ -133,6 +133,7 @@ export const api = {
   adminLogin: (username, password) =>
     http("POST", "/admin/login", { username, password }),
   adminInsights: () => ahttp("GET", "/admin/insights"),
+  adminKeysHealth: () => ahttp("GET", "/admin/keys/health"),
   adminAddKey: (provider, key) => ahttp("POST", "/admin/keys", { provider, key }),
   adminRemoveKey: (provider, suffix) =>
     ahttp("DELETE", `/admin/keys/${provider}/${suffix}`),
