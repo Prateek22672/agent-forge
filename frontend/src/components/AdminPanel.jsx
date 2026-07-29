@@ -8,6 +8,7 @@ export default function AdminPanel({ onClose, standalone = false }) {
   const [users, setUsers] = useState([]);
   const [logins, setLogins] = useState([]);
   const [flagged, setFlagged] = useState([]);
+  const [audit, setAudit] = useState(null);
   const [tab, setTab] = useState("keys");
   const [err, setErr] = useState("");
 
@@ -19,6 +20,7 @@ export default function AdminPanel({ onClose, standalone = false }) {
     setUsers(await api.adminUsers().catch(() => []));
     setLogins(await api.adminRecentLogins().catch(() => []));
     setFlagged(await api.adminFlaggedUsers().catch(() => []));
+    setAudit(await api.adminAudit().catch(() => null));
   };
   useEffect(() => {
     load();
@@ -66,7 +68,7 @@ export default function AdminPanel({ onClose, standalone = false }) {
 
         {/* Tabs */}
         <div className="flex gap-2 px-6">
-          {["keys", "users", "review", "insights"].map((t) => (
+          {["keys", "users", "review", "insights", "security"].map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -111,6 +113,8 @@ export default function AdminPanel({ onClose, standalone = false }) {
           {tab === "insights" && data && (
             <Insights data={data} logins={logins} />
           )}
+
+          {tab === "security" && <Security audit={audit} />}
         </div>
       </div>
     </div>
@@ -336,6 +340,68 @@ function KeyGroup({ title, provider, group, onChanged }) {
         </button>
       </div>
       {msg && <div className="text-xs mt-2 text-white/70">{msg}</div>}
+    </div>
+  );
+}
+
+// Security audit trail: admin login attempts (incl. failures) and sensitive
+// actions, newest first, with a brute-force signal for recent failed logins.
+function Security({ audit }) {
+  if (!audit) return <div className="text-white/40 text-sm">Loading…</div>;
+  const failed = audit.failed_logins_30m || 0;
+  const label = (a) =>
+    ({
+      login: "Admin login",
+      login_fail: "FAILED login",
+      key_add: "Key added",
+      key_remove: "Key removed",
+      user_suspend: "User suspended",
+      user_unsuspend: "User un-suspended",
+    }[a] || a);
+  return (
+    <div className="space-y-3">
+      <div
+        className={`text-sm px-3 py-2 rounded-lg border ${
+          failed >= 3
+            ? "border-red-500/50 bg-red-500/10 text-red-300"
+            : "border-white/15 text-white/60"
+        }`}
+      >
+        {failed >= 3
+          ? `⚠ ${failed} failed admin logins in the last 30 min — possible brute-force. Check the IPs below.`
+          : `${failed} failed admin login${failed === 1 ? "" : "s"} in the last 30 min.`}
+      </div>
+      <div className="text-xs text-white/40">Recent admin activity (newest first)</div>
+      <div className="space-y-1">
+        {(audit.events || []).map((e, i) => (
+          <div
+            key={i}
+            className={`flex items-center justify-between text-sm border px-3 py-2 rounded-lg ${
+              e.action === "login_fail" ? "border-red-500/40" : "border-white/10"
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <span
+                className={`inline-block w-2 h-2 rounded-full ${
+                  e.action === "login_fail" ? "bg-red-400" : "bg-emerald-400"
+                }`}
+              />
+              <span>{label(e.action)}</span>
+              <span className="text-white/40 text-xs">
+                {e.subject}
+                {e.detail ? ` · ${e.detail}` : ""}
+              </span>
+            </span>
+            <span className="text-xs text-white/40 flex items-center gap-3">
+              <span className="font-mono">{e.ip || "—"}</span>
+              <span>{e.created_at ? new Date(e.created_at).toLocaleString() : ""}</span>
+            </span>
+          </div>
+        ))}
+        {!(audit.events || []).length && (
+          <div className="text-white/40 text-sm">No admin activity recorded yet.</div>
+        )}
+      </div>
     </div>
   );
 }

@@ -120,11 +120,15 @@ def get_current_admin(user: User = Depends(get_current_user)) -> User:
 
 
 # ---------- Separate admin console auth (the /admin page) ----------
-def create_admin_token(subject: str = "admin", days: int = 7) -> str:
+def create_admin_token(subject: str = "admin", hours: int = 8) -> str:
+    # Short-lived on purpose: the admin console can add/remove API keys and
+    # suspend users, so a stolen admin token is high-value. An 8-hour expiry
+    # bounds the damage window to a single working session; the frontend also
+    # auto-logs-out on inactivity (see AdminApp.jsx).
     payload = {
         "sub": subject,
         "scope": "admin",  # distinguishes admin tokens from user tokens
-        "exp": datetime.now(timezone.utc) + timedelta(days=days),
+        "exp": datetime.now(timezone.utc) + timedelta(hours=hours),
     }
     return jwt.encode(payload, _secret(), algorithm=_ALGO)
 

@@ -8,16 +8,17 @@ to recover a real key, even by an authenticated admin.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app import admin_audit
 from app import keys as key_manager
 from app import usage
 from app.auth import create_admin_token, require_admin, verify_password
 from app.config import settings
 from app.database import get_db
-from app.models import BypassEvent, ErrorLog, LoginEvent, User
+from app.models import AdminAudit, BypassEvent, ErrorLog, LoginEvent, User
 from app.security.ratelimit import rate_limit
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -36,20 +37,28 @@ class AdminLogin(BaseModel):
 @router.post("/login")
 def admin_login(
     payload: AdminLogin,
+    request: Request,
     db: Session = Depends(get_db),
     _: None = Depends(rate_limit(8, 60)),  # Crocs: throttle admin brute force
 ):
     """Separate admin login. Accepts the dedicated console credentials
     (ADMIN_USERNAME/ADMIN_PASSWORD, default dj/dj), OR an is_admin user's
-    email+password. Returns an admin-scoped token."""
+    email+password. Returns an admin-scoped token. Every attempt (success and
+    failure) is written to the admin audit trail."""
     u = (payload.username or "").strip()
+    ip = admin_audit.client_ip(request)
     # 1) Dedicated console account.
     if u == settings.admin_username and payload.password == settings.admin_password:
+        admin_audit.record(db, "login", subject="console", ip=ip, ok=True)
         return {"admin_token": create_admin_token("console"), "name": "Console admin"}
     # 2) A promoted (is_admin) user signing in with their own credentials.
     user = db.query(User).filter(User.email == u.lower()).first()
     if user and user.is_admin and verify_password(payload.password, user.password_hash):
+        admin_audit.record(db, "login", subject=user.email, ip=ip, ok=True)
         return {"admin_token": create_admin_token(user.id), "name": user.email}
+    # Failure — record the attempted username + IP (breach/brute-force signal).
+    admin_audit.record(db, "login_fail", subject=u[:120], ip=ip, ok=False,
+                       detail="invalid admin credentials")
     raise HTTPException(401, "Invalid admin credentials.")
 
 
@@ -329,6 +338,7 @@ class SuspendUser(BaseModel):
 def suspend_user(
     user_id: str,
     payload: SuspendUser,
+    request: Request,
     db: Session = Depends(get_db),
     admin: str = Depends(require_admin),
 ):
@@ -346,6 +356,10 @@ def suspend_user(
     user.suspended_reason = payload.reason.strip()[:2000] if payload.suspended else ""
     user.suspended_at = datetime.now(timezone.utc) if payload.suspended else None
     db.commit()
+    admin_audit.record(
+        db, "user_suspend" if payload.suspended else "user_unsuspend",
+        subject=admin, ip=admin_audit.client_ip(request), detail=user.email,
+    )
     return {"id": user.id, "is_suspended": user.is_suspended}
 
 
@@ -375,8 +389,34 @@ def send_notice(
     return {"id": user.id, "notice": user.notice}
 
 
+@router.get("/audit")
+def audit_log(db: Session = Depends(get_db), admin: str = Depends(require_admin)):
+    """Recent admin security events (last 100), newest first, plus a
+    failed-login count for the last 30 min as a brute-force signal."""
+    rows = db.query(AdminAudit).order_by(AdminAudit.created_at.desc()).limit(100).all()
+    return {
+        "failed_logins_30m": admin_audit.recent_failed_logins(db, 30),
+        "events": [
+            {
+                "action": e.action,
+                "subject": e.subject,
+                "detail": e.detail,
+                "ip": e.ip,
+                "ok": e.ok,
+                "created_at": e.created_at,
+            }
+            for e in rows
+        ],
+    }
+
+
 @router.post("/keys")
-def add_key(payload: AddKey, admin: str = Depends(require_admin)):
+def add_key(
+    payload: AddKey,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: str = Depends(require_admin),
+):
     if payload.provider not in ("groq", "gemini"):
         raise HTTPException(400, "provider must be 'groq' or 'gemini'")
     added, reason = key_manager.add_key(payload.provider, payload.key)
@@ -387,13 +427,24 @@ def add_key(payload: AddKey, admin: str = Depends(require_admin)):
             "bad_format": "Invalid Groq key (must start with 'gsk_').",
         }.get(reason, "Could not add key.")
         raise HTTPException(409 if reason == "duplicate" else 400, msg)
+    # Audit — never store the key itself, only that one was added and its last-4.
+    admin_audit.record(db, "key_add", subject=admin, ip=admin_audit.client_ip(request),
+                       detail=f"{payload.provider} …{payload.key.strip()[-4:]}")
     return {"added": True}
 
 
 @router.delete("/keys/{provider}/{suffix}")
-def remove_key(provider: str, suffix: str, admin: str = Depends(require_admin)):
+def remove_key(
+    provider: str,
+    suffix: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: str = Depends(require_admin),
+):
     if not key_manager.remove_admin_key(provider, suffix):
         raise HTTPException(404, "Key not found or not removable (env keys live in .env).")
+    admin_audit.record(db, "key_remove", subject=admin, ip=admin_audit.client_ip(request),
+                       detail=f"{provider} …{suffix}")
     return {"removed": True}
 
 
