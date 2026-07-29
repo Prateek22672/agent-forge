@@ -23,11 +23,15 @@ services:
       # --- stable secret for JWTs + DB secret encryption (auto-generated) ---
       - key: SECRET_KEY
         generateValue: true
-      # --- durable Postgres (from the database below) ---
+      # --- durable Postgres: external provider (Neon) ---
+      # Render's free Postgres expires; we use Neon's free tier instead. Paste
+      # the Neon POOLED connection string here in the dashboard (Environment →
+      # DATABASE_URL). Format:
+      #   postgresql://USER:PASS@ep-xxx-pooler.REGION.aws.neon.tech/DBNAME?sslmode=require
+      # app/database.py rewrites postgresql:// -> postgresql+psycopg:// and uses
+      # pool_pre_ping so Neon's idle-suspend reconnects transparently.
       - key: DATABASE_URL
-        fromDatabase:
-          name: agentforge-db
-          property: connectionString
+        sync: false
       # --- Chroma/vector scratch dir (ephemeral; structured data is in Postgres) ---
       - key: AGENTFURY_DATA_DIR
         value: /tmp/agentforge
@@ -46,6 +50,6 @@ services:
       - key: ADMIN_PASSWORD
         sync: false
 
-databases:
-  - name: agentforge-db
-    plan: free
+# No `databases:` block — we use an external free Postgres (Neon) instead of
+# Render's free Postgres, which expires after ~30 days. Set DATABASE_URL above
+# to the Neon connection string.
