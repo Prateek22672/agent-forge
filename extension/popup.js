@@ -259,6 +259,27 @@ async function renderAsk() {
     };
   });
 
+  // If a selection was handed to the panel via the "Open ↗" chip on a page,
+  // prefill the ask box with it (roomier here than the inline bar — good for
+  // code or long passages), then clear the stash so it's a one-shot handoff.
+  try {
+    chrome.storage.local.get("af_pending_selection", (r) => {
+      const sel = r.af_pending_selection;
+      if (sel) {
+        const input = document.getElementById("input");
+        if (input) {
+          input.value = sel;
+          input.style.height = "auto";
+          input.style.height = Math.min(input.scrollHeight, 120) + "px";
+          input.focus();
+        }
+        chrome.storage.local.remove("af_pending_selection");
+      }
+    });
+  } catch {
+    /* no pending selection / context not ready */
+  }
+
   const ask = async () => {
     const input = document.getElementById("input");
     const text = input.value.trim();

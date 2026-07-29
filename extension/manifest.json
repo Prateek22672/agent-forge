@@ -3,7 +3,7 @@
   "name": "AgentFury",
   "short_name": "AgentFury",
   "description": "Your AI agent in the browser: ask about any text you select, write & fix email in Gmail, plus a priority inbox and reminders.",
-  "version": "1.13.2",
+  "version": "1.14.0",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -25,25 +25,46 @@
   },
   "commands": {
     "toggle-privacy": {
-      "suggested_key": { "default": "Alt+Shift+H" },
+      "suggested_key": {
+        "default": "Alt+Shift+H"
+      },
       "description": "Privacy mode — hide/show AgentFury's on-page UI everywhere"
     }
   },
-  "permissions": ["storage", "activeTab", "scripting", "identity", "alarms", "notifications", "contextMenus", "sidePanel"],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "identity",
+    "alarms",
+    "notifications",
+    "contextMenus",
+    "sidePanel"
+  ],
   "host_permissions": [
     "https://agentfury.foliofyx.in/*",
     "https://mail.google.com/*"
   ],
   "content_scripts": [
     {
-      "matches": ["https://mail.google.com/*"],
-      "js": ["content-gmail.js"],
-      "css": ["content-gmail.css"],
+      "matches": [
+        "https://mail.google.com/*"
+      ],
+      "js": [
+        "content-gmail.js"
+      ],
+      "css": [
+        "content-gmail.css"
+      ],
       "run_at": "document_idle"
     },
     {
-      "matches": ["<all_urls>"],
-      "js": ["content-global.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content-global.js"
+      ],
       "run_at": "document_idle"
     }
   ]
