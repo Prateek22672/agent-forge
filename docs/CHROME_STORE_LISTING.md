@@ -30,47 +30,40 @@ verified — manifest at the zip root as required).
 AgentFury — AI Email Assistant
 ```
 
-**Summary** (max 132 chars):
+**Summary** (max 132 chars — the manifest description; includes the spaced
+"Agent Fury" form so both "agent fury" and "agentfury" store searches match):
 ```
-Select any text on any page to ask AgentFury about it. Plus an AI writer in Gmail compose, priority inbox & reminders.
+Agent Fury: AI agent & assistant in your browser — ask about any text you select, write & fix email in Gmail, plus reminders.
 ```
 
-**Description:**
+**Description** (keyword-woven for search: "Agent Fury", "AI agent",
+"AI assistant", "Gmail AI"; reflects the CURRENT features — side panel, Notes,
+select-to-ask, copy on blocked sites, Google/Gemini search):
 ```
-AgentFury puts a personal AI assistant right in your browser.
+Agent Fury is your personal AI agent and assistant, right inside your browser. Highlight text on any page, get AI help in Gmail, and keep your priorities, reminders, and notes one click away.
 
 ASK ABOUT ANYTHING YOU SELECT
-Highlight text on any webpage — like you would to "Search Google for…" — and
-a small bar appears letting you ask AgentFury about it, right there. Explain
-it, summarize it, or ask your own question. Also available via right-click →
-"Ask AgentFury about…".
+Highlight text on any webpage — like you would to "Search Google for…" — and a small bar appears. Explain it, summarize it, ask your own question, or send it straight to Google or Gemini. One-click actions let you save the highlight as a reminder, a note, or to your AI's memory — great for students capturing study material as they read. It even works on pages that block copying.
 
-GMAIL COMPOSE ASSISTANT
-Open Compose in Gmail and click the small AF button for:
+GMAIL AI WRITER
+Open Compose in Gmail and an AI toolbar appears above the message:
 • Improve — fixes grammar and spelling, tightens the wording
 • Shorten — makes it punchier while keeping the key points
 • Formal / Friendly — rewrites in that tone
-• Write for me — type a one-line instruction and get a complete draft, then
-  refine it with follow-ups ("make it shorter", "more formal") before
-  inserting
+• Write for me — type a one-line instruction ("politely decline and ask to reschedule") and get a complete draft, then refine it with follow-ups before inserting
 
-Nothing is ever sent automatically — you review and send it yourself with
-Gmail's own Send button.
+Nothing is ever sent automatically — you review and send with Gmail's own Send button.
 
-QUICK POPUP
-Click the AgentFury icon anytime for:
+SIDE PANEL
+Click the Agent Fury icon to open a side panel with:
 • Ask — a quick question to your AI assistant
 • Priority inbox — today's flagged important emails
-• Pending drafts — review and send AI-prepared replies
-• Quick reminders
-A badge on the icon and native notifications let you know when something new
-needs your attention, even without opening anything.
+• Drafts — review and send AI-prepared replies
+• Reminders and Notes — add and manage, right there
 
-One account, everywhere: sign in once and your data is the same across the
-AgentFury web app, desktop app, and this extension.
+One account, everywhere: sign in once (including "Continue with Google") and your data is the same across the AgentFury web app, desktop app, and this extension.
 
-Free to use. Requires an AgentFury account (create one free at
-agentfury.foliofyx.in).
+Free to use. Create a free account at agentfury.foliofyx.in.
 ```
 
 **Category:** Productivity
