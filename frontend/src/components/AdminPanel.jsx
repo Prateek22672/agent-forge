@@ -221,6 +221,27 @@ function KeyGroup({ title, provider, group, onChanged }) {
   const [key, setKey] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  // Live per-key health: suffix -> { ok, detail }. Populated by "Test keys",
+  // which actually calls each key's provider so you see what really works now.
+  const [health, setHealth] = useState({});
+  const [testing, setTesting] = useState(false);
+
+  const test = async () => {
+    setTesting(true);
+    setMsg("");
+    try {
+      const res = await api.adminKeysHealth();
+      const g = res[provider] || { keys: [] };
+      const map = {};
+      g.keys.forEach((k) => (map[k.suffix] = { ok: k.ok, detail: k.detail }));
+      setHealth(map);
+      setMsg(`${g.working}/${g.total} working`);
+    } catch (e) {
+      setMsg("⚠ couldn't test keys");
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const add = async () => {
     setMsg("");
@@ -247,15 +268,35 @@ function KeyGroup({ title, provider, group, onChanged }) {
     <div className="border border-white/15 p-4 rounded-xl">
       <div className="flex items-center justify-between mb-3">
         <div className="font-semibold text-sm">{title}</div>
-        <div className="text-xs text-white/40">{group.count} active</div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={test}
+            disabled={testing || !group.keys.length}
+            className="text-xs border border-white/20 px-2 py-1 rounded hover:border-white/50 disabled:opacity-40"
+          >
+            {testing ? "Testing…" : "Test keys"}
+          </button>
+          <div className="text-xs text-white/40">{group.count} active</div>
+        </div>
       </div>
       <div className="space-y-1 mb-3">
-        {group.keys.map((k) => (
+        {group.keys.map((k) => {
+          const h = health[k.suffix];
+          return (
           <div
             key={k.suffix}
             className="flex items-center justify-between text-sm border border-white/10 px-3 py-2 rounded-lg"
           >
-            <span className="font-mono">{k.masked}</span>
+            <span className="flex items-center gap-2">
+              {h && (
+                <span
+                  title={h.detail}
+                  className={`inline-block w-2 h-2 rounded-full ${h.ok ? "bg-emerald-400" : "bg-red-400"}`}
+                />
+              )}
+              <span className="font-mono">{k.masked}</span>
+              {h && !h.ok && <span className="text-[10px] text-red-400">{h.detail}</span>}
+            </span>
             <span className="flex items-center gap-3 text-xs text-white/50">
               <span>{k.requests} reqs</span>
               <span className="uppercase text-[10px] border border-white/20 px-1 rounded">
@@ -274,7 +315,8 @@ function KeyGroup({ title, provider, group, onChanged }) {
               )}
             </span>
           </div>
-        ))}
+          );
+        })}
       </div>
       <div className="flex gap-2">
         <input

@@ -184,6 +184,85 @@ def recent_logins(db: Session = Depends(get_db), admin: str = Depends(require_ad
     ]
 
 
+def _test_groq_key(key: str) -> tuple[bool, str]:
+    """Ping Groq with a 1-token request to prove the key actually works right
+    now. Returns (ok, detail) — detail is 'ok' or a short reason."""
+    import httpx
+
+    try:
+        r = httpx.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {key}"},
+            json={
+                "model": "llama-3.1-8b-instant",
+                "messages": [{"role": "user", "content": "ping"}],
+                "max_tokens": 1,
+            },
+            timeout=10.0,
+        )
+        if r.status_code == 200:
+            return True, "ok"
+        if r.status_code == 401:
+            return False, "invalid key (401)"
+        if r.status_code == 429:
+            return False, "rate-limited (429)"
+        return False, f"HTTP {r.status_code}"
+    except Exception as exc:
+        return False, f"{type(exc).__name__}"
+
+
+def _test_gemini_key(key: str) -> tuple[bool, str]:
+    import httpx
+
+    from app.config import settings
+
+    try:
+        r = httpx.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{settings.gemini_model}:generateContent?key={key}",
+            json={"contents": [{"parts": [{"text": "ping"}]}]},
+            timeout=10.0,
+        )
+        if r.status_code == 200:
+            return True, "ok"
+        if r.status_code in (400, 401, 403):
+            return False, "invalid key / bad format"
+        if r.status_code == 429:
+            return False, "rate-limited (429)"
+        return False, f"HTTP {r.status_code}"
+    except Exception as exc:
+        return False, f"{type(exc).__name__}"
+
+
+@router.get("/keys/health")
+def keys_health(admin: str = Depends(require_admin)):
+    """Live health check: actually CALL each key's provider and report whether
+    it works right now. Keys are tested server-side and never returned — only a
+    masked form + status. Runs the tests concurrently so a pool of keys checks
+    in a couple of seconds, not one-timeout-at-a-time."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    groq = key_manager.groq_keys()
+    gemini = key_manager.gemini_keys()
+
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        groq_results = list(ex.map(_test_groq_key, groq))
+        gemini_results = list(ex.map(_test_gemini_key, gemini))
+
+    def rows(keys, results):
+        out = []
+        for k, (ok, detail) in zip(keys, results):
+            out.append({"masked": key_manager.mask(k), "suffix": k[-4:], "ok": ok, "detail": detail})
+        return out
+
+    groq_rows = rows(groq, groq_results)
+    gemini_rows = rows(gemini, gemini_results)
+    return {
+        "groq": {"total": len(groq), "working": sum(1 for r in groq_rows if r["ok"]), "keys": groq_rows},
+        "gemini": {"total": len(gemini), "working": sum(1 for r in gemini_rows if r["ok"]), "keys": gemini_rows},
+    }
+
+
 @router.get("/flagged-users")
 def flagged_users(db: Session = Depends(get_db), admin: str = Depends(require_admin)):
     """Accounts whose extension has repeatedly hit sites that try to block
