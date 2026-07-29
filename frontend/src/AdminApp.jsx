@@ -4,6 +4,8 @@ import AdminPanel from "./components/AdminPanel";
 
 // Standalone admin console at /admin — its own login (default dj / dj), separate
 // from the normal user app. Renders the panel full-screen once authenticated.
+const IDLE_LOGOUT_MS = 20 * 60 * 1000; // 20 min of no activity ends the session
+
 export default function AdminApp() {
   const [authed, setAuthed] = useState(!!adminAuth.get());
 
@@ -13,6 +15,28 @@ export default function AdminApp() {
     return () =>
       window.removeEventListener("agentforge:admin-unauthorized", onUnauthorized);
   }, []);
+
+  // Idle auto-logout: a left-open admin console on a shared/unlocked machine is
+  // a real exposure (it can add keys, suspend users). Any activity resets the
+  // timer; 20 min of none clears the token and drops back to the login screen.
+  useEffect(() => {
+    if (!authed) return;
+    let timer;
+    const reset = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        adminAuth.clear();
+        setAuthed(false);
+      }, IDLE_LOGOUT_MS);
+    };
+    const events = ["mousemove", "keydown", "click", "scroll", "touchstart"];
+    events.forEach((e) => window.addEventListener(e, reset, { passive: true }));
+    reset();
+    return () => {
+      clearTimeout(timer);
+      events.forEach((e) => window.removeEventListener(e, reset));
+    };
+  }, [authed]);
 
   const logout = () => {
     adminAuth.clear();

@@ -110,6 +110,25 @@ class LoginEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
 
 
+class AdminAudit(Base):
+    """Security audit trail for the admin console: every login attempt (success
+    AND failure) and every sensitive action (add/remove key, suspend/delete/
+    promote a user). This is what turns 'someone might have gotten in' into an
+    answerable question — you can see who did what, when, and from which IP, and
+    a burst of failed logins from one IP is a visible brute-force signal.
+    Self-trimming (see app/admin_audit.py)."""
+
+    __tablename__ = "admin_audit"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    action: Mapped[str] = mapped_column(String(40), index=True)  # login|login_fail|key_add|key_remove|user_suspend|...
+    subject: Mapped[str] = mapped_column(String(120), default="")  # which admin (or attempted username)
+    detail: Mapped[str] = mapped_column(Text, default="")
+    ip: Mapped[str] = mapped_column(String(60), default="")
+    ok: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
 class BypassEvent(Base):
     """A record that the extension's anti-copy-block override actually fired
     on some site — i.e. the site tried to block copying and we neutralized
