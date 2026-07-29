@@ -374,11 +374,32 @@
   // the bar off-screen — present in the DOM, invisible to the user. `fixed`
   // always resolves against the viewport, so getBoundingClientRect() values
   // can be used directly and the result is identical on every site.
-  function clampPosition(rect) {
-    const top = rect.bottom + 8;
-    const maxLeft = window.innerWidth - 380;
-    const left = Math.max(8, Math.min(rect.left, Math.max(8, maxLeft)));
-    return { top, left };
+  // Position the bar in VIEWPORT coordinates (it's position: fixed). Measures
+  // the bar's real size after it's in the DOM, then:
+  //  • horizontally: aligns to the selection's left edge but clamps so the bar
+  //    never runs off either side (the old code used a hardcoded 380 width,
+  //    which misplaced the now-wider multi-chip bar).
+  //  • vertically: sits below the selection if it fits, otherwise flips ABOVE
+  //    it — so a selection near the bottom of the screen no longer pushes the
+  //    bar off-screen or has it appear detached ("going up") from the text.
+  function positionBar(rect) {
+    if (!bar) return;
+    const m = 8;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const w = bar.offsetWidth || 320;
+    const h = bar.offsetHeight || 120;
+
+    let left = Math.min(rect.left, vw - w - m);
+    left = Math.max(m, left);
+
+    let top = rect.bottom + m;
+    if (top + h > vh - m) {
+      const above = rect.top - h - m;
+      top = above >= m ? above : Math.max(m, vh - h - m);
+    }
+    bar.style.left = `${left}px`;
+    bar.style.top = `${top}px`;
   }
 
   function escapeHtml(s) {
@@ -613,9 +634,6 @@
     removeBar();
     bar = document.createElement("div");
     bar.className = "af-sel-bar";
-    const pos = clampPosition(rect);
-    bar.style.top = `${pos.top}px`;
-    bar.style.left = `${pos.left}px`;
     bar.innerHTML = `
       <div class="af-sel-row">
         <span class="af-sel-icon">AF</span>
@@ -625,13 +643,17 @@
       <div class="af-sel-chips">
         <button type="button" class="af-sel-chip" data-q="Explain this simply.">Explain</button>
         <button type="button" class="af-sel-chip" data-q="Summarize this concisely.">Summarize</button>
+        <button type="button" class="af-sel-chip" data-search="google" title="Search this on Google">Google</button>
+        <button type="button" class="af-sel-chip" data-search="gemini" title="Ask Google's Gemini (AI Mode) about this">Gemini</button>
         <button type="button" class="af-sel-chip" data-copy="1" title="Copy this text — works even on sites that block copying">Copy</button>
+        <button type="button" class="af-sel-chip" data-open="1" title="Open in the AgentFury side panel — roomier for code or long text">Open ↗</button>
         <button type="button" class="af-sel-chip af-sel-action" data-action="remind" title="Add this as a reminder">Remind</button>
         <button type="button" class="af-sel-chip af-sel-action" data-action="note" title="Save this to your Notes — great for study highlights">Note</button>
         <button type="button" class="af-sel-chip af-sel-action" data-action="brain" title="Save this to your Brain (personalizes the AI)">Brain</button>
       </div>
     `;
     getAfRoot().appendChild(bar);
+    positionBar(rect); // measure real size, then place viewport-aware
     requestAnimationFrame(() => bar.classList.add("af-in"));
 
     const input = bar.querySelector(".af-sel-input");
@@ -656,6 +678,21 @@
     bar.querySelectorAll(".af-sel-action[data-action]").forEach((c) => {
       c.onclick = () => quickAction(c.dataset.action);
     });
+    bar.querySelectorAll(".af-sel-chip[data-search]").forEach((c) => {
+      c.onclick = () => {
+        const q = encodeURIComponent(lastSelectionText.slice(0, 500));
+        // Google: normal web search. Gemini: Google Search "AI Mode" (udm=50),
+        // which is Gemini-powered and accepts a prefilled query — the standalone
+        // gemini.google.com app has no reliable URL-prefill, so this is the way
+        // to hand it the selection in one click.
+        const url =
+          c.dataset.search === "gemini"
+            ? `https://www.google.com/search?udm=50&q=${q}`
+            : `https://www.google.com/search?q=${q}`;
+        window.open(url, "_blank", "noopener");
+        removeBar();
+      };
+    });
     const copyChip = bar.querySelector(".af-sel-chip[data-copy]");
     if (copyChip) {
       copyChip.onclick = async () => {
@@ -664,6 +701,21 @@
         setTimeout(() => {
           if (copyChip) copyChip.textContent = "Copy";
         }, 1400);
+      };
+    }
+    const openChip = bar.querySelector(".af-sel-chip[data-open]");
+    if (openChip) {
+      openChip.onclick = () => {
+        // Hand the selection to the side panel — roomier than the inline bar
+        // for code snippets or long passages. Stash it so the panel picks it
+        // up on open (see popup.js pending-selection handling), then open it.
+        try {
+          chrome.storage.local.set({ af_pending_selection: lastSelectionText.slice(0, 6000) });
+          chrome.runtime.sendMessage({ type: "AF_OPEN_PANEL" }).catch(() => {});
+        } catch {
+          /* extension context not ready — nothing to do */
+        }
+        removeBar();
       };
     }
     bar.addEventListener("mousedown", (e) => {
