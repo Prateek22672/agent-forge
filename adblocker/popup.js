@@ -1,23 +1,21 @@
 const $ = (id) => document.getElementById(id);
 
 async function refresh() {
-  // Freshen the all-time counter, then read state + the current tab's count.
-  try {
-    await chrome.runtime.sendMessage({ type: "NOADS_POLL_NOW" });
-  } catch {}
   const s = await chrome.storage.local.get(["paused", "totalBlocked"]);
   const on = s.paused !== true;
   $("power").checked = on;
   $("total").textContent = (s.totalBlocked || 0).toLocaleString();
   $("status").innerHTML = on ? "<b>Blocking is on</b>" : "Paused";
 
-  // Current-page blocked count (this session).
+  // Live per-tab count from the background (accurate — counted as they happen).
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    let n = 0;
     if (tab && tab.id != null) {
-      const res = await chrome.declarativeNetRequest.getMatchedRules({ tabId: tab.id });
-      $("current").textContent = ((res && res.rulesMatchedInfo) || []).length.toLocaleString();
+      const res = await chrome.runtime.sendMessage({ type: "NOADS_TAB_COUNT", tabId: tab.id });
+      n = (res && res.count) || 0;
     }
+    $("current").textContent = on ? n.toLocaleString() : "0";
   } catch {
     $("current").textContent = "0";
   }
