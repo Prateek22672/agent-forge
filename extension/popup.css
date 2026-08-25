@@ -89,6 +89,26 @@ body.af-sidepanel .panel {
 .rail-btn.active { background: var(--af-chip-bg); color: var(--af-fg); }
 .rail-btn svg { opacity: .9; }
 
+.rail-icon { background: transparent; border: none; color: var(--af-muted); cursor: pointer; padding: 6px; margin: 0 auto 4px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+.rail-icon:hover { background: var(--af-chip-bg); color: var(--af-fg); }
+.rail-spacer { flex: 1; }
+.rail-profile { width: 32px; height: 32px; align-self: center; border-radius: 50%; background: var(--af-chip-bg); border: 1px solid var(--af-border); color: var(--af-fg); font-size: 11px; font-weight: 600; cursor: pointer; }
+.rail-profile:hover { border-color: var(--af-muted); }
+
+.body-row { position: relative; }
+.rail-reopen { display: none; position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; align-items: center; justify-content: center; background: var(--af-bg-alt); border: 1px solid var(--af-border); color: var(--af-muted); border-radius: 8px; cursor: pointer; z-index: 5; padding: 0; }
+.rail-reopen:hover { color: var(--af-fg); border-color: var(--af-muted); }
+.body-row[data-rail="closed"] .rail { display: none; }
+.body-row[data-rail="closed"] .rail-reopen { display: flex; }
+
+.profile-pop { position: absolute; bottom: 12px; right: 66px; width: 200px; background: var(--af-bg-alt); border: 1px solid var(--af-border); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.4); padding: 12px; z-index: 10; }
+.profile-pop[hidden] { display: none; }
+.pp-name { font-size: 12.5px; font-weight: 550; }
+.pp-email { font-size: 11px; color: var(--af-muted); margin-bottom: 10px; word-break: break-all; }
+.pp-btn { width: 100%; text-align: left; background: transparent; color: var(--af-fg); border: none; padding: 7px 8px; border-radius: 8px; font-size: 12px; cursor: pointer; }
+.pp-btn:hover { background: var(--af-chip-bg); }
+.pp-logout { color: var(--af-danger); }
+
 .header {
   display: flex;
   align-items: center;

@@ -137,20 +137,23 @@ function initials(user) {
 
 function renderApp() {
   app.innerHTML = `
-    <div class="header">
-      <span class="brand-name">AgentFury</span>
-      <div class="header-right">
-        <button id="themeToggle" class="iconBtn" title="Switch theme">…</button>
-        <span class="avatar" title="${escapeHtml(state.user?.email || "")}">${initials(state.user)}</span>
-      </div>
-    </div>
     <div id="privacyBanner"></div>
-    <div class="body-row">
+    <div class="body-row" id="bodyRow">
       <div class="panel" id="panel"></div>
       <div class="rail">
+        <button type="button" class="rail-icon" id="railCollapse" title="Hide menu">${ICONS.collapse}</button>
         <button type="button" class="rail-btn" data-tab="chat" title="Chat">${ICONS.chat}<span>Chat</span></button>
         <button type="button" class="rail-btn" data-tab="activity" title="Activity">${ICONS.activity}<span>Activity</span></button>
         <button type="button" class="rail-btn" data-tab="settings" title="Settings">${ICONS.settings}<span>Settings</span></button>
+        <div class="rail-spacer"></div>
+        <button type="button" class="rail-profile" id="railProfile" title="Account">${initials(state.user)}</button>
+      </div>
+      <button type="button" class="rail-reopen" id="railReopen" title="Show menu">${ICONS.expand}</button>
+      <div class="profile-pop" id="profilePop" hidden>
+        <div class="pp-name">${escapeHtml(state.user?.name || "Signed in")}</div>
+        <div class="pp-email">${escapeHtml(state.user?.email || "")}</div>
+        <button type="button" class="pp-btn" id="ppOpenApp">Open full app ↗</button>
+        <button type="button" class="pp-btn pp-logout" id="ppLogout">Log out</button>
       </div>
     </div>`;
 
@@ -176,20 +179,6 @@ function renderApp() {
     }
   });
 
-  const themeBtn = document.getElementById("themeToggle");
-  chrome.storage.local.get("af_theme", (r) => {
-    const current = r.af_theme === "light" ? "light" : "dark";
-    themeBtn.textContent = current === "dark" ? "Light" : "Dark";
-  });
-  themeBtn.onclick = () => {
-    chrome.storage.local.get("af_theme", (r) => {
-      const next = r.af_theme === "light" ? "dark" : "light";
-      chrome.storage.local.set({ af_theme: next }, () => {
-        themeBtn.textContent = next === "dark" ? "Light" : "Dark";
-      });
-    });
-  };
-
   document.querySelectorAll(".rail-btn").forEach((el) => {
     el.onclick = () => {
       state.tab = el.dataset.tab;
@@ -199,6 +188,32 @@ function renderApp() {
   const activeEl = document.querySelector(`.rail-btn[data-tab="${state.tab}"]`);
   if (activeEl) activeEl.classList.add("active");
   else document.querySelector('.rail-btn[data-tab="chat"]').classList.add("active");
+
+  // Collapse / reopen the right rail (gives the chat the full width).
+  const bodyRow = document.getElementById("bodyRow");
+  const applyRail = (open) => bodyRow.setAttribute("data-rail", open ? "open" : "closed");
+  chrome.storage.local.get("af_rail_open", (r) => applyRail(r.af_rail_open !== false));
+  document.getElementById("railCollapse").onclick = () =>
+    chrome.storage.local.set({ af_rail_open: false }, () => applyRail(false));
+  document.getElementById("railReopen").onclick = () =>
+    chrome.storage.local.set({ af_rail_open: true }, () => applyRail(true));
+
+  // Profile popup — account details + logout, opened from the avatar.
+  const pop = document.getElementById("profilePop");
+  const profBtn = document.getElementById("railProfile");
+  profBtn.onclick = (e) => {
+    e.stopPropagation();
+    pop.hidden = !pop.hidden;
+  };
+  document.addEventListener("click", (e) => {
+    if (!pop.hidden && e.target !== profBtn && !pop.contains(e.target)) pop.hidden = true;
+  });
+  document.getElementById("ppOpenApp").onclick = () => chrome.tabs.create({ url: WEB_URL });
+  document.getElementById("ppLogout").onclick = async () => {
+    await send({ type: "LOGOUT" });
+    state.user = null;
+    renderLogin();
+  };
 
   if (state.tab === "activity") renderActivity();
   else if (state.tab === "settings") renderExtSettings();
@@ -225,6 +240,10 @@ const ICONS = {
     '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.5 8.9 8.9 0 0 1-4-.9L3 20l1-4.5A8.4 8.4 0 0 1 3 11.5 8.4 8.4 0 0 1 11.5 3 8.4 8.4 0 0 1 21 11.5z"/></svg>',
   activity:
     '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
+  collapse:
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
+  expand:
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>',
 };
 
 // ---------- Chat: a real multi-turn conversation with your agent ----------
@@ -659,6 +678,13 @@ async function renderExtSettings() {
   const panel = document.getElementById("panel");
   panel.innerHTML = `
     <div class="item">
+      <div class="title">Appearance</div>
+      <div class="sub">Switch between dark and light theme.</div>
+      <div class="row">
+        <button id="themeToggle" class="secondary">…</button>
+      </div>
+    </div>
+    <div class="item">
       <div class="title">Account</div>
       <div class="sub">${escapeHtml(state.user?.name || state.user?.email || "")}</div>
       <div class="row">
@@ -710,6 +736,17 @@ async function renderExtSettings() {
 
   const ck = document.getElementById("customizeKeys");
   if (ck) ck.onclick = () => chrome.tabs.create({ url: "chrome://extensions/shortcuts" });
+
+  const themeBtn = document.getElementById("themeToggle");
+  const paintTheme = (t) =>
+    (themeBtn.textContent = t === "light" ? "Switch to dark" : "Switch to light");
+  chrome.storage.local.get("af_theme", (r) => paintTheme(r.af_theme === "light" ? "light" : "dark"));
+  themeBtn.onclick = () => {
+    chrome.storage.local.get("af_theme", (r) => {
+      const next = r.af_theme === "light" ? "dark" : "light";
+      chrome.storage.local.set({ af_theme: next }, () => paintTheme(next));
+    });
+  };
 
   const pBtn = document.getElementById("privacyToggle");
   const paintPrivacy = (on) => {
