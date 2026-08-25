@@ -75,7 +75,7 @@
 
   const AF_CSS_TEXT = `
 .af-sel-highlight { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 2147482999; }
-.af-sel-highlight-box { position: fixed; background: rgba(124, 92, 255, .30); border-radius: 2px; }
+.af-sel-highlight-box { position: fixed; background: rgba(91, 108, 240, .28); border-radius: 2px; }
 .af-logo { background: url(${AF_LOGO}) center / cover no-repeat !important; color: transparent !important; font-size: 0 !important; }
 
 /* The bar adapts to the page: dark tokens by default, a .af-light override
@@ -83,7 +83,7 @@
    Everything below reads these custom properties, so theming is one class. */
 .af-sel-bar {
   --bg: rgba(22,22,26,.72); --fg:#f4f4f6; --muted:rgba(255,255,255,.5); --border:rgba(255,255,255,.09);
-  --chip:rgba(255,255,255,.055); --chip-brd:rgba(255,255,255,.08); --chip-hover:rgba(255,255,255,.11); --accent:#8b74ff;
+  --chip:rgba(255,255,255,.055); --chip-brd:rgba(255,255,255,.08); --chip-hover:rgba(255,255,255,.11); --accent:#5b6cf0;
   --icon-bg:#ffffff; --icon-fg:#111214;
   position: fixed; z-index: 2147483000; display: flex; flex-direction: column; gap: 8px;
   padding: 9px 10px; background: var(--bg); color: var(--fg);
@@ -103,7 +103,7 @@
 }
 .af-sel-bar * { box-sizing: border-box; }
 .af-sel-bar.af-in { opacity: 1; transform: translateY(0) scale(1); }
-.af-sel-row { display: flex; align-items: center; gap: 8px; }
+.af-sel-row { display: flex; align-items: center; gap: 8px; padding-left: 4px; }
 .af-sel-icon { flex-shrink: 0; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: var(--icon-bg); color: var(--icon-fg); border-radius: 50%; font-size: 8.5px; font-weight: 700; letter-spacing: -.01em; }
 .af-sel-input { flex: 1; min-width: 110px; background: transparent; border: none; color: var(--fg); font-size: 13.5px; font-weight: 400; outline: none; font-family: inherit; padding: 0; margin: 0; letter-spacing: .005em; }
 .af-sel-input::placeholder { color: var(--muted); font-weight: 400; }
@@ -120,8 +120,8 @@
 .af-more-btn { margin-left: auto; background: transparent; border-color: transparent; color: var(--muted); }
 .af-more-btn:hover { background: var(--chip); color: var(--fg); border-color: transparent; }
 .af-sel-action:hover { background: var(--accent); color: #fff; border-color: transparent; }
-.af-answer { background: var(--accent); color: #fff; font-weight: 500; border-color: transparent; box-shadow: 0 2px 10px rgba(139,116,255,.32); }
-.af-answer:hover { border-color: transparent; filter: brightness(1.08); }
+.af-answer { background: linear-gradient(180deg, #6d7bff, #4f5cd8); color: #fff; font-weight: 500; border-color: transparent; box-shadow: 0 2px 9px rgba(79,92,216,.42), inset 0 1px 0 rgba(255,255,255,.22); }
+.af-answer:hover { border-color: transparent; filter: brightness(1.06); box-shadow: 0 3px 12px rgba(79,92,216,.5), inset 0 1px 0 rgba(255,255,255,.22); }
 /* Static flex child (not absolutely positioned) so the bar's own size includes
    it and positionBar keeps the whole thing on screen. max-height is set per
    render in JS (fitAnswerBox) to the space left below/above the bar, so it
@@ -998,7 +998,6 @@
     bar.className = "af-sel-bar" + (pageIsLight() ? " af-light" : "");
     bar.innerHTML = `
       <div class="af-sel-row">
-        <span class="af-sel-icon af-logo">AF</span>
         <input type="text" class="af-sel-input" placeholder="Ask about this…" />
         <button type="button" class="af-ic af-copy-ic" title="Copy (works even where copying is blocked)">${SVG_COPY}</button>
         <button type="button" class="af-sel-send" title="Get an AI answer (Enter)">${SVG_SEND}</button>
