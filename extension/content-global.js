@@ -103,8 +103,9 @@
 .af-ic.af-ok { color: #22c55e; }
 .af-sel-send { flex-shrink: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: var(--icon-bg); color: var(--icon-fg); border: none; border-radius: 8px; cursor: pointer; padding: 0; }
 .af-sel-send:hover { opacity: .85; }
-.af-sel-chips, .af-sel-more { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.af-sel-more { padding-top: 8px; margin-top: 1px; border-top: 1px solid var(--border); }
+.af-sel-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.af-sel-more { flex-wrap: wrap; gap: 6px; align-items: center; padding-top: 8px; margin-top: 1px; border-top: 1px solid var(--border); }
+.af-sel-more:not([hidden]) { display: flex; } /* [hidden] must win, so only show when NOT hidden */
 .af-sel-chip { flex-shrink: 0; background: var(--chip); color: var(--fg); border: 1px solid transparent; border-radius: 9px; padding: 5px 11px; font-size: 11.5px; font-weight: 500; cursor: pointer; white-space: nowrap; font-family: inherit; }
 .af-sel-chip:hover { background: var(--chip-hover); }
 .af-more-btn { margin-left: auto; background: transparent; color: var(--muted); }
@@ -124,6 +125,22 @@
 .af-result-title { color: var(--accent); font-size: 12.5px; font-weight: 600; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .af-result-url { color: var(--muted); font-size: 10.5px; margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .af-result-snippet { color: var(--fg); font-size: 11.5px; line-height: 1.45; opacity: .82; }
+/* Compact trigger — shown first on a selection so it barely covers text; click
+   it to expand the full bar. Follows the selection on scroll (repositioned in
+   JS) so you can read/scroll with it, instead of it dying on the first scroll. */
+.af-sel-pill { --bg:#101012; --fg:#f3f3f4; --muted:rgba(255,255,255,.55); --border:rgba(255,255,255,.14); --icon-bg:#ffffff; --icon-fg:#111214;
+  position: fixed; z-index: 2147483000; display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 11px 4px 5px; background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 999px; box-shadow: 0 6px 20px rgba(0,0,0,.30);
+  cursor: pointer; font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px; font-weight: 600; box-sizing: border-box;
+  opacity: 0; transform: translateY(4px) scale(.96);
+  transition: opacity .13s ease, transform .13s cubic-bezier(.2,.8,.3,1); }
+.af-sel-pill.af-light { --bg:#ffffff; --fg:#18181b; --muted:rgba(0,0,0,.55); --border:rgba(0,0,0,.12); --icon-bg:#18181b; --icon-fg:#fff; box-shadow: 0 6px 20px rgba(0,0,0,.14); }
+.af-sel-pill.af-in { opacity: 1; transform: translateY(0) scale(1); }
+.af-sel-pill:hover { border-color: var(--muted); }
+.af-sel-pill .af-sel-icon { width: 20px; height: 20px; }
+.af-pill-label { padding-right: 2px; }
 .af-bubble { position: fixed; bottom: 22px; right: 22px; z-index: 2147483000; width: 40px; height: 40px; border-radius: 50%; background: #fff; color: #000; border: none; font-size: 11px; font-weight: 800; letter-spacing: -.02em; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.35); font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif; opacity: 0; transform: scale(.8); transition: opacity .18s ease, transform .18s cubic-bezier(.2,.8,.3,1), box-shadow .12s ease; padding: 0; }
 .af-bubble.af-in { opacity: 1; transform: scale(1); }
 .af-bubble:hover { box-shadow: 0 8px 26px rgba(0,0,0,.5); transform: scale(1.06); }
@@ -181,6 +198,7 @@
 
   function enterPrivacyMode() {
     privacyMode = true;
+    removePill();
     removeBar();
     closeCapture();
     unmountBubble();
@@ -336,7 +354,7 @@
       }
       if ("af_select_enabled" in changes) {
         selectEnabled = changes.af_select_enabled.newValue !== false;
-        if (!selectEnabled) removeBar();
+        if (!selectEnabled) closeSelUI();
         else restoreCopyPaste();
       }
       if ("af_bubble_enabled" in changes) {
@@ -396,6 +414,73 @@
       bar = null;
     }
     clearHighlightOverlay();
+  }
+
+  // Collapse-first UX: a selection shows a tiny PILL, not the full bar, so it
+  // barely covers the text. Clicking the pill expands the bar. The pill + bar
+  // both follow the selection on scroll (via anchorRange) so you can read.
+  let pill = null;
+  let anchorRange = null; // the selection's Range, kept so we can re-anchor
+
+  function removePill() {
+    if (pill) {
+      pill.remove();
+      pill = null;
+    }
+  }
+  // Close everything the selection flow put on screen.
+  function closeSelUI() {
+    removePill();
+    removeBar(); // also clears the highlight overlay
+  }
+
+  function anchorRect() {
+    // Live viewport rect of the current selection — recomputed each call so it
+    // tracks scrolling. Returns null if the range is gone/collapsed off-screen.
+    if (!anchorRange) return null;
+    try {
+      const r = anchorRange.getBoundingClientRect();
+      if (!r || (r.width === 0 && r.height === 0)) return null;
+      return r;
+    } catch {
+      return null;
+    }
+  }
+
+  function showPill(rect) {
+    if (!selectEnabled || privacyMode) return;
+    removePill();
+    if (bar) {
+      bar.remove();
+      bar = null;
+    }
+    pill = document.createElement("div");
+    pill.className = "af-sel-pill" + (pageIsLight() ? " af-light" : "");
+    pill.innerHTML = `<span class="af-sel-icon">AF</span><span class="af-pill-label">Ask</span>`;
+    getAfRoot().appendChild(pill);
+    // Position just under the selection start, clamped to the viewport.
+    const m = 8;
+    const w = pill.offsetWidth || 72;
+    const h = pill.offsetHeight || 30;
+    let left = Math.max(m, Math.min(rect.left, window.innerWidth - w - m));
+    let top = rect.bottom + m;
+    if (top + h > window.innerHeight - m) {
+      const above = rect.top - h - m;
+      top = above >= m ? above : rect.bottom + m;
+    }
+    pill.style.left = `${left}px`;
+    pill.style.top = `${top}px`;
+    requestAnimationFrame(() => pill.classList.add("af-in"));
+    // Don't let the click steal/clear the selection; expand to the full bar.
+    pill.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    pill.onclick = () => {
+      const r = anchorRect() || rect;
+      removePill();
+      showBar(r, "", false);
+    };
   }
 
   // Viewport coordinates, paired with position: fixed. Deliberately NOT
@@ -754,7 +839,9 @@
 
   function showBar(rect, prefill, autoFocus) {
     if (!selectEnabled || privacyMode) return; // single choke point for both switches
-    removeBar();
+    removePill();
+    removeBar(); // clears the highlight — redraw it below from anchorRange
+    if (anchorRange) drawHighlightOverlay(anchorRange);
     bar = document.createElement("div");
     bar.className = "af-sel-bar" + (pageIsLight() ? " af-light" : "");
     bar.innerHTML = `
@@ -888,7 +975,7 @@
   window.addEventListener(
     "mouseup",
     (e) => {
-      if (bar && e.target === afHost) return;
+      if ((bar || pill) && e.target === afHost) return;
       // Deferred a tick: in capture phase the browser may not have finalized
       // the Selection yet, and this also lets the page's own handlers run
       // first so we read the selection they leave behind, not an interim one.
@@ -897,11 +984,11 @@
         const text = sel ? sel.toString().trim() : "";
         if (text.length > 2 && text.length < 6000 && sel.rangeCount > 0) {
           lastSelectionText = text;
-          const range = sel.getRangeAt(0);
-          showBar(range.getBoundingClientRect());
-          drawHighlightOverlay(range); // survives even if the page later clears its own selection
+          anchorRange = sel.getRangeAt(0);
+          drawHighlightOverlay(anchorRange); // survives page clearing its selection
+          showPill(anchorRange.getBoundingClientRect()); // tiny trigger, not the full bar
         } else if (!text) {
-          removeBar();
+          closeSelUI();
         }
       }, 0);
     },
@@ -910,7 +997,7 @@
   window.addEventListener(
     "mousedown",
     (e) => {
-      if (bar && e.target !== afHost) removeBar();
+      if ((bar || pill) && e.target !== afHost) closeSelUI();
     },
     true
   );
@@ -918,17 +1005,47 @@
     "keydown",
     (e) => {
       if (e.key === "Escape") {
-        removeBar();
+        closeSelUI();
         closeCapture();
       }
     },
     true
   );
-  // The bar and highlight are viewport-positioned, so once the page scrolls
-  // they no longer line up with the text they refer to — dismiss instead of
-  // letting them drift. Capture phase so it also catches scrolling inside a
-  // nested scroll container, which is how most app-like sites scroll.
-  window.addEventListener("scroll", () => { if (bar) removeBar(); }, true);
+  // On scroll, FOLLOW the selection instead of dismissing — so you can scroll
+  // and read while the pill/bar stays glued to the text it refers to. Only
+  // when the selection scrolls fully out of view do we close. rAF-throttled so
+  // fast scrolling stays smooth. Capture phase catches nested scroll
+  // containers (how most app-like sites scroll).
+  let scrollRaf = 0;
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (!pill && !bar) return;
+      if (scrollRaf) return;
+      scrollRaf = requestAnimationFrame(() => {
+        scrollRaf = 0;
+        const r = anchorRect();
+        if (!r || r.bottom < 0 || r.top > window.innerHeight) {
+          closeSelUI();
+          return;
+        }
+        drawHighlightOverlay(anchorRange); // keep the highlight glued to the text
+        if (pill) {
+          const m = 8, w = pill.offsetWidth || 72, h = pill.offsetHeight || 30;
+          let left = Math.max(m, Math.min(r.left, window.innerWidth - w - m));
+          let top = r.bottom + m;
+          if (top + h > window.innerHeight - m) {
+            const a = r.top - h - m;
+            top = a >= m ? a : r.bottom + m;
+          }
+          pill.style.left = `${left}px`;
+          pill.style.top = `${top}px`;
+        }
+        if (bar) positionBar(r);
+      });
+    },
+    true
+  );
 
   // Right-click → "Ask AgentFury about…" (background.js relays the selection here).
   try {
@@ -936,16 +1053,19 @@
       if (msg.type === "AF_OPEN_SELECTION") {
         lastSelectionText = msg.text || lastSelectionText;
         let rect = { top: window.innerHeight / 2, bottom: window.innerHeight / 2, left: window.innerWidth / 2 };
+        anchorRange = null;
         const sel = window.getSelection();
         if (sel && sel.rangeCount) {
           try {
-            const range = sel.getRangeAt(0);
-            rect = range.getBoundingClientRect();
-            drawHighlightOverlay(range);
+            anchorRange = sel.getRangeAt(0);
+            rect = anchorRange.getBoundingClientRect();
+            drawHighlightOverlay(anchorRange);
           } catch {
             /* keep fallback */
           }
         }
+        // Right-click is explicit intent → open the full bar directly (not the
+        // pill), focused, so they can type straight away.
         showBar(rect, "", true);
       }
     });
