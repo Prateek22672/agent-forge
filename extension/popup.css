@@ -50,10 +50,44 @@ body.af-sidepanel,
 body.af-sidepanel #app {
   height: 100vh;
 }
+body.af-sidepanel .body-row { flex: 1; min-height: 0; }
 body.af-sidepanel .panel {
   flex: 1;
   max-height: none;
 }
+
+/* Sider-style layout: content fills the left, a thin vertical nav rail sits on
+   the right edge — no tab row eating the top. */
+.body-row { display: flex; flex-direction: row; min-height: 0; }
+.body-row .panel { min-width: 0; }
+.rail {
+  flex-shrink: 0;
+  width: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 6px;
+  border-left: 1px solid var(--af-border-soft);
+}
+.rail-btn {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: transparent;
+  color: var(--af-muted);
+  border: none;
+  border-radius: 10px;
+  padding: 8px 4px;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .12s ease, color .12s ease;
+}
+.rail-btn:hover { background: var(--af-chip-bg); color: var(--af-fg); opacity: 1; }
+.rail-btn.active { background: var(--af-chip-bg); color: var(--af-fg); }
+.rail-btn svg { opacity: .9; }
 
 .header {
   display: flex;

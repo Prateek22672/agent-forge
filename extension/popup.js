@@ -144,13 +144,15 @@ function renderApp() {
         <span class="avatar" title="${escapeHtml(state.user?.email || "")}">${initials(state.user)}</span>
       </div>
     </div>
-    <div class="tabs">
-      <div class="tab" data-tab="chat">Chat</div>
-      <div class="tab" data-tab="activity">Activity</div>
-      <div class="tab" data-tab="settings" title="Settings">Settings</div>
-    </div>
     <div id="privacyBanner"></div>
-    <div class="panel" id="panel"></div>`;
+    <div class="body-row">
+      <div class="panel" id="panel"></div>
+      <div class="rail">
+        <button type="button" class="rail-btn" data-tab="chat" title="Chat">${ICONS.chat}<span>Chat</span></button>
+        <button type="button" class="rail-btn" data-tab="activity" title="Activity">${ICONS.activity}<span>Activity</span></button>
+        <button type="button" class="rail-btn" data-tab="settings" title="Settings">${ICONS.settings}<span>Settings</span></button>
+      </div>
+    </div>`;
 
   // Privacy mode silently removes the on-page UI everywhere, which looks
   // exactly like "the extension broke" if you forgot it was on. Always show a
@@ -188,15 +190,15 @@ function renderApp() {
     });
   };
 
-  document.querySelectorAll(".tab").forEach((el) => {
+  document.querySelectorAll(".rail-btn").forEach((el) => {
     el.onclick = () => {
       state.tab = el.dataset.tab;
       renderApp();
     };
   });
-  const activeEl = document.querySelector(`.tab[data-tab="${state.tab}"]`);
+  const activeEl = document.querySelector(`.rail-btn[data-tab="${state.tab}"]`);
   if (activeEl) activeEl.classList.add("active");
-  else document.querySelector('.tab[data-tab="chat"]').classList.add("active");
+  else document.querySelector('.rail-btn[data-tab="chat"]').classList.add("active");
 
   if (state.tab === "activity") renderActivity();
   else if (state.tab === "settings") renderExtSettings();
@@ -219,6 +221,10 @@ const ICONS = {
     '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9 12h6M9 16h6"/></svg>',
   send:
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>',
+  chat:
+    '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.5 8.9 8.9 0 0 1-4-.9L3 20l1-4.5A8.4 8.4 0 0 1 3 11.5 8.4 8.4 0 0 1 11.5 3 8.4 8.4 0 0 1 21 11.5z"/></svg>',
+  activity:
+    '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
 };
 
 // ---------- Chat: a real multi-turn conversation with your agent ----------
