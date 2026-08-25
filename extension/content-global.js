@@ -357,8 +357,10 @@
   // Select-to-ask and the floating bubble can both be turned off from the
   // popup (Settings). Cached locally and kept live via storage.onChanged, so
   // toggling takes effect on every open tab immediately — no refresh needed.
+  // The bubble is OFF by default now: it duplicated the highlight bar's Save
+  // action and just added clutter to every page. Off unless a user opts in.
   let selectEnabled = true;
-  let bubbleEnabled = true;
+  let bubbleEnabled = false;
   try {
     chrome.storage.local.get(
       ["af_select_enabled", "af_bubble_enabled", "af_privacy_mode"],

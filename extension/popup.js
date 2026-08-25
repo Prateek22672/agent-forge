@@ -11,7 +11,7 @@
 const app = document.getElementById("app");
 const WEB_URL = "https://agentfury.foliofyx.in";
 
-let state = { user: null, tab: "ask" };
+let state = { user: null, tab: "chat" };
 
 // Theme: dark by default, light optional. Applied to <html data-af-theme="…">
 // before anything renders, and kept live so toggling in Settings updates
@@ -59,12 +59,12 @@ async function init() {
 // some other tab, that broadcasts here — if we're currently looking at the
 // affected tab, re-render it so the new item shows up without the user
 // having to switch tabs and back.
-const KIND_TO_TAB = { remind: "remind", note: "notes" }; // brain has no dedicated tab yet
 try {
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type !== "AF_DATA_CHANGED") return;
-    const affected = KIND_TO_TAB[msg.kind];
-    if (affected && state.tab === affected) renderApp();
+    // Reminders/notes/brain now all live in the unified Activity feed — if it's
+    // open, refresh it so items saved from the bar appear immediately.
+    if (state.tab === "activity") renderApp();
   });
 } catch {
   /* not running in an extension context somehow — ignore */
@@ -148,11 +148,8 @@ function renderApp() {
       </div>
     </div>
     <div class="tabs">
-      <div class="tab" data-tab="ask">Ask</div>
-      <div class="tab" data-tab="priority">Priority</div>
-      <div class="tab" data-tab="drafts">Drafts</div>
-      <div class="tab" data-tab="remind">Remind</div>
-      <div class="tab" data-tab="notes">Notes</div>
+      <div class="tab" data-tab="chat">Chat</div>
+      <div class="tab" data-tab="activity">Activity</div>
       <div class="tab" data-tab="settings" title="Settings">Settings</div>
     </div>
     <div id="privacyBanner"></div>
@@ -200,14 +197,13 @@ function renderApp() {
       renderApp();
     };
   });
-  document.querySelector(`.tab[data-tab="${state.tab}"]`).classList.add("active");
+  const activeEl = document.querySelector(`.tab[data-tab="${state.tab}"]`);
+  if (activeEl) activeEl.classList.add("active");
+  else document.querySelector('.tab[data-tab="chat"]').classList.add("active");
 
-  if (state.tab === "ask") renderAsk();
-  else if (state.tab === "priority") renderPriority();
-  else if (state.tab === "drafts") renderDrafts();
-  else if (state.tab === "remind") renderRemind();
-  else if (state.tab === "notes") renderNotes();
+  if (state.tab === "activity") renderActivity();
   else if (state.tab === "settings") renderExtSettings();
+  else renderChat();
 }
 
 // ---------- Ask tab: one-shot Q&A (no fake persistence) ----------
@@ -228,110 +224,229 @@ const ICONS = {
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>',
 };
 
-async function renderAsk() {
+// ---------- Chat: a real multi-turn conversation with your agent ----------
+// This is the panel's reason to exist — the on-page bar gives quick one-shot
+// answers; here you have a back-and-forth that remembers context (threaded via
+// conversation_id) and can use tools: "remind me to…", "search for…", "draft a
+// reply to…". Depth over speed; that's the split.
+let chatHistory = []; // {role, content} for this panel session
+let chatConvoId = null; // server conversation id → real memory across turns
+
+async function renderChat() {
   const panel = document.getElementById("panel");
-  const first = (state.user?.name || state.user?.email || "").split(/[\s@]/)[0];
   panel.innerHTML = `
-    <div class="af-welcome">
-      <div class="af-welcome-title">Welcome${first ? ", " + escapeHtml(first) : ""}</div>
-      <div class="af-welcome-sub">Your AI agent for email, reminders, and more.</div>
-    </div>
-    <div class="af-section-label">Tools</div>
-    <div class="tools-grid">
-      <button type="button" class="tool-tile" data-tab="priority">${ICONS.priority}<span>Priority</span></button>
-      <button type="button" class="tool-tile" data-tab="drafts">${ICONS.drafts}<span>Drafts</span></button>
-      <button type="button" class="tool-tile" data-tab="remind">${ICONS.remind}<span>Remind</span></button>
-      <button type="button" class="tool-tile" data-tab="notes">${ICONS.notes}<span>Notes</span></button>
-      <button type="button" class="tool-tile" data-tab="settings">${ICONS.settings}<span>Settings</span></button>
-    </div>
-    <div class="af-section-label">Quick ask</div>
-    <div id="answerWrap"></div>
+    <div id="chatMsgs" class="chat-msgs"></div>
     <div class="af-ask-row">
-      <textarea id="input" placeholder="Ask AgentFury anything…" rows="1"></textarea>
-      <button id="askBtn" class="af-ask-send" title="Ask" aria-label="Ask">${ICONS.send}</button>
+      <textarea id="input" placeholder="Message your assistant…" rows="1"></textarea>
+      <button id="askBtn" class="af-ask-send" title="Send" aria-label="Send">${ICONS.send}</button>
     </div>
-    <div class="msg" id="askMsg">For back-and-forth conversations, memory, and Autopilot, use the full app.</div>`;
+    <div class="chat-hint">It can search, remind, and draft — just ask. <a href="#" id="openFullChat">Open full app ↗</a></div>`;
 
-  panel.querySelectorAll(".tool-tile").forEach((t) => {
-    t.onclick = () => {
-      state.tab = t.dataset.tab;
-      renderApp();
-    };
-  });
+  const msgsEl = document.getElementById("chatMsgs");
+  const inputEl = document.getElementById("input");
+  const btn = document.getElementById("askBtn");
 
-  // If a selection was handed to the panel via the "Open ↗" chip on a page,
-  // prefill the ask box with it (roomier here than the inline bar — good for
-  // code or long passages), then clear the stash so it's a one-shot handoff.
+  const paintMsgs = () => {
+    if (!chatHistory.length) {
+      msgsEl.innerHTML = `<div class="chat-empty">Ask me anything.<br><span>Try “summarize this”, “remind me to reply to Sam at 6pm”, or paste some text.</span></div>`;
+      return;
+    }
+    msgsEl.innerHTML = chatHistory
+      .map(
+        (m) =>
+          `<div class="chat-bubble ${m.role === "user" ? "me" : "ai"}">${
+            m.content === "…" ? '<span class="chat-typing"><i></i><i></i><i></i></span>' : escapeHtml(m.content).replace(/\n/g, "<br>")
+          }</div>`
+      )
+      .join("");
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+  };
+  paintMsgs();
+
+  document.getElementById("openFullChat").onclick = (e) => {
+    e.preventDefault();
+    chrome.tabs.create({ url: WEB_URL });
+  };
+
+  const autoSize = () => {
+    inputEl.style.height = "auto";
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px";
+  };
+  inputEl.addEventListener("input", autoSize);
+
+  // A selection handed over via the on-page "Open ↗" chip prefills the box.
   try {
     chrome.storage.local.get("af_pending_selection", (r) => {
-      const sel = r.af_pending_selection;
-      if (sel) {
-        const input = document.getElementById("input");
-        if (input) {
-          input.value = sel;
-          input.style.height = "auto";
-          input.style.height = Math.min(input.scrollHeight, 120) + "px";
-          input.focus();
-        }
+      if (r.af_pending_selection) {
+        inputEl.value = r.af_pending_selection;
+        autoSize();
+        inputEl.focus();
         chrome.storage.local.remove("af_pending_selection");
       }
     });
   } catch {
-    /* no pending selection / context not ready */
+    /* none */
   }
 
-  const ask = async () => {
-    const input = document.getElementById("input");
-    const text = input.value.trim();
+  const sendMsg = async () => {
+    const text = inputEl.value.trim();
     if (!text) return;
-    const btn = document.getElementById("askBtn");
-    const msgEl = document.getElementById("askMsg");
-    const answerWrap = document.getElementById("answerWrap");
+    chatHistory.push({ role: "user", content: text });
+    chatHistory.push({ role: "assistant", content: "…" });
+    inputEl.value = "";
+    autoSize();
     btn.disabled = true;
-    btn.classList.add("af-loading");
-    msgEl.textContent = "First request can take a bit if the server was asleep.";
-    msgEl.className = "msg";
+    paintMsgs();
 
     if (!assistantAgentId) {
       const r = await api("/agents");
       if (r.ok) {
-        const assistant = r.data.find((a) => a.name === "Assistant") || r.data[0];
-        assistantAgentId = assistant?.id || null;
+        const a = r.data.find((x) => x.name === "Assistant") || r.data[0];
+        assistantAgentId = a?.id || null;
       }
     }
+    let reply;
     if (!assistantAgentId) {
-      btn.disabled = false;
-      btn.classList.remove("af-loading");
-      msgEl.textContent = "Couldn't load your assistant — try Open full app.";
-      msgEl.className = "msg error";
-      return;
-    }
-
-    const r = await api(`/agents/${assistantAgentId}/chat`, "POST", { message: text });
-    btn.disabled = false;
-    btn.classList.remove("af-loading");
-    if (r.ok) {
-      answerWrap.innerHTML = `<div class="answer-box">${escapeHtml(r.data.reply)}</div>`;
-      msgEl.textContent = "";
-      input.value = "";
+      reply = "Couldn't load your assistant — try Open full app.";
     } else {
-      msgEl.textContent = r.timedOut
-        ? "Still waking up — click Ask again, it'll be quick now."
-        : "⚠ " + (r.error || "Something went wrong.");
-      msgEl.className = "msg error";
+      const r = await api(`/agents/${assistantAgentId}/chat`, "POST", {
+        message: text,
+        conversation_id: chatConvoId, // thread it → the agent remembers the chat
+      });
+      if (r.ok) {
+        reply = r.data.reply;
+        chatConvoId = r.data.conversation_id || chatConvoId;
+      } else {
+        reply = r.timedOut
+          ? "Still waking up — send again, it'll be quick now."
+          : "⚠ " + (r.error || "Something went wrong.");
+      }
     }
+    chatHistory[chatHistory.length - 1] = { role: "assistant", content: reply };
+    btn.disabled = false;
+    paintMsgs();
   };
-  document.getElementById("askBtn").onclick = ask;
-  const inputEl = document.getElementById("input");
+
+  btn.onclick = sendMsg;
   inputEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      ask();
+      sendMsg();
     }
   });
-  inputEl.addEventListener("input", () => {
-    inputEl.style.height = "auto";
-    inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px";
+}
+
+// ---------- Activity: one glanceable feed instead of four half-empty tabs ----
+// Priority mail, pending drafts, reminders, and notes in a single scroll — the
+// panel's job is a quick glance + quick action, not full management (that's the
+// web app). Creation happens from chat or the on-page bar.
+async function renderActivity() {
+  const panel = document.getElementById("panel");
+  panel.innerHTML = `<div class="empty">Loading…</div>`;
+  const [prio, drafts, rem, notes] = await Promise.all([
+    api("/priority"),
+    api("/emails/pending"),
+    api("/reminders"),
+    api("/notes"),
+  ]);
+
+  const sections = [];
+
+  if (prio.ok && prio.data.length) {
+    sections.push(
+      `<div class="af-section-label">Priority mail</div>` +
+        prio.data
+          .slice(0, 6)
+          .map(
+            (p) => `<div class="item"><div class="title">${escapeHtml(p.subject || "(no subject)")}</div>
+            <div class="sub">${escapeHtml(p.sender || "")}${p.category ? " · " + escapeHtml(p.category) : ""}</div></div>`
+          )
+          .join("")
+    );
+  }
+
+  if (drafts.ok && drafts.data.length) {
+    sections.push(
+      `<div class="af-section-label">Drafts to review</div>` +
+        drafts.data
+          .map(
+            (d) => `<div class="item" data-id="${d.id}"><div class="title">To: ${escapeHtml(d.to_addr)}</div>
+            <div class="sub">${escapeHtml(d.subject || "(no subject)")}</div>
+            <div class="row"><button class="sendD" data-id="${d.id}">Send</button>
+            <button class="secondary cancelD" data-id="${d.id}">Cancel</button></div></div>`
+          )
+          .join("")
+    );
+  }
+
+  if (rem.ok && rem.data.length) {
+    const items = rem.data
+      .filter((it) => it.status !== "done")
+      .concat(rem.data.filter((it) => it.status === "done"))
+      .slice(0, 8);
+    sections.push(
+      `<div class="af-section-label">Reminders</div>` +
+        items
+          .map(
+            (it) => `<div class="item"><div class="title"${it.status === "done" ? ' style="text-decoration:line-through;opacity:.5"' : ""}>${escapeHtml(it.title)}</div>
+            ${it.remind_at ? `<div class="sub">${escapeHtml(it.remind_at)}</div>` : ""}
+            <div class="row"><button type="button" class="secondary remToggle" data-id="${it.id}">${it.status === "done" ? "Undo" : "Done"}</button>
+            <button type="button" class="secondary remDel" data-id="${it.id}">Delete</button></div></div>`
+          )
+          .join("")
+    );
+  }
+
+  if (notes.ok && notes.data.length) {
+    sections.push(
+      `<div class="af-section-label">Notes</div>` +
+        notes.data
+          .slice(0, 8)
+          .map(
+            (n) => `<div class="item"><div class="title">${escapeHtml(n.title || "Note")}</div>
+            <div class="sub">${escapeHtml((n.content || "").slice(0, 120))}</div>
+            <div class="row"><button type="button" class="secondary noteDel" data-id="${n.id}">Delete</button></div></div>`
+          )
+          .join("")
+    );
+  }
+
+  panel.innerHTML = sections.length
+    ? sections.join("")
+    : `<div class="empty">Nothing here yet.<br>Highlight text on any page and choose Save, or ask your assistant to remind you about something.</div>`;
+
+  // Wire quick actions
+  panel.querySelectorAll(".sendD").forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true;
+      await api(`/emails/${b.dataset.id}/send`, "POST");
+      renderActivity();
+    };
+  });
+  panel.querySelectorAll(".cancelD").forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true;
+      await api(`/emails/${b.dataset.id}`, "DELETE");
+      renderActivity();
+    };
+  });
+  panel.querySelectorAll(".remToggle").forEach((b) => {
+    b.onclick = async () => {
+      await api(`/reminders/${b.dataset.id}`, "PATCH");
+      renderActivity();
+    };
+  });
+  panel.querySelectorAll(".remDel").forEach((b) => {
+    b.onclick = async () => {
+      await api(`/reminders/${b.dataset.id}`, "DELETE");
+      renderActivity();
+    };
+  });
+  panel.querySelectorAll(".noteDel").forEach((b) => {
+    b.onclick = async () => {
+      await api(`/notes/${b.dataset.id}`, "DELETE");
+      renderActivity();
+    };
   });
 }
 
@@ -605,11 +720,11 @@ async function renderExtSettings() {
     bBtn.textContent = enabled ? "On — tap to turn off" : "Off — tap to turn on";
   };
   chrome.storage.local.get("af_bubble_enabled", (r) => {
-    paintBubble(r.af_bubble_enabled !== false); // default: on
+    paintBubble(r.af_bubble_enabled === true); // default: OFF (opt-in)
   });
   bBtn.onclick = () => {
     chrome.storage.local.get("af_bubble_enabled", (r) => {
-      const next = !(r.af_bubble_enabled !== false);
+      const next = !(r.af_bubble_enabled === true);
       chrome.storage.local.set({ af_bubble_enabled: next }, () => paintBubble(next));
     });
   };
