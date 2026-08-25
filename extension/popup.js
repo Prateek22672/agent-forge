@@ -295,7 +295,15 @@ async function renderChat() {
     chipEl.innerHTML = `Reading ${escapeHtml(f.name)}…`;
     const r = await extractFile(f);
     if (!r.ok) {
-      chipEl.innerHTML = `<span class="cf-err">Couldn't read ${escapeHtml(f.name)}</span> <button type="button" id="cfClear">✕</button>`;
+      const why =
+        r.status === 404
+          ? "Server is still updating — try again in a minute."
+          : r.timedOut
+          ? "Server was asleep — try again."
+          : typeof r.error === "string"
+          ? r.error
+          : "Couldn't read this file.";
+      chipEl.innerHTML = `<span class="cf-err">${escapeHtml(why)}</span> <button type="button" id="cfClear">✕</button>`;
       document.getElementById("cfClear").onclick = clearAttached;
       return;
     }
