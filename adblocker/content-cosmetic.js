@@ -1,48 +1,56 @@
-// Cosmetic ad removal + anti-adblock-nag removal, on every page.
-//
-// declarativeNetRequest blocks ad NETWORK requests; this handles the two things
-// it can't: (1) ad containers that still take up space, and (2) "please disable
-// your ad blocker" nag overlays that some sites throw up. Best-effort and fails
-// safe — if a site's markup doesn't match, it simply does nothing. Skipped
-// entirely while the user has paused blocking from the popup.
+// Cosmetic ad removal + anti-adblock-nag removal + user custom selectors.
+// declarativeNetRequest blocks ad NETWORK requests; this handles what it can't:
+// ad containers that still take space, "disable your ad blocker" nag overlays,
+// and any CSS selectors the user added in the popup. Counts what it removes and
+// reports to the background so the all-time total reflects it. Best-effort and
+// fails safe. Honours the global pause and the per-site pause list.
 (function () {
+  const HOST = location.hostname;
   let paused = false;
+  let pausedHere = false;
+  let customAll = [];
+  let customSite = [];
+
+  const readState = (r) => {
+    paused = r.paused === true;
+    pausedHere = Array.isArray(r.pausedSites) && r.pausedSites.includes(HOST);
+    customAll = (r.customAll || []).filter(Boolean);
+    customSite = ((r.customSite || {})[HOST] || []).filter(Boolean);
+  };
   try {
-    chrome.storage.local.get("paused", (r) => (paused = r.paused === true));
-    chrome.storage.onChanged.addListener((c) => {
-      if (c.paused) paused = c.paused.newValue === true;
+    chrome.storage.local.get(["paused", "pausedSites", "customAll", "customSite"], readState);
+    chrome.storage.onChanged.addListener((c, area) => {
+      if (area !== "local") return;
+      chrome.storage.local.get(["paused", "pausedSites", "customAll", "customSite"], readState);
     });
   } catch {}
 
-  // Common ad-container selectors (kept specific to avoid nuking real content).
   const AD = [
-    ".adsbygoogle",
-    "ins.adsbygoogle",
-    '[id^="ad-"]',
-    '[id*="google_ads"]',
-    '[id*="-ad-slot"]',
-    '[class*="ad-slot"]',
-    '[class*="ad-banner"]',
-    '[class*="adBanner"]',
-    '[aria-label="Advertisement"]',
-    '[aria-label="Advertisements"]',
-    '[data-ad-slot]',
-    'iframe[src*="doubleclick"]',
-    'iframe[src*="googlesyndication"]',
-    'iframe[src*="/ads/"]',
-    "#taboola-below-article",
-    '[id^="taboola"]',
-    '[class*="trc_related"]',
+    ".adsbygoogle", "ins.adsbygoogle", '[id^="ad-"]', '[id*="google_ads"]', '[id*="-ad-slot"]',
+    '[class*="ad-slot"]', '[class*="ad-banner"]', '[class*="adBanner"]',
+    '[aria-label="Advertisement"]', '[aria-label="Advertisements"]', '[data-ad-slot]',
+    'iframe[src*="doubleclick"]', 'iframe[src*="googlesyndication"]', 'iframe[src*="/ads/"]',
+    "#taboola-below-article", '[id^="taboola"]', '[class*="trc_related"]',
   ];
-
-  // Hints that an element is an anti-adblock nag (only removed if it behaves
-  // like a blocking overlay — fixed/absolute and high z-index or full-screen).
   const NAG = ["adblock", "ad-block", "ad_block", "disable-adblock", "anti-adblock", "adblocker", "detect-adblock"];
 
+  let pending = 0;
+  const flush = () => {
+    if (pending > 0) {
+      try { chrome.runtime.sendMessage({ type: "NOADS_REMOVED", n: pending }); } catch {}
+      pending = 0;
+    }
+  };
+
   const clean = () => {
-    if (paused) return;
+    if (paused || pausedHere) return;
     try {
-      AD.forEach((s) => document.querySelectorAll(s).forEach((el) => el && el.remove()));
+      const sels = AD.concat(customAll, customSite);
+      sels.forEach((s) => {
+        let nodes;
+        try { nodes = document.querySelectorAll(s); } catch { return; }
+        nodes.forEach((el) => { if (el) { el.remove(); pending++; } });
+      });
 
       const nodes = document.querySelectorAll("div,section,aside,dialog,ytd-popup-container");
       for (const el of nodes) {
@@ -50,28 +58,23 @@
         const idc = (el.id + " " + cls).toLowerCase();
         if (!NAG.some((h) => idc.includes(h))) continue;
         let cs;
-        try {
-          cs = getComputedStyle(el);
-        } catch {
-          continue;
+        try { cs = getComputedStyle(el); } catch { continue; }
+        if (cs.position === "fixed" || cs.position === "absolute" || (+cs.zIndex || 0) > 999) {
+          el.remove();
+          pending++;
         }
-        const overlay = cs.position === "fixed" || cs.position === "absolute" || (+cs.zIndex || 0) > 999;
-        if (overlay) el.remove();
       }
 
-      // Undo the scroll-lock nags apply so the page is usable again.
       if (getComputedStyle(document.body).overflow === "hidden") document.body.style.overflow = "auto";
       const de = document.documentElement;
       if (getComputedStyle(de).overflow === "hidden") de.style.overflow = "auto";
-      // Remove blur some nags put on the page behind their overlay.
       if (getComputedStyle(document.body).filter !== "none") document.body.style.filter = "none";
     } catch {}
+    flush();
   };
 
   const start = () => {
-    try {
-      new MutationObserver(clean).observe(document.documentElement, { childList: true, subtree: true });
-    } catch {}
+    try { new MutationObserver(clean).observe(document.documentElement, { childList: true, subtree: true }); } catch {}
     clean();
   };
   if (document.body) start();
