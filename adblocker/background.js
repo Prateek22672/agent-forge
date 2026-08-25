@@ -1,10 +1,12 @@
-// NoAds background — badge, all-time block counting, and per-site controls.
+// NoAds background — blocking toggle, accurate counting, per-tab counts.
 //
-// Counting in MV3: declarativeNetRequest doesn't hand you a lifetime total, so
-// we poll getMatchedRules (the declarativeNetRequestFeedback permission) on an
-// alarm and accumulate a persistent counter, mapping each matched rule back to
-// the ad domain it blocked so the popup can show WHAT was blocked. Cosmetic /
-// YouTube removals from the content scripts are added in too.
+// Counting: onRuleMatchedDebug fires in real time for every blocked request
+// (works while the extension is loaded unpacked — i.e. while testing). In a
+// published build it doesn't fire, so we fall back to polling getMatchedRules.
+// Either way we keep a persistent all-time total + a live per-tab count.
+
+let PAUSED = false;
+chrome.storage.local.get("paused", (r) => (PAUSED = r.paused === true));
 
 function applyBadge() {
   try {
@@ -13,84 +15,92 @@ function applyBadge() {
   chrome.action.setBadgeBackgroundColor({ color: "#5b6cf0" });
 }
 
-// ruleId -> the domain/pattern it blocks (for the "what was blocked" breakdown).
+// ruleId -> ad domain (for future breakdown; harmless if unused by the popup).
 const RULE_DOMAIN = {};
 async function loadRuleMap() {
   try {
-    const res = await fetch(chrome.runtime.getURL("rules.json"));
-    const rules = await res.json();
+    const rules = await (await fetch(chrome.runtime.getURL("rules.json"))).json();
     for (const r of rules) {
       const f = (r.condition && r.condition.urlFilter) || "";
       const m = f.match(/\|\|([^\^]+)\^/);
-      RULE_DOMAIN[r.id] = m ? m[1] : f.replace(/[|^*]/g, "") || "other";
+      RULE_DOMAIN[r.id] = m ? m[1] : "other";
     }
   } catch {}
 }
 
-let lastStamp = 0;
-async function pollMatches() {
-  try {
-    if (!Object.keys(RULE_DOMAIN).length) await loadRuleMap();
-    const res = await chrome.declarativeNetRequest.getMatchedRules({});
-    const matches = (res && res.rulesMatchedInfo) || [];
-    if (!matches.length) return;
-    const store = await chrome.storage.local.get(["totalBlocked", "perDomain"]);
-    let total = store.totalBlocked || 0;
-    const per = store.perDomain || {};
-    let newest = lastStamp;
-    for (const info of matches) {
-      if (info.timeStamp <= lastStamp) continue;
-      newest = Math.max(newest, info.timeStamp);
-      total += 1;
-      const d = RULE_DOMAIN[info.rule.ruleId] || "other";
-      per[d] = (per[d] || 0) + 1;
-    }
-    lastStamp = newest;
-    await chrome.storage.local.set({ totalBlocked: total, perDomain: per });
-  } catch {}
+const tabCounts = {}; // tabId -> blocked this page-load (live)
+let pendingTotal = 0;
+let flushTimer = null;
+
+function flushSoon() {
+  if (flushTimer) return;
+  flushTimer = setTimeout(async () => {
+    flushTimer = null;
+    if (pendingTotal <= 0) return;
+    const add = pendingTotal;
+    pendingTotal = 0;
+    const s = await chrome.storage.local.get("totalBlocked");
+    await chrome.storage.local.set({ totalBlocked: (s.totalBlocked || 0) + add });
+  }, 1200);
 }
+
+function countBlock(tabId) {
+  if (PAUSED) return;
+  pendingTotal++;
+  if (tabId != null && tabId >= 0) tabCounts[tabId] = (tabCounts[tabId] || 0) + 1;
+  flushSoon();
+}
+
+// Real-time, accurate (unpacked/dev builds).
+try {
+  if (chrome.declarativeNetRequest.onRuleMatchedDebug) {
+    chrome.declarativeNetRequest.onRuleMatchedDebug.addListener((info) => {
+      countBlock(info.request && info.request.tabId);
+    });
+  }
+} catch {}
+
+// Reset a tab's live count when it navigates; drop it when it closes.
+chrome.tabs.onUpdated.addListener((tabId, info) => {
+  if (info.status === "loading") tabCounts[tabId] = 0;
+});
+chrome.tabs.onRemoved.addListener((tabId) => {
+  delete tabCounts[tabId];
+});
 
 function init() {
   applyBadge();
   loadRuleMap();
-  chrome.alarms.create("poll", { periodInMinutes: 1 });
-  pollMatches();
 }
 chrome.runtime.onInstalled.addListener(init);
 chrome.runtime.onStartup.addListener(init);
 init();
 
-chrome.alarms.onAlarm.addListener((a) => {
-  if (a.name === "poll") pollMatches();
-});
-
-// Content scripts report cosmetic / YouTube removals so they count too.
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg && msg.type === "NOADS_REMOVED" && msg.n > 0) {
-    (async () => {
-      const store = await chrome.storage.local.get(["totalBlocked", "perDomain"]);
-      const per = store.perDomain || {};
-      per["page elements (hidden)"] = (per["page elements (hidden)"] || 0) + msg.n;
-      await chrome.storage.local.set({
-        totalBlocked: (store.totalBlocked || 0) + msg.n,
-        perDomain: per,
-      });
-    })();
+  // Cosmetic / YouTube removals count toward the all-time total too.
+  if (msg && msg.type === "NOADS_REMOVED" && msg.n > 0 && !PAUSED) {
+    pendingTotal += msg.n;
+    flushSoon();
   }
-  if (msg && msg.type === "NOADS_POLL_NOW") {
-    pollMatches().then(() => sendResponse({ ok: true }));
-    return true;
+  // Popup asks for the active tab's live count.
+  if (msg && msg.type === "NOADS_TAB_COUNT") {
+    sendResponse({ count: tabCounts[msg.tabId] || 0 });
   }
+  return false;
 });
 
-// Global pause (from the popup toggle) enables/disables the whole ruleset.
+// The on/off switch: disable/enable the whole ruleset, stop counting, clear badge.
 chrome.storage.onChanged.addListener(async (changes, area) => {
   if (area !== "local" || !("paused" in changes)) return;
-  const paused = changes.paused.newValue === true;
+  PAUSED = changes.paused.newValue === true;
   try {
     await chrome.declarativeNetRequest.updateEnabledRulesets(
-      paused ? { disableRulesetIds: ["ads"] } : { enableRulesetIds: ["ads"] }
+      PAUSED ? { disableRulesetIds: ["ads"] } : { enableRulesetIds: ["ads"] }
     );
   } catch {}
-  chrome.action.setBadgeText({ text: paused ? "off" : "" });
+  try {
+    // Off = truly off: turn the auto badge off and show "off".
+    chrome.declarativeNetRequest.setExtensionActionOptions({ displayActionCountAsBadgeText: !PAUSED });
+  } catch {}
+  chrome.action.setBadgeText({ text: PAUSED ? "off" : "" });
 });
