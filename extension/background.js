@@ -349,6 +349,22 @@ chrome.commands.onCommand.addListener(async (command) => {
     } catch (e) {
       /* some pages (chrome://, the store) can't host a panel — nothing to do */
     }
+    return;
+  }
+  // Alt+Shift+F — make the AgentFury bar appear on the current page, asking
+  // about whatever is selected (empty & focused if nothing is). Reuses the
+  // same content-script entry point as the right-click "Ask AgentFury" menu.
+  if (command === "trigger-ask") {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab && tab.id != null) {
+        chrome.tabs
+          .sendMessage(tab.id, { type: "AF_OPEN_SELECTION", text: "" })
+          .catch(() => {});
+      }
+    } catch (e) {
+      /* content script not present on this page (chrome://, store) — ignore */
+    }
   }
 });
 

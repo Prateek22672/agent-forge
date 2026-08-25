@@ -138,10 +138,7 @@ function initials(user) {
 function renderApp() {
   app.innerHTML = `
     <div class="header">
-      <span class="brand">
-        <span class="brand-mark">AF</span>
-        <span class="brand-name">AgentFury</span>
-      </span>
+      <span class="brand-name">AgentFury</span>
       <div class="header-right">
         <button id="themeToggle" class="iconBtn" title="Switch theme">…</button>
         <span class="avatar" title="${escapeHtml(state.user?.email || "")}">${initials(state.user)}</span>
@@ -252,12 +249,15 @@ async function renderChat() {
       return;
     }
     msgsEl.innerHTML = chatHistory
-      .map(
-        (m) =>
-          `<div class="chat-bubble ${m.role === "user" ? "me" : "ai"}">${
-            m.content === "…" ? '<span class="chat-typing"><i></i><i></i><i></i></span>' : escapeHtml(m.content).replace(/\n/g, "<br>")
-          }</div>`
-      )
+      .map((m) => {
+        const body =
+          m.content === "…"
+            ? '<span class="chat-typing"><i></i><i></i><i></i></span>'
+            : m.role === "user"
+            ? escapeHtml(m.content).replace(/\n/g, "<br>")
+            : mdToHtml(m.content); // render the assistant's markdown (tables, bold, lists)
+        return `<div class="chat-bubble ${m.role === "user" ? "me" : "ai"}">${body}</div>`;
+      })
       .join("");
     msgsEl.scrollTop = msgsEl.scrollHeight;
   };
@@ -688,11 +688,22 @@ async function renderExtSettings() {
       <div class="row">
         <button id="privacyToggle" class="secondary">…</button>
       </div>
-      <div class="sub" style="margin-top:8px">
-        <a href="#" id="captureLab" style="color:var(--af-muted);text-decoration:underline">Open capture-privacy experiment →</a>
+    </div>
+    <div class="item">
+      <div class="title">Keyboard shortcuts</div>
+      <div class="sub" style="line-height:1.7">
+        <b>Alt+Shift+F</b> — show the AgentFury bar on the page<br>
+        <b>Alt+Shift+A</b> — open this side panel<br>
+        <b>Alt+Shift+H</b> — privacy mode (hide on-page UI)
+      </div>
+      <div class="row">
+        <button type="button" id="customizeKeys" class="secondary">Customize shortcuts</button>
       </div>
     </div>
     <div class="msg">Toggles take effect immediately on open tabs — no refresh needed.</div>`;
+
+  const ck = document.getElementById("customizeKeys");
+  if (ck) ck.onclick = () => chrome.tabs.create({ url: "chrome://extensions/shortcuts" });
 
   const pBtn = document.getElementById("privacyToggle");
   const paintPrivacy = (on) => {
@@ -785,6 +796,83 @@ function escapeHtml(s) {
   const d = document.createElement("div");
   d.textContent = s ?? "";
   return d.innerHTML;
+}
+
+// Lightweight, XSS-safe markdown → HTML for chat bubbles. Escapes first, then
+// adds tags — so the AI's tables/bold/lists render cleanly instead of showing
+// raw "| From | Subject |" and "**text**". Handles the cases the assistant
+// actually produces: tables, headers, bold/italic/code, links, and lists.
+function mdToHtml(src) {
+  const esc = (s) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const inline = (t) =>
+    esc(t)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(?!\s)([^*]+?)\*/g, "<em>$1</em>")
+      .replace(/`([^`]+?)`/g, "<code>$1</code>")
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  const lines = String(src).replace(/\r/g, "").split("\n");
+  const isSep = (l) => /^\s*\|?[\s:|-]+\|?\s*$/.test(l) && l.includes("-");
+  const cells = (l) => {
+    const c = l.split("|").map((s) => s.trim());
+    if (c[0] === "") c.shift();
+    if (c.length && c[c.length - 1] === "") c.pop();
+    return c;
+  };
+  let html = "";
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.includes("|") && i + 1 < lines.length && isSep(lines[i + 1])) {
+      const header = cells(line);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && lines[i].includes("|")) rows.push(cells(lines[i++]));
+      html +=
+        '<div class="md-table-wrap"><table class="md-table"><thead><tr>' +
+        header.map((h) => `<th>${inline(h)}</th>`).join("") +
+        "</tr></thead><tbody>" +
+        rows.map((r) => "<tr>" + r.map((c) => `<td>${inline(c)}</td>`).join("") + "</tr>").join("") +
+        "</tbody></table></div>";
+      continue;
+    }
+    const h = line.match(/^(#{1,4})\s+(.*)/);
+    if (h) {
+      html += `<div class="md-h">${inline(h[2])}</div>`;
+      i++;
+      continue;
+    }
+    if (/^\s*[-*]\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) items.push(inline(lines[i++].replace(/^\s*[-*]\s+/, "")));
+      html += "<ul>" + items.map((x) => `<li>${x}</li>`).join("") + "</ul>";
+      continue;
+    }
+    if (/^\s*\d+\.\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) items.push(inline(lines[i++].replace(/^\s*\d+\.\s+/, "")));
+      html += "<ol>" + items.map((x) => `<li>${x}</li>`).join("") + "</ol>";
+      continue;
+    }
+    if (line.trim() === "") {
+      i++;
+      continue;
+    }
+    const para = [line];
+    i++;
+    while (
+      i < lines.length &&
+      lines[i].trim() !== "" &&
+      !/^\s*[-*]\s+/.test(lines[i]) &&
+      !/^\s*\d+\.\s+/.test(lines[i]) &&
+      !/^#{1,4}\s/.test(lines[i]) &&
+      !(lines[i].includes("|") && i + 1 < lines.length && isSep(lines[i + 1]))
+    ) {
+      para.push(lines[i++]);
+    }
+    html += `<p>${para.map(inline).join("<br>")}</p>`;
+  }
+  return html;
 }
 
 init();
