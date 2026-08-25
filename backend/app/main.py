@@ -23,6 +23,7 @@ from app.api import (
     connections,
     emails,
     ext_auth_api,
+    files_api,
     priority_api,
     push_api,
     settings_api,
@@ -130,6 +131,7 @@ app.include_router(calendar_api.router)
 app.include_router(write_api.router)
 app.include_router(ext_auth_api.router)
 app.include_router(telemetry_api.router)
+app.include_router(files_api.router)
 
 
 @app.get("/api/health")

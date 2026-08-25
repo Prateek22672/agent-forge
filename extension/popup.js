@@ -44,6 +44,15 @@ function send(msg, timeoutMs = 45000) {
 }
 const api = (path, method = "GET", body) => send({ type: "API_CALL", path, method, body });
 
+// Upload a file to the backend for text extraction (PDF/Word/Excel/CSV/text).
+// The file's bytes go through the background worker (which holds the token and
+// does the multipart POST). Returns {ok, data:{text, chars, pages, truncated}}.
+async function extractFile(file) {
+  const bytes = await file.arrayBuffer();
+  return send({ type: "UPLOAD_EXTRACT", name: file.name, bytes }, 60000);
+}
+const FILE_ACCEPT = ".pdf,.docx,.xlsx,.xlsm,.csv,.txt,.md";
+
 async function init() {
   send({ type: "WARM_UP" }); // wake a sleeping backend early
   const status = await send({ type: "GET_TOKEN_STATUS" });
@@ -244,6 +253,8 @@ const ICONS = {
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
   expand:
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>',
+  attach:
+    '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.05l-8.5 8.5a5 5 0 0 1-7.07-7.07l8.49-8.49a3.33 3.33 0 0 1 4.71 4.71l-8.5 8.49a1.67 1.67 0 0 1-2.35-2.35l7.78-7.78"/></svg>',
 };
 
 // ---------- Chat: a real multi-turn conversation with your agent ----------
@@ -253,20 +264,56 @@ const ICONS = {
 // reply to…". Depth over speed; that's the split.
 let chatHistory = []; // {role, content} for this panel session
 let chatConvoId = null; // server conversation id → real memory across turns
+let chatAttached = null; // {name, text} of an uploaded file to include as context
 
 async function renderChat() {
   const panel = document.getElementById("panel");
   panel.innerHTML = `
     <div id="chatMsgs" class="chat-msgs"></div>
+    <div class="chat-file-chip" id="chatFileChip" hidden></div>
     <div class="af-ask-row">
+      <button type="button" id="attachBtn" class="af-ask-attach" title="Attach a PDF/Word/Excel/text file">${ICONS.attach}</button>
+      <input type="file" id="chatFile" accept="${FILE_ACCEPT}" hidden />
       <textarea id="input" placeholder="Message your assistant…" rows="1"></textarea>
       <button id="askBtn" class="af-ask-send" title="Send" aria-label="Send">${ICONS.send}</button>
     </div>
-    <div class="chat-hint">It can search, remind, and draft — just ask. <a href="#" id="openFullChat">Open full app ↗</a></div>`;
+    <div class="chat-hint">Attach a file or just ask — it can search, remind, and draft. <a href="#" id="openFullChat">Open full app ↗</a></div>`;
 
   const msgsEl = document.getElementById("chatMsgs");
   const inputEl = document.getElementById("input");
   const btn = document.getElementById("askBtn");
+  const chipEl = document.getElementById("chatFileChip");
+  const fileEl = document.getElementById("chatFile");
+
+  // Attached-file context: its extracted text rides along with the next
+  // message so you can ask questions about a PDF/doc without pasting it.
+  document.getElementById("attachBtn").onclick = () => fileEl.click();
+  fileEl.onchange = async () => {
+    const f = fileEl.files[0];
+    if (!f) return;
+    chipEl.hidden = false;
+    chipEl.innerHTML = `Reading ${escapeHtml(f.name)}…`;
+    const r = await extractFile(f);
+    if (!r.ok) {
+      chipEl.innerHTML = `<span class="cf-err">Couldn't read ${escapeHtml(f.name)}</span> <button type="button" id="cfClear">✕</button>`;
+      document.getElementById("cfClear").onclick = clearAttached;
+      return;
+    }
+    chatAttached = { name: r.data.name || f.name, text: r.data.text || "" };
+    chipEl.innerHTML = `📎 ${escapeHtml(chatAttached.name)} · ${r.data.chars.toLocaleString()} chars <button type="button" id="cfClear" title="Remove">✕</button>`;
+    document.getElementById("cfClear").onclick = clearAttached;
+  };
+  function clearAttached() {
+    chatAttached = null;
+    chipEl.hidden = true;
+    chipEl.innerHTML = "";
+    fileEl.value = "";
+  }
+  if (chatAttached) {
+    chipEl.hidden = false;
+    chipEl.innerHTML = `📎 ${escapeHtml(chatAttached.name)} <button type="button" id="cfClear" title="Remove">✕</button>`;
+    document.getElementById("cfClear").onclick = clearAttached;
+  }
 
   const first = (state.user?.name || state.user?.email || "").split(/[\s@]/)[0];
   const paintMsgs = () => {
@@ -342,6 +389,12 @@ async function renderChat() {
   const sendMsg = async () => {
     const text = inputEl.value.trim();
     if (!text) return;
+    // Fold an attached file's text into the message sent to the model (as
+    // context), but show only what the user typed in their bubble.
+    let message = text;
+    if (chatAttached && chatAttached.text) {
+      message = `Document "${chatAttached.name}":\n${chatAttached.text.slice(0, 12000)}\n\n---\n${text}`;
+    }
     chatHistory.push({ role: "user", content: text });
     chatHistory.push({ role: "assistant", content: "…" });
     inputEl.value = "";
@@ -361,7 +414,7 @@ async function renderChat() {
       reply = "Couldn't load your assistant — try Open full app.";
     } else {
       const r = await api(`/agents/${assistantAgentId}/chat`, "POST", {
-        message: text,
+        message,
         conversation_id: chatConvoId, // thread it → the agent remembers the chat
       });
       if (r.ok) {
@@ -412,10 +465,46 @@ async function renderStudyKit(seed) {
 
   const renderInput = (val) => {
     shell(`
-      <div class="sk-intro">Paste notes, an article, or any text — get a summary, flashcards, and a quiz.</div>
-      <textarea id="skText" class="sk-textarea" placeholder="Paste your study material here…">${escapeHtml(val || "")}</textarea>
+      <div class="sk-intro">Upload a PDF / Word / Excel, or paste text — get a summary, flashcards, and a quiz.</div>
+      <label class="sk-drop" id="skDrop">
+        <input type="file" id="skFile" accept="${FILE_ACCEPT}" hidden />
+        <span id="skDropText">Drop a file here, or <b>browse</b> (PDF, Word, Excel, CSV, text)</span>
+      </label>
+      <textarea id="skText" class="sk-textarea" placeholder="…or paste your study material here">${escapeHtml(val || "")}</textarea>
       <button type="button" id="skGen" class="sk-gen">Generate study kit</button>
       <div class="msg" id="skMsg"></div>`);
+
+    const drop = document.getElementById("skDrop");
+    const fileEl = document.getElementById("skFile");
+    const dropText = document.getElementById("skDropText");
+    const skText = document.getElementById("skText");
+    const handleFile = async (f) => {
+      if (!f) return;
+      dropText.innerHTML = `Reading <b>${escapeHtml(f.name)}</b>…`;
+      drop.classList.add("busy");
+      const r = await extractFile(f);
+      drop.classList.remove("busy");
+      if (!r.ok) {
+        dropText.innerHTML = "Couldn't read that file — try another. <b>browse</b>";
+        document.getElementById("skMsg").textContent =
+          typeof r.error === "string" ? r.error : "Extraction failed.";
+        return;
+      }
+      skText.value = r.data.text || "";
+      dropText.innerHTML = `Loaded <b>${escapeHtml(r.data.name || f.name)}</b> · ${r.data.chars.toLocaleString()} chars${r.data.truncated ? " (trimmed)" : ""} — <b>replace</b>`;
+    };
+    fileEl.onchange = () => handleFile(fileEl.files[0]);
+    ["dragover", "dragenter"].forEach((e) =>
+      drop.addEventListener(e, (ev) => { ev.preventDefault(); drop.classList.add("over"); })
+    );
+    ["dragleave", "drop"].forEach((e) =>
+      drop.addEventListener(e, (ev) => { ev.preventDefault(); drop.classList.remove("over"); })
+    );
+    drop.addEventListener("drop", (ev) => {
+      const f = ev.dataTransfer && ev.dataTransfer.files[0];
+      if (f) handleFile(f);
+    });
+
     const gen = document.getElementById("skGen");
     gen.onclick = async () => {
       const text = document.getElementById("skText").value.trim();
