@@ -268,9 +268,29 @@ async function renderChat() {
   const inputEl = document.getElementById("input");
   const btn = document.getElementById("askBtn");
 
+  const first = (state.user?.name || state.user?.email || "").split(/[\s@]/)[0];
   const paintMsgs = () => {
     if (!chatHistory.length) {
-      msgsEl.innerHTML = `<div class="chat-empty">Ask me anything.<br><span>Try “summarize this”, “remind me to reply to Sam at 6pm”, or paste some text.</span></div>`;
+      msgsEl.innerHTML = `<div class="chat-welcome">
+        <div class="cw-hi">Hi${first ? ", " + escapeHtml(first) : ""}</div>
+        <div class="cw-sub">How can I help you study today?</div>
+        <div class="cw-tiles">
+          <button type="button" class="cw-tile" data-tpl="Make flashcards (question on the front, answer on the back) from this:\n\n">Flashcards</button>
+          <button type="button" class="cw-tile" data-tpl="Explain this simply, as if I'm new to it:\n\n">Explain simply</button>
+          <button type="button" class="cw-tile" data-tpl="Turn this into concise study notes with clear headings and bullet points:\n\n">Study notes</button>
+          <button type="button" class="cw-tile" data-tpl="Quiz me with 5 questions on this, one at a time, and wait for my answer:\n\n">Quiz me</button>
+        </div>
+        <div class="cw-tip">Tip: paste your material after picking one, or just type anything.</div>
+      </div>`;
+      msgsEl.querySelectorAll(".cw-tile").forEach((t) => {
+        t.onclick = () => {
+          inputEl.value = t.dataset.tpl;
+          inputEl.style.height = "auto";
+          inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px";
+          inputEl.focus();
+          inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+        };
+      });
       return;
     }
     msgsEl.innerHTML = chatHistory

@@ -154,7 +154,7 @@
 .af-sel-pill { --bg: rgba(22,22,26,.74); --fg:#f4f4f6; --muted:rgba(255,255,255,.5); --border:rgba(255,255,255,.1); --icon-bg:#ffffff; --icon-fg:#111214;
   -webkit-backdrop-filter: blur(22px) saturate(180%); backdrop-filter: blur(22px) saturate(180%);
   position: fixed; z-index: 2147483000; display: inline-flex; align-items: center; gap: 6px;
-  padding: 4px 11px 4px 5px; background: var(--bg); color: var(--fg);
+  padding: 4px 5px 4px 13px; background: var(--bg); color: var(--fg);
   border: 1px solid var(--border); border-radius: 999px; box-shadow: 0 6px 20px rgba(0,0,0,.30);
   cursor: pointer; font-family: -apple-system, "Segoe UI", "Inter", ui-sans-serif, system-ui, sans-serif;
   font-size: 12.5px; font-weight: 500; letter-spacing: .01em; box-sizing: border-box;
@@ -165,7 +165,7 @@
 .af-sel-pill.af-in { opacity: 1; transform: translateY(0) scale(1); }
 .af-sel-pill:hover { transform: translateY(0) scale(1.02); }
 .af-sel-pill .af-sel-icon { width: 20px; height: 20px; }
-.af-pill-label { padding-right: 2px; }
+.af-pill-label { padding-left: 1px; }
 .af-bubble { position: fixed; bottom: 22px; right: 22px; z-index: 2147483000; width: 40px; height: 40px; border-radius: 50%; background: #fff; color: #000; border: none; font-size: 11px; font-weight: 800; letter-spacing: -.02em; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.35); font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif; opacity: 0; transform: scale(.8); transition: opacity .18s ease, transform .18s cubic-bezier(.2,.8,.3,1), box-shadow .12s ease; padding: 0; }
 .af-bubble.af-in { opacity: 1; transform: scale(1); }
 .af-bubble:hover { box-shadow: 0 8px 26px rgba(0,0,0,.5); transform: scale(1.06); }
@@ -483,7 +483,7 @@
     }
     pill = document.createElement("div");
     pill.className = "af-sel-pill" + (pageIsLight() ? " af-light" : "");
-    pill.innerHTML = `<span class="af-sel-icon af-logo">AF</span><span class="af-pill-label">Ask</span>`;
+    pill.innerHTML = `<span class="af-pill-label">Ask</span><span class="af-sel-icon af-logo">AF</span>`;
     getAfRoot().appendChild(pill);
     // Position just under the selection start, clamped to the viewport.
     const m = 8;
