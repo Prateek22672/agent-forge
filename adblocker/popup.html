@@ -5,93 +5,42 @@
 <style>
   * { box-sizing: border-box; }
   body {
-    width: 320px; margin: 0; padding: 14px;
+    width: 268px; margin: 0; padding: 16px;
     font-family: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
-    font-size: 13px; background: #f2f3f6; color: #1b1c1f;
+    font-size: 13px; background: #14151a; color: #f3f4f7;
     -webkit-font-smoothing: antialiased;
   }
-  .row { display: flex; align-items: center; }
-  .card { background: #fff; border: 1px solid #e7e8ee; border-radius: 14px; padding: 14px; margin-bottom: 10px; }
-  .head { justify-content: space-between; margin-bottom: 12px; }
+  .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
   .brand { display: flex; align-items: center; gap: 9px; }
   .logo { width: 26px; height: 26px; border-radius: 8px; }
   .name { font-weight: 650; font-size: 16px; letter-spacing: -0.01em; }
 
-  /* toggle switch */
   .switch { position: relative; width: 44px; height: 26px; cursor: pointer; }
   .switch input { opacity: 0; width: 0; height: 0; }
-  .slider { position: absolute; inset: 0; background: #c9cbd4; border-radius: 999px; transition: .18s; }
-  .slider::before { content: ""; position: absolute; width: 20px; height: 20px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .18s; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+  .slider { position: absolute; inset: 0; background: rgba(255,255,255,.16); border-radius: 999px; transition: .18s; }
+  .slider::before { content: ""; position: absolute; width: 20px; height: 20px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .18s; }
   .switch input:checked + .slider { background: #5b6cf0; }
   .switch input:checked + .slider::before { transform: translateX(18px); }
 
-  .stat { text-align: center; padding: 18px 14px; }
-  .stat .num { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; color: #5b6cf0; }
-  .stat .lbl { font-size: 12px; color: #6b6d76; margin-top: 2px; }
-
-  .site { justify-content: space-between; }
-  .site .host { display: flex; align-items: center; gap: 8px; font-weight: 550; overflow: hidden; }
-  .site .host span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pill { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
-  .pill.on { background: #e7f6ee; color: #1a8f4e; }
-  .pill.off { background: #eeeef2; color: #85878f; }
-
-  .label { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #8a8c95; margin-bottom: 9px; }
-  .brk-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; font-size: 12px; }
-  .brk-row .d { color: #46474d; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
-  .brk-row .c { color: #8a8c95; font-variant-numeric: tabular-nums; }
-  .empty { color: #9a9ba3; font-size: 12px; text-align: center; padding: 6px 0; }
-
-  button.btn { width: 100%; padding: 10px; border: none; border-radius: 10px; cursor: pointer; font-size: 12.5px; font-weight: 550; font-family: inherit; }
-  .btn-primary { background: #5b6cf0; color: #fff; }
-  .btn-ghost { background: #fff; color: #1b1c1f; border: 1px solid #dcdde4; }
-  button.btn:hover { filter: brightness(.98); }
-
-  .seg { display: flex; background: #eeeef2; border-radius: 9px; padding: 3px; margin-bottom: 8px; }
-  .seg button { flex: 1; border: none; background: transparent; border-radius: 7px; padding: 6px; font-size: 12px; font-weight: 550; cursor: pointer; color: #6b6d76; font-family: inherit; }
-  .seg button.active { background: #fff; color: #1b1c1f; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
-  textarea { width: 100%; min-height: 58px; resize: vertical; border: 1px solid #dcdde4; border-radius: 9px; padding: 8px 10px; font-size: 12px; font-family: ui-monospace, "Cascadia Code", monospace; outline: none; }
-  textarea:focus { border-color: #5b6cf0; }
-  .rule { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f0f1f4; font-size: 12px; }
-  .rule:last-child { border-bottom: none; }
-  .rule .scope { font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: #85878f; background: #f0f1f4; padding: 2px 6px; border-radius: 6px; }
-  .rule .sel { font-family: ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-  .rule .x { cursor: pointer; color: #b0b1b8; }
-  .rule .x:hover { color: #e5484d; }
+  .stat { display: flex; gap: 10px; }
+  .box { flex: 1; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 16px 12px; text-align: center; }
+  .box .num { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+  .box.total .num { color: #5b6cf0; }
+  .box .lbl { font-size: 11px; color: rgba(255,255,255,.5); margin-top: 3px; }
+  .status { text-align: center; font-size: 11.5px; color: rgba(255,255,255,.45); margin-top: 14px; }
+  .status b { color: #f3f4f7; font-weight: 500; }
 </style>
 </head>
 <body>
-  <div class="row head">
+  <div class="head">
     <div class="brand"><img class="logo" src="icons/icon48.png" alt="" /><span class="name">NoAds</span></div>
-    <label class="switch"><input type="checkbox" id="power" /><span class="slider"></span></label>
+    <label class="switch"><input type="checkbox" id="power" checked /><span class="slider"></span></label>
   </div>
-
-  <div class="card stat">
-    <div class="num" id="total">0</div>
-    <div class="lbl">ads &amp; trackers blocked all-time</div>
+  <div class="stat">
+    <div class="box"><div class="num" id="current">0</div><div class="lbl">this page</div></div>
+    <div class="box total"><div class="num" id="total">0</div><div class="lbl">all-time</div></div>
   </div>
-
-  <div class="card">
-    <div class="row site">
-      <div class="host"><span id="host">this site</span></div>
-      <span class="pill on" id="siteStatus">Active</span>
-    </div>
-    <button class="btn btn-ghost" id="pauseSite" style="margin-top:10px">Pause on this site</button>
-  </div>
-
-  <div class="card">
-    <div class="label">What's been blocked</div>
-    <div id="breakdown"><div class="empty">Nothing yet — browse a bit.</div></div>
-  </div>
-
-  <div class="card">
-    <div class="label">Hide something yourself</div>
-    <div class="seg"><button id="segSite" class="active">This site</button><button id="segAll">All sites</button></div>
-    <textarea id="selInput" placeholder="One CSS selector per line, e.g.&#10;.sponsored&#10;#sidebar-ads"></textarea>
-    <button class="btn btn-primary" id="addSel" style="margin-top:8px">Add rule</button>
-    <div id="rules" style="margin-top:10px"></div>
-  </div>
-
+  <div class="status" id="status"><b>Blocking is on</b></div>
   <script src="popup.js"></script>
 </body>
 </html>
