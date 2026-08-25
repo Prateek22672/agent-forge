@@ -3,7 +3,7 @@
   "name": "AgentFury",
   "short_name": "AgentFury",
   "description": "Agent Fury: AI agent & assistant in your browser — ask about any text you select, write & fix email in Gmail, plus reminders.",
-  "version": "1.14.1",
+  "version": "1.15.0",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",

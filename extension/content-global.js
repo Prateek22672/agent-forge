@@ -69,29 +69,55 @@
   // math below needs no changes.
   const AF_CSS_TEXT = `
 .af-sel-highlight { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 2147482999; }
-.af-sel-highlight-box { position: fixed; background: rgba(124, 92, 255, .38); border-radius: 2px; }
-.af-sel-bar { position: fixed; z-index: 2147483000; display: flex; flex-direction: column; gap: 6px; padding: 7px 8px; background: #0b0b0b; border: 1px solid rgba(255,255,255,.14); border-radius: 16px; box-shadow: 0 10px 28px rgba(0,0,0,.4); font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif; max-width: 380px; min-width: 300px; opacity: 0; transform: translateY(6px) scale(.97); transition: opacity .16s ease, transform .16s cubic-bezier(.2,.8,.3,1); box-sizing: border-box; }
+.af-sel-highlight-box { position: fixed; background: rgba(124, 92, 255, .30); border-radius: 2px; }
+
+/* The bar adapts to the page: dark tokens by default, a .af-light override
+   applied at build time when the page's background is light (see pageIsLight).
+   Everything below reads these custom properties, so theming is one class. */
+.af-sel-bar {
+  --bg:#101012; --fg:#f3f3f4; --muted:rgba(255,255,255,.55); --border:rgba(255,255,255,.13);
+  --chip:rgba(255,255,255,.07); --chip-hover:rgba(255,255,255,.15); --accent:#7c5cff;
+  --icon-bg:#ffffff; --icon-fg:#111214;
+  position: fixed; z-index: 2147483000; display: flex; flex-direction: column; gap: 7px;
+  padding: 8px 9px; background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.30);
+  font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  max-width: 360px; min-width: 300px; box-sizing: border-box;
+  opacity: 0; transform: translateY(6px) scale(.98);
+  transition: opacity .15s ease, transform .15s cubic-bezier(.2,.8,.3,1);
+}
+.af-sel-bar.af-light {
+  --bg:#ffffff; --fg:#18181b; --muted:rgba(0,0,0,.55); --border:rgba(0,0,0,.11);
+  --chip:rgba(0,0,0,.045); --chip-hover:rgba(0,0,0,.09); --icon-bg:#18181b; --icon-fg:#fff;
+  box-shadow: 0 8px 30px rgba(0,0,0,.14);
+}
 .af-sel-bar * { box-sizing: border-box; }
 .af-sel-bar.af-in { opacity: 1; transform: translateY(0) scale(1); }
-.af-sel-row { display: flex; align-items: center; gap: 6px; }
-.af-sel-chips { display: flex; flex-wrap: wrap; gap: 5px; padding-left: 28px; }
-.af-sel-icon { flex-shrink: 0; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: #fff; color: #000; border-radius: 50%; font-size: 9px; font-weight: 800; letter-spacing: -.02em; }
-.af-sel-input { flex: 1; min-width: 120px; background: transparent; border: none; color: #fff; font-size: 12.5px; outline: none; font-family: inherit; padding: 0; margin: 0; }
-.af-sel-input::placeholder { color: rgba(255,255,255,.4); }
-.af-sel-chip { flex-shrink: 0; background: rgba(255,255,255,.07); color: #fff; border: 1px solid rgba(255,255,255,.14); border-radius: 999px; padding: 4px 10px; font-size: 11px; font-weight: 500; cursor: pointer; white-space: nowrap; }
-.af-sel-chip:hover { background: #fff; color: #000; border-color: #fff; }
-.af-sel-action { background: rgba(124, 92, 255, .18); border-color: rgba(124, 92, 255, .4); }
-.af-sel-action:hover { background: #7c5cff; color: #fff; border-color: #7c5cff; }
-.af-sel-send { flex-shrink: 0; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; background: #fff; color: #000; border: none; border-radius: 50%; font-size: 14px; font-weight: 700; cursor: pointer; padding: 0; }
+.af-sel-row { display: flex; align-items: center; gap: 7px; }
+.af-sel-icon { flex-shrink: 0; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: var(--icon-bg); color: var(--icon-fg); border-radius: 7px; font-size: 9px; font-weight: 800; letter-spacing: -.02em; }
+.af-sel-input { flex: 1; min-width: 110px; background: transparent; border: none; color: var(--fg); font-size: 13px; outline: none; font-family: inherit; padding: 0; margin: 0; }
+.af-sel-input::placeholder { color: var(--muted); }
+.af-ic { flex-shrink: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 8px; color: var(--muted); cursor: pointer; padding: 0; }
+.af-ic:hover { background: var(--chip); color: var(--fg); }
+.af-ic.af-ok { color: #22c55e; }
+.af-sel-send { flex-shrink: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: var(--icon-bg); color: var(--icon-fg); border: none; border-radius: 8px; cursor: pointer; padding: 0; }
 .af-sel-send:hover { opacity: .85; }
-.af-sel-answer { position: absolute; top: 100%; left: 0; margin-top: 8px; width: 340px; max-height: 220px; overflow-y: auto; background: #0b0b0b; border: 1px solid rgba(255,255,255,.14); border-radius: 12px; box-shadow: 0 10px 28px rgba(0,0,0,.4); padding: 11px 13px; font-size: 12.5px; line-height: 1.55; color: #f2f2f2; opacity: 0; transform: translateY(4px); transition: opacity .14s ease, transform .14s ease; box-sizing: border-box; }
+.af-sel-chips, .af-sel-more { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.af-sel-more { padding-top: 8px; margin-top: 1px; border-top: 1px solid var(--border); }
+.af-sel-chip { flex-shrink: 0; background: var(--chip); color: var(--fg); border: 1px solid transparent; border-radius: 9px; padding: 5px 11px; font-size: 11.5px; font-weight: 500; cursor: pointer; white-space: nowrap; font-family: inherit; }
+.af-sel-chip:hover { background: var(--chip-hover); }
+.af-more-btn { margin-left: auto; background: transparent; color: var(--muted); }
+.af-more-btn:hover { background: var(--chip); color: var(--fg); }
+.af-sel-action:hover { background: var(--accent); color: #fff; }
+.af-sel-answer { position: absolute; top: 100%; left: 0; margin-top: 8px; width: 340px; max-height: 240px; overflow-y: auto; background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,.28); padding: 12px 13px; font-size: 12.5px; line-height: 1.55; opacity: 0; transform: translateY(4px); transition: opacity .14s ease, transform .14s ease; box-sizing: border-box; }
 .af-sel-answer.af-in { opacity: 1; transform: translateY(0); }
-.af-sel-answer.af-err { color: #ff8a8a; }
+.af-sel-answer.af-err { color: #e5484d; }
 .af-sel-answer-text { margin-bottom: 8px; }
-.af-sel-spin { display: inline-block; width: 11px; height: 11px; border: 2px solid rgba(255,255,255,.25); border-top-color: #fff; border-radius: 50%; margin-right: 7px; vertical-align: -1px; animation: af-spin .7s linear infinite; }
+.af-sel-spin { display: inline-block; width: 11px; height: 11px; border: 2px solid var(--border); border-top-color: var(--fg); border-radius: 50%; margin-right: 7px; vertical-align: -1px; animation: af-spin .7s linear infinite; }
 @keyframes af-spin { to { transform: rotate(360deg); } }
-.af-copy { background: transparent; color: rgba(255,255,255,.65); border: 1px solid rgba(255,255,255,.22); border-radius: 999px; padding: 4px 11px; font-size: 11px; cursor: pointer; }
-.af-copy:hover { color: #fff; border-color: rgba(255,255,255,.55); }
+.af-copy { background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 8px; padding: 4px 11px; font-size: 11px; cursor: pointer; }
+.af-copy:hover { color: var(--fg); }
 .af-bubble { position: fixed; bottom: 22px; right: 22px; z-index: 2147483000; width: 40px; height: 40px; border-radius: 50%; background: #fff; color: #000; border: none; font-size: 11px; font-weight: 800; letter-spacing: -.02em; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.35); font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif; opacity: 0; transform: scale(.8); transition: opacity .18s ease, transform .18s cubic-bezier(.2,.8,.3,1), box-shadow .12s ease; padding: 0; }
 .af-bubble.af-in { opacity: 1; transform: scale(1); }
 .af-bubble:hover { box-shadow: 0 8px 26px rgba(0,0,0,.5); transform: scale(1.06); }
@@ -629,27 +655,61 @@
     true
   );
 
+  // Inline SVGs (currentColor, so they pick up the theme token).
+  const SVG_COPY =
+    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  const SVG_CHECK =
+    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+  const SVG_SEND =
+    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>';
+
+  // Decide light vs dark by the page's actual background luminance, so the bar
+  // blends into whatever site it's on instead of always being a dark block on
+  // a white page (the reported problem). Walks up a few ancestors to find a
+  // real (non-transparent) background; falls back to prefers-color-scheme.
+  function pageIsLight() {
+    try {
+      let el = document.body || document.documentElement;
+      for (let i = 0; el && i < 5; i++, el = el.parentElement) {
+        const c = getComputedStyle(el).backgroundColor || "";
+        const m = c.match(/rgba?\(([^)]+)\)/);
+        if (!m) continue;
+        const parts = m[1].split(",").map((n) => parseFloat(n));
+        const [r, g, b, a = 1] = parts;
+        if (a < 0.2) continue; // transparent — keep walking up
+        const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        return lum > 0.6;
+      }
+      return !(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    } catch {
+      return false;
+    }
+  }
+
   function showBar(rect, prefill, autoFocus) {
     if (!selectEnabled || privacyMode) return; // single choke point for both switches
     removeBar();
     bar = document.createElement("div");
-    bar.className = "af-sel-bar";
+    bar.className = "af-sel-bar" + (pageIsLight() ? " af-light" : "");
     bar.innerHTML = `
       <div class="af-sel-row">
         <span class="af-sel-icon">AF</span>
-        <input type="text" class="af-sel-input" placeholder="Ask AgentFury about this…" />
-        <button type="button" class="af-sel-send" title="Ask">→</button>
+        <input type="text" class="af-sel-input" placeholder="Ask about this…" />
+        <button type="button" class="af-ic af-copy-ic" title="Copy (works even where copying is blocked)">${SVG_COPY}</button>
+        <button type="button" class="af-sel-send" title="Get an AI answer (Enter)">${SVG_SEND}</button>
       </div>
       <div class="af-sel-chips">
-        <button type="button" class="af-sel-chip" data-q="Explain this simply.">Explain</button>
+        <button type="button" class="af-sel-chip" data-search="google" title="Search Google">Google</button>
+        <button type="button" class="af-sel-chip" data-search="gemini" title="Ask Gemini (Google AI Mode)">Gemini</button>
+        <button type="button" class="af-sel-chip" data-search="chatgpt" title="Ask ChatGPT">ChatGPT</button>
+        <button type="button" class="af-sel-chip af-more-btn" data-more="1">More</button>
+      </div>
+      <div class="af-sel-more" hidden>
         <button type="button" class="af-sel-chip" data-q="Summarize this concisely.">Summarize</button>
-        <button type="button" class="af-sel-chip" data-search="google" title="Search this on Google">Google</button>
-        <button type="button" class="af-sel-chip" data-search="gemini" title="Ask Google's Gemini (AI Mode) about this">Gemini</button>
-        <button type="button" class="af-sel-chip" data-copy="1" title="Copy this text — works even on sites that block copying">Copy</button>
-        <button type="button" class="af-sel-chip" data-open="1" title="Open in the AgentFury side panel — roomier for code or long text">Open ↗</button>
-        <button type="button" class="af-sel-chip af-sel-action" data-action="remind" title="Add this as a reminder">Remind</button>
-        <button type="button" class="af-sel-chip af-sel-action" data-action="note" title="Save this to your Notes — great for study highlights">Note</button>
-        <button type="button" class="af-sel-chip af-sel-action" data-action="brain" title="Save this to your Brain (personalizes the AI)">Brain</button>
+        <button type="button" class="af-sel-chip af-sel-action" data-action="note" title="Save to your Notes">Save note</button>
+        <button type="button" class="af-sel-chip af-sel-action" data-action="remind" title="Add as a reminder">Remind</button>
+        <button type="button" class="af-sel-chip af-sel-action" data-action="brain" title="Teach your AI's memory">Brain</button>
+        <button type="button" class="af-sel-chip" data-open="1" title="Open in the side panel — roomier for code or long text">Open in panel ↗</button>
       </div>
     `;
     getAfRoot().appendChild(bar);
@@ -659,19 +719,20 @@
     const input = bar.querySelector(".af-sel-input");
     enablePasteBypass(input);
     if (prefill) input.value = prefill;
-    // Only steal keyboard focus when explicitly opened to ask (right-click
-    // menu). On a plain text selection, focusing our input would hijack
-    // Ctrl+C — the browser copies from whatever has focus, so the page's
-    // highlighted text would silently fail to copy. Leave focus on the page.
     if (autoFocus) input.focus();
 
-    bar.querySelector(".af-sel-send").onclick = () => ask(input.value.trim());
+    // One smart "ask": typed question if there is one, else a merged
+    // explain+summarize default (this replaces the separate Explain/Summarize
+    // chips — one better inline answer, like a lens for text).
+    const smartAsk = () => ask(input.value.trim() || "Explain this clearly and concisely.");
+    bar.querySelector(".af-sel-send").onclick = smartAsk;
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        ask(input.value.trim());
+        smartAsk();
       }
     });
+
     bar.querySelectorAll(".af-sel-chip[data-q]").forEach((c) => {
       c.onclick = () => ask(c.dataset.q);
     });
@@ -681,34 +742,52 @@
     bar.querySelectorAll(".af-sel-chip[data-search]").forEach((c) => {
       c.onclick = () => {
         const q = encodeURIComponent(lastSelectionText.slice(0, 500));
-        // Google: normal web search. Gemini: Google Search "AI Mode" (udm=50),
-        // which is Gemini-powered and accepts a prefilled query — the standalone
-        // gemini.google.com app has no reliable URL-prefill, so this is the way
-        // to hand it the selection in one click.
+        // Google: web search. Gemini: Google "AI Mode" (udm=50), Gemini-powered
+        // and prefillable. ChatGPT: chatgpt.com/?q= prefills the prompt. These
+        // open in a new tab — their result pages can't be embedded inline
+        // (X-Frame-Options / CSP block iframing), so external is the only path.
         const url =
           c.dataset.search === "gemini"
             ? `https://www.google.com/search?udm=50&q=${q}`
+            : c.dataset.search === "chatgpt"
+            ? `https://chatgpt.com/?q=${q}`
             : `https://www.google.com/search?q=${q}`;
         window.open(url, "_blank", "noopener");
         removeBar();
       };
     });
-    const copyChip = bar.querySelector(".af-sel-chip[data-copy]");
-    if (copyChip) {
-      copyChip.onclick = async () => {
+
+    // "More" expander — reveals the secondary actions and re-positions since
+    // the bar's height changed.
+    const moreBtn = bar.querySelector('[data-more]');
+    const moreSection = bar.querySelector(".af-sel-more");
+    if (moreBtn && moreSection) {
+      moreBtn.onclick = () => {
+        const show = moreSection.hasAttribute("hidden");
+        if (show) moreSection.removeAttribute("hidden");
+        else moreSection.setAttribute("hidden", "");
+        moreBtn.textContent = show ? "Less" : "More";
+        positionBar(rect);
+      };
+    }
+
+    const copyIc = bar.querySelector(".af-copy-ic");
+    if (copyIc) {
+      copyIc.onclick = async () => {
         const ok = await forceCopy(lastSelectionText);
-        copyChip.textContent = ok ? "Copied" : "Couldn't copy";
+        copyIc.innerHTML = ok ? SVG_CHECK : SVG_COPY;
+        copyIc.classList.toggle("af-ok", ok);
         setTimeout(() => {
-          if (copyChip) copyChip.textContent = "Copy";
+          if (copyIc) {
+            copyIc.innerHTML = SVG_COPY;
+            copyIc.classList.remove("af-ok");
+          }
         }, 1400);
       };
     }
     const openChip = bar.querySelector(".af-sel-chip[data-open]");
     if (openChip) {
       openChip.onclick = () => {
-        // Hand the selection to the side panel — roomier than the inline bar
-        // for code snippets or long passages. Stash it so the panel picks it
-        // up on open (see popup.js pending-selection handling), then open it.
         try {
           chrome.storage.local.set({ af_pending_selection: lastSelectionText.slice(0, 6000) });
           chrome.runtime.sendMessage({ type: "AF_OPEN_PANEL" }).catch(() => {});
