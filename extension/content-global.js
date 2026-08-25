@@ -121,8 +121,10 @@
 .af-sel-answer.af-in { opacity: 1; transform: translateY(0); }
 .af-sel-answer.af-err { color: #e5484d; }
 .af-sel-answer-text { margin-bottom: 8px; white-space: normal; }
-.af-verdict { margin-bottom: 10px; }
-.af-sources-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 4px; }
+.af-verdict { margin-bottom: 8px; }
+.af-src-toggle { display: block; margin-top: 6px; background: transparent; color: var(--muted); border: none; padding: 2px 0; font-size: 11px; font-weight: 600; cursor: pointer; }
+.af-src-toggle:hover { color: var(--fg); }
+.af-src-list { margin-top: 4px; }
 .af-code-wrap { position: relative; margin: 6px 0 10px; }
 .af-code { margin: 0; padding: 10px 11px; background: rgba(127,127,127,.14); border: 1px solid var(--border); border-radius: 8px; font-family: ui-monospace, "Cascadia Code", "Consolas", monospace; font-size: 11.5px; line-height: 1.5; overflow-x: auto; white-space: pre; }
 .af-code-copy { position: absolute; top: 6px; right: 6px; background: var(--bg); color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; font-size: 10.5px; cursor: pointer; }
@@ -649,30 +651,62 @@
   // "search appears here" experience inline instead of redirecting to a new
   // tab. Results come from our backend's free web search (ddgs), so this
   // costs zero LLM/Groq credits. Clicking a result opens that page (expected).
+  // Answer-first: the AI verdict is the hero; the raw web sources collapse into
+  // a small "Sources (N)" toggle, hidden by default, so the user sees the
+  // answer — not a wall of links to sift.
   function showResults(results, verdict) {
     if (!bar) return;
     const box = ensureAnswerBox();
     box.classList.remove("af-err");
-    if ((!results || !results.length) && !verdict) {
-      box.innerHTML = `<div class="af-sel-answer-text">No web results — try Answer instead.</div>`;
+    box.innerHTML = "";
+
+    if (verdict && verdict.trim()) {
+      const v = document.createElement("div");
+      v.className = "af-verdict";
+      renderRich(v, verdict); // supports code blocks in the verdict too
+      box.appendChild(v);
+      const copyBtn = document.createElement("button");
+      copyBtn.type = "button";
+      copyBtn.className = "af-copy";
+      copyBtn.textContent = "Copy";
+      copyBtn.onclick = () => {
+        navigator.clipboard.writeText(verdict).catch(() => {});
+        copyBtn.textContent = "Copied";
+        setTimeout(() => (copyBtn.textContent = "Copy"), 1400);
+      };
+      box.appendChild(copyBtn);
+    } else if (!results || !results.length) {
+      box.innerHTML = `<div class="af-sel-answer-text">No answer — try the Answer button.</div>`;
       fitAnswerBox();
       return;
     }
-    const verdictHtml = verdict
-      ? `<div class="af-verdict">${escapeHtml(verdict).replace(/\n/g, "<br>")}</div>`
-      : "";
-    const sourcesHtml = (results || [])
-      .map(
-        (r) => `
-      <a class="af-result" href="${safeUrl(r.url)}" target="_blank" rel="noopener noreferrer">
-        <div class="af-result-title">${escapeHtml(r.title || prettyUrl(r.url))}</div>
-        <div class="af-result-url">${escapeHtml(prettyUrl(r.url))}</div>
-        <div class="af-result-snippet">${escapeHtml((r.snippet || "").slice(0, 180))}</div>
-      </a>`
-      )
-      .join("");
-    const label = results && results.length ? `<div class="af-sources-label">Sources</div>` : "";
-    box.innerHTML = verdictHtml + label + sourcesHtml;
+
+    if (results && results.length) {
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "af-src-toggle";
+      toggle.textContent = `Sources (${results.length})`;
+      const list = document.createElement("div");
+      list.className = "af-src-list";
+      list.hidden = true; // collapsed by default
+      list.innerHTML = results
+        .map(
+          (r) => `
+        <a class="af-result" href="${safeUrl(r.url)}" target="_blank" rel="noopener noreferrer">
+          <div class="af-result-title">${escapeHtml(r.title || prettyUrl(r.url))}</div>
+          <div class="af-result-url">${escapeHtml(prettyUrl(r.url))}</div>
+          <div class="af-result-snippet">${escapeHtml((r.snippet || "").slice(0, 160))}</div>
+        </a>`
+        )
+        .join("");
+      toggle.onclick = () => {
+        list.hidden = !list.hidden;
+        toggle.textContent = (list.hidden ? "Sources" : "Hide sources") + ` (${results.length})`;
+        fitAnswerBox();
+      };
+      box.appendChild(toggle);
+      box.appendChild(list);
+    }
     fitAnswerBox();
   }
 
@@ -704,7 +738,15 @@
       showAnswer(friendlyError(r), true);
       return;
     }
-    showResults(r.data && r.data.results, r.data && r.data.answer);
+    const answer = r.data && r.data.answer;
+    const results = r.data && r.data.results;
+    // If the web synthesis came back empty (junk/no results), fall back to a
+    // pure AI answer so the user is never left with nothing useful.
+    if (!answer || !answer.trim()) {
+      await ask("Respond to the highlighted text");
+      return;
+    }
+    showResults(results, answer);
   }
 
   // Selection-bar answers go through the FAST /write/answer endpoint — one
