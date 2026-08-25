@@ -203,7 +203,7 @@ def _test_groq_key(key: str) -> tuple[bool, str]:
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {key}"},
             json={
-                "model": "llama-3.1-8b-instant",
+                "model": "openai/gpt-oss-20b",
                 "messages": [{"role": "user", "content": "ping"}],
                 "max_tokens": 1,
             },

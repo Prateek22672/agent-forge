@@ -21,15 +21,13 @@ from app.config import settings
 from app import runtime_settings
 
 # Friendly catalogue shown in the UI. All are free on Groq's tier.
-# NOTE on tool calling: the GPT-OSS and Llama-3.1 models emit well-formed tool
-# calls reliably. llama-3.3-70b is strong at prose but occasionally produces a
-# malformed tool call that Groq rejects (tool_use_failed) — so it's offered, but
-# not the default, and the runtime has a fallback for when any model slips up.
+# NOTE: Groq deprecated its Llama chat models (llama-3.1-8b-instant and
+# llama-3.3-70b-versatile) in mid-2026 — calling them now returns
+# model_not_found. The GPT-OSS models are the supported path and emit
+# well-formed tool calls reliably, so everything runs on those.
 AVAILABLE_MODELS: dict[str, str] = {
-    "openai/gpt-oss-20b": "GPT-OSS 20B — reliable tool calls, great all-round (default)",
+    "openai/gpt-oss-20b": "GPT-OSS 20B — reliable tool calls, fast, great all-round (default)",
     "openai/gpt-oss-120b": "GPT-OSS 120B — strongest open-weight, reliable tools",
-    "llama-3.1-8b-instant": "Llama 3.1 8B — fastest & cheapest, reliable tools",
-    "llama-3.3-70b-versatile": "Llama 3.3 70B — best prose, occasional tool hiccups",
 }
 
 
@@ -109,6 +107,25 @@ def gemini_available() -> bool:
     return bool(_gemini_key())
 
 
+# Groq retired these mid-2026; anything still asking for one (a stale
+# default_model setting, an old agent row) is transparently remapped so it
+# keeps working instead of 500ing with model_not_found.
+_DEPRECATED_MODELS = {
+    "llama-3.1-8b-instant": "openai/gpt-oss-20b",
+    "llama-3.3-70b-versatile": "openai/gpt-oss-120b",
+    "llama3-8b-8192": "openai/gpt-oss-20b",
+    "llama3-70b-8192": "openai/gpt-oss-120b",
+    "mixtral-8x7b-32768": "openai/gpt-oss-20b",
+}
+
+
+def _norm_model(model: str | None) -> str:
+    m = (model or "").strip()
+    if not m:
+        m = runtime_settings.get("default_model") or "openai/gpt-oss-20b"
+    return _DEPRECATED_MODELS.get(m, m)
+
+
 def get_llm(model: str | None = None, temperature: float = 0.7):
     """Return the PRIMARY chat model for the active provider.
 
@@ -129,9 +146,7 @@ def get_llm(model: str | None = None, temperature: float = 0.7):
             return _cached_gemini(settings.gemini_model, temperature, gk)
 
     # Default: Groq, spreading load across the key pool.
-    if not model:
-        model = runtime_settings.get("default_model")
-    return _cached_groq(model, temperature, _next_groq_key())
+    return _cached_groq(_norm_model(model), temperature, _next_groq_key())
 
 
 def get_groq(model: str, temperature: float = 0.2):
@@ -139,15 +154,18 @@ def get_groq(model: str, temperature: float = 0.2):
     keys. Used by internal features that need a particular model for accuracy."""
     if not key_manager.groq_keys():
         return None
-    return _cached_groq(model, temperature, _next_groq_key())
+    return _cached_groq(_norm_model(model), temperature, _next_groq_key())
 
 
 def get_fast_groq(temperature: float = 0.4):
-    """A small fast Groq model for INTERNAL helpers (e.g. follow-up suggestions),
-    independent of the user's selected provider so it stays cheap and reliable."""
+    """A fast Groq model for INTERNAL helpers (follow-up suggestions, the
+    selection-bar answer, brain-fact extraction, email polish), independent of
+    the user's selected provider so it stays cheap and reliable. Uses
+    gpt-oss-20b — Groq deprecated the old llama-*-instant fast models, and
+    20B is both supported and fast on Groq's hardware."""
     if not key_manager.groq_keys():
         return None
-    return _cached_groq("llama-3.1-8b-instant", temperature, _next_groq_key())
+    return _cached_groq("openai/gpt-oss-20b", temperature, _next_groq_key())
 
 
 def get_failover_llms(temperature: float = 0.7) -> list:
