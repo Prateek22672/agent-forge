@@ -39,6 +39,88 @@ def web_search_inline(
         return {"results": []}
 
 
+class StudyKitRequest(BaseModel):
+    text: str = ""
+
+
+@router.post("/studykit")
+def study_kit(
+    payload: StudyKitRequest,
+    user: User = Depends(get_current_user),
+    _: None = Depends(rate_limit(15, 60)),
+):
+    """The flagship study feature: turn any text (notes, an article, a
+    selection) into a structured study kit — a short summary, flashcards, and a
+    multiple-choice quiz — returned as JSON the extension renders as interactive
+    flip-cards and a quiz. One model call; validated + repaired JSON so the UI
+    always gets usable data."""
+    import json
+    import re
+
+    from app.llm.router import get_fast_groq
+
+    text = (payload.text or "").strip()
+    if len(text) < 20:
+        raise HTTPException(400, "Give me a bit more text to work with.")
+    text = text[:8000]
+
+    prompt = (
+        "From the STUDY TEXT below, produce a study kit as STRICT JSON only "
+        "(no prose, no markdown fences). Shape:\n"
+        '{"summary": "3-4 sentence summary", '
+        '"flashcards": [{"front": "question/term", "back": "answer/definition"}], '
+        '"quiz": [{"question": "...", "options": ["a","b","c","d"], "answer": 0}]}\n'
+        "Rules: 6-10 flashcards, 4-6 quiz questions, each quiz has exactly 4 "
+        "options, `answer` is the 0-based index of the correct option. Base "
+        "everything ONLY on the text. Output JSON and nothing else.\n\n"
+        f"STUDY TEXT:\n{text}"
+    )
+
+    def _extract_json(s: str):
+        s = s.strip()
+        s = re.sub(r"^```(?:json)?|```$", "", s.strip(), flags=re.MULTILINE).strip()
+        start, end = s.find("{"), s.rfind("}")
+        if start != -1 and end != -1:
+            s = s[start : end + 1]
+        return json.loads(s)
+
+    last_exc = None
+    for _attempt in range(3):
+        try:
+            llm = get_fast_groq(0.3)
+            if llm is None:
+                raise HTTPException(503, "No model available right now.")
+            out = llm.invoke(prompt)
+            raw = out.content if isinstance(out.content, str) else str(out.content)
+            data = _extract_json(raw)
+            # Normalize/validate so the UI never breaks on a malformed field.
+            cards = [
+                {"front": str(c.get("front", "")).strip(), "back": str(c.get("back", "")).strip()}
+                for c in (data.get("flashcards") or [])
+                if c.get("front") and c.get("back")
+            ][:10]
+            quiz = []
+            for q in (data.get("quiz") or [])[:6]:
+                opts = [str(o).strip() for o in (q.get("options") or []) if str(o).strip()][:4]
+                if q.get("question") and len(opts) == 4:
+                    ans = q.get("answer", 0)
+                    ans = ans if isinstance(ans, int) and 0 <= ans < 4 else 0
+                    quiz.append({"question": str(q["question"]).strip(), "options": opts, "answer": ans})
+            if not cards and not quiz:
+                raise ValueError("empty kit")
+            return {
+                "summary": str(data.get("summary", "")).strip(),
+                "flashcards": cards,
+                "quiz": quiz,
+            }
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            continue
+    raise HTTPException(503, f"Couldn't build a study kit — try again. ({last_exc})")
+
+
 class QuickAnswer(BaseModel):
     text: str = ""      # the selected text
     question: str = ""  # optional user question about it

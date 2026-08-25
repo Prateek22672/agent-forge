@@ -274,10 +274,14 @@ async function renderChat() {
       msgsEl.innerHTML = `<div class="chat-welcome">
         <div class="cw-hi">Hi${first ? ", " + escapeHtml(first) : ""}</div>
         <div class="cw-sub">How can I help you study today?</div>
+        <button type="button" class="cw-hero" id="cwStudyKit">
+          <span class="cw-hero-title">Make a Study Kit ✦</span>
+          <span class="cw-hero-sub">Paste notes → instant summary, flashcards &amp; a quiz</span>
+        </button>
         <div class="cw-tiles">
-          <button type="button" class="cw-tile" data-tpl="Make flashcards (question on the front, answer on the back) from this:\n\n">Flashcards</button>
           <button type="button" class="cw-tile" data-tpl="Explain this simply, as if I'm new to it:\n\n">Explain simply</button>
           <button type="button" class="cw-tile" data-tpl="Turn this into concise study notes with clear headings and bullet points:\n\n">Study notes</button>
+          <button type="button" class="cw-tile" data-tpl="Summarize the key points of this concisely:\n\n">Summarize</button>
           <button type="button" class="cw-tile" data-tpl="Quiz me with 5 questions on this, one at a time, and wait for my answer:\n\n">Quiz me</button>
         </div>
         <div class="cw-tip">Tip: paste your material after picking one, or just type anything.</div>
@@ -291,6 +295,8 @@ async function renderChat() {
           inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
         };
       });
+      const skTile = msgsEl.querySelector("#cwStudyKit");
+      if (skTile) skTile.onclick = () => renderStudyKit(inputEl.value.trim());
       return;
     }
     msgsEl.innerHTML = chatHistory
@@ -379,6 +385,123 @@ async function renderChat() {
       sendMsg();
     }
   });
+}
+
+// ---------- Study Kit: the flagship — text → summary + flashcards + quiz -----
+// Turns any notes/article/selection into an interactive study kit. Most AI
+// extensions only chat; this MAKES study material and lets you drill it.
+async function renderStudyKit(seed) {
+  const panel = document.getElementById("panel");
+  let data = null;
+  let cardIdx = 0;
+  let flipped = false;
+  let quizAnswers = {};
+
+  const shell = (inner) => {
+    panel.innerHTML = `
+      <div class="sk-head">
+        <button type="button" class="sk-back" id="skBack">‹ Back</button>
+        <span class="sk-title">Study Kit</span>
+      </div>
+      <div class="sk-body">${inner}</div>`;
+    document.getElementById("skBack").onclick = () => {
+      state.tab = "chat";
+      renderApp();
+    };
+  };
+
+  const renderInput = (val) => {
+    shell(`
+      <div class="sk-intro">Paste notes, an article, or any text — get a summary, flashcards, and a quiz.</div>
+      <textarea id="skText" class="sk-textarea" placeholder="Paste your study material here…">${escapeHtml(val || "")}</textarea>
+      <button type="button" id="skGen" class="sk-gen">Generate study kit</button>
+      <div class="msg" id="skMsg"></div>`);
+    const gen = document.getElementById("skGen");
+    gen.onclick = async () => {
+      const text = document.getElementById("skText").value.trim();
+      const msg = document.getElementById("skMsg");
+      if (text.length < 20) {
+        msg.textContent = "Add a bit more text to work with.";
+        return;
+      }
+      gen.disabled = true;
+      gen.textContent = "Building your kit…";
+      msg.textContent = "";
+      const r = await api("/write/studykit", "POST", { text });
+      if (!r.ok) {
+        gen.disabled = false;
+        gen.textContent = "Generate study kit";
+        msg.textContent = r.timedOut ? "Server waking up — try again." : "Couldn't generate — try again.";
+        return;
+      }
+      data = r.data;
+      cardIdx = 0;
+      flipped = false;
+      quizAnswers = {};
+      renderKit();
+    };
+  };
+
+  const renderKit = () => {
+    const cards = data.flashcards || [];
+    const quiz = data.quiz || [];
+    let html = "";
+    if (data.summary) {
+      html += `<div class="af-section-label">Summary</div><div class="sk-summary">${escapeHtml(data.summary)}</div>`;
+    }
+    if (cards.length) {
+      const c = cards[cardIdx];
+      html += `<div class="af-section-label">Flashcards</div>
+        <div class="sk-card ${flipped ? "flipped" : ""}" id="skCard">
+          <div class="sk-card-tag">${flipped ? "Answer" : "Question"} · ${cardIdx + 1}/${cards.length}</div>
+          <div class="sk-card-text">${escapeHtml(flipped ? c.back : c.front)}</div>
+          <div class="sk-card-hint">Click to ${flipped ? "see the question" : "reveal the answer"}</div>
+        </div>
+        <div class="sk-card-nav">
+          <button type="button" class="secondary" id="skPrev">‹ Prev</button>
+          <button type="button" class="secondary" id="skNext">Next ›</button>
+        </div>`;
+    }
+    if (quiz.length) {
+      const answered = Object.keys(quizAnswers).length;
+      const correct = quiz.filter((q, qi) => quizAnswers[qi] === q.answer).length;
+      html += `<div class="af-section-label">Quiz${answered === quiz.length ? ` · ${correct}/${quiz.length}` : ""}</div><div class="sk-quiz">`;
+      html += quiz
+        .map((q, qi) => {
+          const chosen = quizAnswers[qi];
+          return (
+            `<div class="sk-q"><div class="sk-q-text">${qi + 1}. ${escapeHtml(q.question)}</div>` +
+            q.options
+              .map((o, oi) => {
+                let cls = "sk-opt";
+                if (chosen != null) {
+                  if (oi === q.answer) cls += " correct";
+                  else if (oi === chosen) cls += " wrong";
+                }
+                return `<button type="button" class="${cls}" data-q="${qi}" data-o="${oi}" ${chosen != null ? "disabled" : ""}>${escapeHtml(o)}</button>`;
+              })
+              .join("") +
+            `</div>`
+          );
+        })
+        .join("");
+      html += `</div>`;
+    }
+    html += `<button type="button" class="secondary sk-new" id="skNew">New study kit</button>`;
+    shell(html);
+    const card = document.getElementById("skCard");
+    if (card) card.onclick = () => { flipped = !flipped; renderKit(); };
+    const prev = document.getElementById("skPrev");
+    const next = document.getElementById("skNext");
+    if (prev) prev.onclick = () => { cardIdx = (cardIdx - 1 + cards.length) % cards.length; flipped = false; renderKit(); };
+    if (next) next.onclick = () => { cardIdx = (cardIdx + 1) % cards.length; flipped = false; renderKit(); };
+    panel.querySelectorAll(".sk-opt").forEach((b) => {
+      b.onclick = () => { quizAnswers[b.dataset.q] = +b.dataset.o; renderKit(); };
+    });
+    document.getElementById("skNew").onclick = () => renderInput("");
+  };
+
+  renderInput(seed || "");
 }
 
 // ---------- Activity: one glanceable feed instead of four half-empty tabs ----
