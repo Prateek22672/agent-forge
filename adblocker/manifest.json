@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "NoAds — Ad Blocker & YouTube Ad Skipper",
+  "name": "NoAds Ad Blocker Agent",
   "short_name": "NoAds",
   "version": "1.0.0",
   "description": "Block ads, trackers and pop-ups, skip YouTube ads automatically, and remove anti-adblock nags. Fast, private, zero data collection.",
