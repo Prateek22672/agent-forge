@@ -67,52 +67,61 @@
   // their containing block by walking OUT through the (unpositioned) host,
   // same as before — so all the existing scrollX/scrollY-based positioning
   // math below needs no changes.
+  // The brand logo as a data URI (a small circular AF mark) so the icon shows
+  // the real logo instead of plain "AF" text — no web_accessible_resources or
+  // network needed, works on every page.
+  const AF_LOGO =
+    "data:image/png;base64,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";
+
   const AF_CSS_TEXT = `
 .af-sel-highlight { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 2147482999; }
 .af-sel-highlight-box { position: fixed; background: rgba(124, 92, 255, .30); border-radius: 2px; }
+.af-logo { background: url(${AF_LOGO}) center / cover no-repeat !important; color: transparent !important; font-size: 0 !important; }
 
 /* The bar adapts to the page: dark tokens by default, a .af-light override
    applied at build time when the page's background is light (see pageIsLight).
    Everything below reads these custom properties, so theming is one class. */
 .af-sel-bar {
-  --bg:#101012; --fg:#f3f3f4; --muted:rgba(255,255,255,.55); --border:rgba(255,255,255,.13);
-  --chip:rgba(255,255,255,.07); --chip-hover:rgba(255,255,255,.15); --accent:#7c5cff;
+  --bg: rgba(22,22,26,.72); --fg:#f4f4f6; --muted:rgba(255,255,255,.5); --border:rgba(255,255,255,.09);
+  --chip:rgba(255,255,255,.055); --chip-brd:rgba(255,255,255,.08); --chip-hover:rgba(255,255,255,.11); --accent:#8b74ff;
   --icon-bg:#ffffff; --icon-fg:#111214;
-  position: fixed; z-index: 2147483000; display: flex; flex-direction: column; gap: 7px;
-  padding: 8px 9px; background: var(--bg); color: var(--fg);
+  position: fixed; z-index: 2147483000; display: flex; flex-direction: column; gap: 8px;
+  padding: 9px 10px; background: var(--bg); color: var(--fg);
+  -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid var(--border); border-radius: 18px;
-  box-shadow: 0 8px 30px rgba(0,0,0,.30);
-  font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  box-shadow: 0 1px 0 rgba(255,255,255,.06) inset, 0 14px 48px rgba(0,0,0,.42), 0 2px 8px rgba(0,0,0,.22);
+  font-family: -apple-system, "Segoe UI", "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 400; -webkit-font-smoothing: antialiased;
   max-width: 360px; min-width: 300px; box-sizing: border-box;
-  opacity: 0; transform: translateY(6px) scale(.98);
-  transition: opacity .15s ease, transform .15s cubic-bezier(.2,.8,.3,1);
+  opacity: 0; transform: translateY(6px) scale(.985);
+  transition: opacity .16s ease, transform .16s cubic-bezier(.2,.8,.3,1);
 }
 .af-sel-bar.af-light {
-  --bg:#ffffff; --fg:#18181b; --muted:rgba(0,0,0,.55); --border:rgba(0,0,0,.11);
-  --chip:rgba(0,0,0,.045); --chip-hover:rgba(0,0,0,.09); --icon-bg:#18181b; --icon-fg:#fff;
-  box-shadow: 0 8px 30px rgba(0,0,0,.14);
+  --bg: rgba(255,255,255,.72); --fg:#1b1b1f; --muted:rgba(0,0,0,.5); --border:rgba(0,0,0,.07);
+  --chip:rgba(0,0,0,.035); --chip-brd:rgba(0,0,0,.06); --chip-hover:rgba(0,0,0,.07); --icon-bg:#1b1b1f; --icon-fg:#fff;
+  box-shadow: 0 1px 0 rgba(255,255,255,.7) inset, 0 14px 48px rgba(0,0,0,.15), 0 2px 8px rgba(0,0,0,.07);
 }
 .af-sel-bar * { box-sizing: border-box; }
 .af-sel-bar.af-in { opacity: 1; transform: translateY(0) scale(1); }
-.af-sel-row { display: flex; align-items: center; gap: 7px; }
-.af-sel-icon { flex-shrink: 0; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: var(--icon-bg); color: var(--icon-fg); border-radius: 50%; font-size: 9px; font-weight: 800; letter-spacing: -.02em; }
-.af-sel-input { flex: 1; min-width: 110px; background: transparent; border: none; color: var(--fg); font-size: 13px; outline: none; font-family: inherit; padding: 0; margin: 0; }
-.af-sel-input::placeholder { color: var(--muted); }
-.af-ic { flex-shrink: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 8px; color: var(--muted); cursor: pointer; padding: 0; }
+.af-sel-row { display: flex; align-items: center; gap: 8px; }
+.af-sel-icon { flex-shrink: 0; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: var(--icon-bg); color: var(--icon-fg); border-radius: 50%; font-size: 8.5px; font-weight: 700; letter-spacing: -.01em; }
+.af-sel-input { flex: 1; min-width: 110px; background: transparent; border: none; color: var(--fg); font-size: 13.5px; font-weight: 400; outline: none; font-family: inherit; padding: 0; margin: 0; letter-spacing: .005em; }
+.af-sel-input::placeholder { color: var(--muted); font-weight: 400; }
+.af-ic { flex-shrink: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 9px; color: var(--muted); cursor: pointer; padding: 0; transition: background .12s ease, color .12s ease; }
 .af-ic:hover { background: var(--chip); color: var(--fg); }
 .af-ic.af-ok { color: #22c55e; }
-.af-sel-send { flex-shrink: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: var(--icon-bg); color: var(--icon-fg); border: none; border-radius: 8px; cursor: pointer; padding: 0; }
-.af-sel-send:hover { opacity: .85; }
+.af-sel-send { flex-shrink: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: var(--icon-bg); color: var(--icon-fg); border: none; border-radius: 9px; cursor: pointer; padding: 0; transition: transform .12s ease, opacity .12s ease; }
+.af-sel-send:hover { opacity: .88; transform: translateX(1px); }
 .af-sel-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .af-sel-more { flex-wrap: wrap; gap: 6px; align-items: center; padding-top: 8px; margin-top: 1px; border-top: 1px solid var(--border); }
 .af-sel-more:not([hidden]) { display: flex; } /* [hidden] must win, so only show when NOT hidden */
-.af-sel-chip { flex-shrink: 0; background: var(--chip); color: var(--fg); border: 1px solid transparent; border-radius: 9px; padding: 5px 11px; font-size: 11.5px; font-weight: 500; cursor: pointer; white-space: nowrap; font-family: inherit; }
-.af-sel-chip:hover { background: var(--chip-hover); }
-.af-more-btn { margin-left: auto; background: transparent; color: var(--muted); }
-.af-more-btn:hover { background: var(--chip); color: var(--fg); }
-.af-sel-action:hover { background: var(--accent); color: #fff; }
-.af-answer { background: var(--accent); color: #fff; font-weight: 600; }
-.af-answer:hover { background: var(--accent); filter: brightness(1.1); }
+.af-sel-chip { flex-shrink: 0; background: var(--chip); color: var(--fg); border: 1px solid var(--chip-brd); border-radius: 10px; padding: 5px 12px; font-size: 12px; font-weight: 450; cursor: pointer; white-space: nowrap; font-family: inherit; transition: background .12s ease, border-color .12s ease; }
+.af-sel-chip:hover { background: var(--chip-hover); border-color: var(--border); }
+.af-more-btn { margin-left: auto; background: transparent; border-color: transparent; color: var(--muted); }
+.af-more-btn:hover { background: var(--chip); color: var(--fg); border-color: transparent; }
+.af-sel-action:hover { background: var(--accent); color: #fff; border-color: transparent; }
+.af-answer { background: var(--accent); color: #fff; font-weight: 500; border-color: transparent; box-shadow: 0 2px 10px rgba(139,116,255,.32); }
+.af-answer:hover { border-color: transparent; filter: brightness(1.08); }
 /* Static flex child (not absolutely positioned) so the bar's own size includes
    it and positionBar keeps the whole thing on screen. max-height is set per
    render in JS (fitAnswerBox) to the space left below/above the bar, so it
@@ -142,17 +151,19 @@
 /* Compact trigger — shown first on a selection so it barely covers text; click
    it to expand the full bar. Follows the selection on scroll (repositioned in
    JS) so you can read/scroll with it, instead of it dying on the first scroll. */
-.af-sel-pill { --bg:#101012; --fg:#f3f3f4; --muted:rgba(255,255,255,.55); --border:rgba(255,255,255,.14); --icon-bg:#ffffff; --icon-fg:#111214;
+.af-sel-pill { --bg: rgba(22,22,26,.74); --fg:#f4f4f6; --muted:rgba(255,255,255,.5); --border:rgba(255,255,255,.1); --icon-bg:#ffffff; --icon-fg:#111214;
+  -webkit-backdrop-filter: blur(22px) saturate(180%); backdrop-filter: blur(22px) saturate(180%);
   position: fixed; z-index: 2147483000; display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 11px 4px 5px; background: var(--bg); color: var(--fg);
   border: 1px solid var(--border); border-radius: 999px; box-shadow: 0 6px 20px rgba(0,0,0,.30);
-  cursor: pointer; font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
-  font-size: 12px; font-weight: 600; box-sizing: border-box;
+  cursor: pointer; font-family: -apple-system, "Segoe UI", "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-size: 12.5px; font-weight: 500; letter-spacing: .01em; box-sizing: border-box;
+  box-shadow: 0 1px 0 rgba(255,255,255,.06) inset, 0 8px 24px rgba(0,0,0,.34);
   opacity: 0; transform: translateY(4px) scale(.96);
   transition: opacity .13s ease, transform .13s cubic-bezier(.2,.8,.3,1); }
-.af-sel-pill.af-light { --bg:#ffffff; --fg:#18181b; --muted:rgba(0,0,0,.55); --border:rgba(0,0,0,.12); --icon-bg:#18181b; --icon-fg:#fff; box-shadow: 0 6px 20px rgba(0,0,0,.14); }
+.af-sel-pill.af-light { --bg: rgba(255,255,255,.74); --fg:#1b1b1f; --muted:rgba(0,0,0,.5); --border:rgba(0,0,0,.08); --icon-bg:#1b1b1f; --icon-fg:#fff; box-shadow: 0 1px 0 rgba(255,255,255,.7) inset, 0 8px 24px rgba(0,0,0,.13); }
 .af-sel-pill.af-in { opacity: 1; transform: translateY(0) scale(1); }
-.af-sel-pill:hover { border-color: var(--muted); }
+.af-sel-pill:hover { transform: translateY(0) scale(1.02); }
 .af-sel-pill .af-sel-icon { width: 20px; height: 20px; }
 .af-pill-label { padding-right: 2px; }
 .af-bubble { position: fixed; bottom: 22px; right: 22px; z-index: 2147483000; width: 40px; height: 40px; border-radius: 50%; background: #fff; color: #000; border: none; font-size: 11px; font-weight: 800; letter-spacing: -.02em; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.35); font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif; opacity: 0; transform: scale(.8); transition: opacity .18s ease, transform .18s cubic-bezier(.2,.8,.3,1), box-shadow .12s ease; padding: 0; }
@@ -470,7 +481,7 @@
     }
     pill = document.createElement("div");
     pill.className = "af-sel-pill" + (pageIsLight() ? " af-light" : "");
-    pill.innerHTML = `<span class="af-sel-icon">AF</span><span class="af-pill-label">Ask</span>`;
+    pill.innerHTML = `<span class="af-sel-icon af-logo">AF</span><span class="af-pill-label">Ask</span>`;
     getAfRoot().appendChild(pill);
     // Position just under the selection start, clamped to the viewport.
     const m = 8;
@@ -985,7 +996,7 @@
     bar.className = "af-sel-bar" + (pageIsLight() ? " af-light" : "");
     bar.innerHTML = `
       <div class="af-sel-row">
-        <span class="af-sel-icon">AF</span>
+        <span class="af-sel-icon af-logo">AF</span>
         <input type="text" class="af-sel-input" placeholder="Ask about this…" />
         <button type="button" class="af-ic af-copy-ic" title="Copy (works even where copying is blocked)">${SVG_COPY}</button>
         <button type="button" class="af-sel-send" title="Get an AI answer (Enter)">${SVG_SEND}</button>
