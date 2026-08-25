@@ -1,10 +1,10 @@
 # Chrome Web Store submission — copy-paste package
 
 Everything you need to fill in the Developer Dashboard form. Submission
-package: `dist-extension/agentfury-extension-v1.20.0.zip` (already built and
+package: `dist-extension/agentfury-extension-v1.20.1.zip` (already built and
 verified — manifest at the zip root as required).
 
-> If you already have an item uploaded, this is now **v1.20.0** — upload the
+> If you already have an item uploaded, this is now **v1.20.1** — upload the
 > new zip as a new package version on the SAME item (Package tab → Upload new
 > package), you don't need to re-register.
 
@@ -20,7 +20,7 @@ verified — manifest at the zip root as required).
 
 ## 2. Upload
 
-- Click **New Item** → upload `dist-extension/agentfury-extension-v1.20.0.zip`
+- Click **New Item** → upload `dist-extension/agentfury-extension-v1.20.1.zip`
 - It parses the manifest automatically (name: AgentFury, version 1.0.0)
 
 ## 3. Store listing tab — copy-paste these
@@ -84,14 +84,12 @@ popup.
 
 | Permission | Justification |
 |---|---|
-| `storage` | Stores the user's AgentFury login session token locally so they stay signed in between browser sessions. |
-| `activeTab` | Used only when the user interacts with the extension popup on the current tab; no passive tracking. |
-| `scripting` | Reserved for injecting UI beyond the static content scripts if a future feature needs it. |
+| `storage` | Stores the user's AgentFury login session token locally so they stay signed in between browser sessions, plus their on/off preferences (select-to-ask, bubble, theme, privacy mode). |
 | `identity` | Used only for the "Continue with Google" sign-in button (`chrome.identity.launchWebAuthFlow`) — lets the user sign in without typing a password. |
 | `alarms` | Schedules a once-per-minute background check for new priority emails and AI-drafted replies, so the user is notified without having to open the extension. |
 | `notifications` | Shows a native OS notification when new priority mail or an AI draft is found, and displays a badge count on the toolbar icon. |
 | `contextMenus` | Adds a right-click "Ask AgentFury about…" entry when text is selected, as an alternative to the select-to-ask bar. |
-| `sidePanel` | Opens AgentFury as a native browser side panel when the toolbar icon is clicked (Chat/Priority/Drafts/Reminders), instead of a small dropdown popup. |
+| `sidePanel` | Opens AgentFury as a native browser side panel when the toolbar icon is clicked (Ask/Priority/Drafts/Reminders/Notes), instead of a small dropdown popup. |
 | Host/content script: `<all_urls>` | Lets the user select text on ANY page and ask their AI assistant about it (the core "select-to-ask" feature) — the same way a browser's built-in "Search Google for…" works on any selection. The content script only activates on an active text selection; it does not read page content otherwise. |
 | Host: `https://mail.google.com/*` | Required to detect Gmail's compose box and inject the AI toolbar button directly above it, and to insert AI-rewritten text back into the compose box the user is actively editing. |
 | Host: `https://agentfury.foliofyx.in/*` | The extension's own backend API — used to authenticate the user and process their AI requests (chat, email rewriting, priority inbox, reminders). |
