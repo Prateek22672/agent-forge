@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "AdVanish — Ad & Tracker Blocker",
-  "short_name": "AdVanish",
+  "name": "NoAds — Ad Blocker & YouTube Ad Skipper",
+  "short_name": "NoAds",
   "version": "1.0.0",
-  "description": "Ruthlessly blocks ads, trackers and pop-ups, auto-skips YouTube ads, and removes anti-adblock nags. Fast, private, zero data collection.",
+  "description": "Block ads, trackers and pop-ups, skip YouTube ads automatically, and remove anti-adblock nags. Fast, private, zero data collection.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -15,7 +15,7 @@
   "action": {
     "default_popup": "popup.html",
     "default_icon": { "16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
-    "default_title": "AdVanish — click to pause/resume"
+    "default_title": "NoAds — click to pause/resume"
   },
   "declarative_net_request": {
     "rule_resources": [{ "id": "ads", "enabled": true, "path": "rules.json" }]
