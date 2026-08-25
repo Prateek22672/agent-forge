@@ -113,10 +113,20 @@
 .af-sel-action:hover { background: var(--accent); color: #fff; }
 .af-answer { background: var(--accent); color: #fff; font-weight: 600; }
 .af-answer:hover { background: var(--accent); filter: brightness(1.1); }
-.af-sel-answer { position: absolute; top: 100%; left: 0; margin-top: 8px; width: 340px; max-height: 240px; overflow-y: auto; background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,.28); padding: 12px 13px; font-size: 12.5px; line-height: 1.55; opacity: 0; transform: translateY(4px); transition: opacity .14s ease, transform .14s ease; box-sizing: border-box; }
+/* Static flex child (not absolutely positioned) so the bar's own size includes
+   it and positionBar keeps the whole thing on screen. max-height is set per
+   render in JS (fitAnswerBox) to the space left below/above the bar, so it
+   never spills off the viewport. */
+.af-sel-answer { width: 100%; margin-top: 2px; overflow-y: auto; background: transparent; color: var(--fg); border-top: 1px solid var(--border); padding-top: 10px; font-size: 12.5px; line-height: 1.55; opacity: 0; transform: translateY(3px); transition: opacity .14s ease, transform .14s ease; box-sizing: border-box; }
 .af-sel-answer.af-in { opacity: 1; transform: translateY(0); }
 .af-sel-answer.af-err { color: #e5484d; }
-.af-sel-answer-text { margin-bottom: 8px; }
+.af-sel-answer-text { margin-bottom: 8px; white-space: normal; }
+.af-verdict { margin-bottom: 10px; }
+.af-sources-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 4px; }
+.af-code-wrap { position: relative; margin: 6px 0 10px; }
+.af-code { margin: 0; padding: 10px 11px; background: rgba(127,127,127,.14); border: 1px solid var(--border); border-radius: 8px; font-family: ui-monospace, "Cascadia Code", "Consolas", monospace; font-size: 11.5px; line-height: 1.5; overflow-x: auto; white-space: pre; }
+.af-code-copy { position: absolute; top: 6px; right: 6px; background: var(--bg); color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; font-size: 10.5px; cursor: pointer; }
+.af-code-copy:hover { color: var(--fg); }
 .af-sel-spin { display: inline-block; width: 11px; height: 11px; border: 2px solid var(--border); border-top-color: var(--fg); border-radius: 50%; margin-right: 7px; vertical-align: -1px; animation: af-spin .7s linear infinite; }
 @keyframes af-spin { to { transform: rotate(360deg); } }
 .af-copy { background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 8px; padding: 4px 11px; font-size: 11px; cursor: pointer; }
@@ -527,8 +537,7 @@
     return d.innerHTML;
   }
 
-  function showAnswer(text, isError, busy) {
-    if (!bar) return;
+  function ensureAnswerBox() {
     let box = bar.querySelector(".af-sel-answer");
     if (!box) {
       box = document.createElement("div");
@@ -536,20 +545,88 @@
       bar.appendChild(box);
       requestAnimationFrame(() => box.classList.add("af-in"));
     }
+    return box;
+  }
+
+  // Cap the answer/results box to the space actually left on screen below the
+  // bar, so it can never spill past the viewport into a blind spot. Then
+  // re-place the bar (it may need to flip up) so the whole thing stays visible.
+  function fitAnswerBox() {
+    const box = bar && bar.querySelector(".af-sel-answer");
+    if (!box) return;
+    const barRect = bar.getBoundingClientRect();
+    const below = window.innerHeight - barRect.bottom - 16;
+    const above = barRect.top - 16;
+    // Give it whichever side has more room; hard cap so it always fits.
+    const avail = Math.max(below, above, 140);
+    box.style.maxHeight = Math.min(avail, Math.round(window.innerHeight * 0.6)) + "px";
+    const r = anchorRect();
+    if (r) positionBar(r);
+  }
+
+  // Render text with fenced ```code blocks``` as real code blocks (monospace,
+  // horizontal-scroll, own Copy button). Everything else is escaped plain text.
+  function renderRich(container, text) {
+    container.innerHTML = "";
+    const parts = String(text).split(/```/);
+    parts.forEach((part, i) => {
+      if (i % 2 === 1) {
+        // code block — first line may be a language label
+        let code = part.replace(/^\n/, "");
+        const nl = code.indexOf("\n");
+        if (nl > -1 && /^[a-z0-9+#-]{1,15}$/i.test(code.slice(0, nl).trim())) {
+          code = code.slice(nl + 1);
+        }
+        code = code.replace(/\n$/, "");
+        const wrap = document.createElement("div");
+        wrap.className = "af-code-wrap";
+        const pre = document.createElement("pre");
+        pre.className = "af-code";
+        pre.textContent = code;
+        const cbtn = document.createElement("button");
+        cbtn.type = "button";
+        cbtn.className = "af-code-copy";
+        cbtn.textContent = "Copy";
+        cbtn.onclick = () => {
+          navigator.clipboard.writeText(code).catch(() => {});
+          cbtn.textContent = "Copied";
+          setTimeout(() => (cbtn.textContent = "Copy"), 1400);
+        };
+        wrap.appendChild(cbtn);
+        wrap.appendChild(pre);
+        container.appendChild(wrap);
+      } else if (part) {
+        const d = document.createElement("div");
+        d.className = "af-sel-answer-text";
+        d.innerHTML = escapeHtml(part).replace(/\n/g, "<br>");
+        container.appendChild(d);
+      }
+    });
+  }
+
+  function showAnswer(text, isError, busy) {
+    if (!bar) return;
+    const box = ensureAnswerBox();
     box.classList.toggle("af-err", !!isError);
     if (busy) {
       box.innerHTML = `<span class="af-sel-spin"></span><span>${escapeHtml(text)}</span>`;
+      fitAnswerBox();
       return;
     }
-    box.innerHTML = `<div class="af-sel-answer-text">${escapeHtml(text).replace(/\n/g, "<br>")}</div>`;
+    renderRich(box, text);
     if (!isError) {
       const copyBtn = document.createElement("button");
       copyBtn.type = "button";
       copyBtn.className = "af-copy";
-      copyBtn.textContent = "Copy";
-      copyBtn.onclick = () => navigator.clipboard.writeText(text).catch(() => {});
+      copyBtn.textContent = "Copy all";
+      copyBtn.onclick = () => {
+        navigator.clipboard.writeText(text).catch(() => {});
+        copyBtn.textContent = "Copied";
+        setTimeout(() => (copyBtn.textContent = "Copy all"), 1400);
+      };
       box.appendChild(copyBtn);
     }
+    fitAnswerBox();
   }
 
   function prettyUrl(u) {
@@ -572,21 +649,19 @@
   // "search appears here" experience inline instead of redirecting to a new
   // tab. Results come from our backend's free web search (ddgs), so this
   // costs zero LLM/Groq credits. Clicking a result opens that page (expected).
-  function showResults(results) {
+  function showResults(results, verdict) {
     if (!bar) return;
-    let box = bar.querySelector(".af-sel-answer");
-    if (!box) {
-      box = document.createElement("div");
-      box.className = "af-sel-answer";
-      bar.appendChild(box);
-      requestAnimationFrame(() => box.classList.add("af-in"));
-    }
+    const box = ensureAnswerBox();
     box.classList.remove("af-err");
-    if (!results || !results.length) {
-      box.innerHTML = `<div class="af-sel-answer-text">No web results — try the AI answer (→) instead.</div>`;
+    if ((!results || !results.length) && !verdict) {
+      box.innerHTML = `<div class="af-sel-answer-text">No web results — try Answer instead.</div>`;
+      fitAnswerBox();
       return;
     }
-    box.innerHTML = results
+    const verdictHtml = verdict
+      ? `<div class="af-verdict">${escapeHtml(verdict).replace(/\n/g, "<br>")}</div>`
+      : "";
+    const sourcesHtml = (results || [])
       .map(
         (r) => `
       <a class="af-result" href="${safeUrl(r.url)}" target="_blank" rel="noopener noreferrer">
@@ -596,6 +671,9 @@
       </a>`
       )
       .join("");
+    const label = results && results.length ? `<div class="af-sources-label">Sources</div>` : "";
+    box.innerHTML = verdictHtml + label + sourcesHtml;
+    fitAnswerBox();
   }
 
   // Turn a messy selection into a good web query. A multiple-choice question
@@ -611,48 +689,52 @@
     return (firstLine.length > 8 ? firstLine : q).slice(0, 220);
   }
 
+  // Google chip → search + VERDICT: the backend runs the free web search, then
+  // a fast model reads the results and gives a direct answer, shown above the
+  // source links. Turns "here are 6 links, go sift" into "here's the answer,
+  // and the sources." Cheap: ddgs (free) + fast Groq.
   async function searchWeb() {
-    showAnswer("Searching the web…", false, true);
+    showAnswer("Searching…", false, true);
     const r = await send({
       type: "API_CALL",
-      path: `/write/search?q=${encodeURIComponent(searchQuery(lastSelectionText))}`,
+      path: `/write/search-answer?q=${encodeURIComponent(searchQuery(lastSelectionText))}`,
       method: "GET",
     });
     if (!r.ok) {
       showAnswer(friendlyError(r), true);
       return;
     }
-    showResults(r.data && r.data.results);
+    showResults(r.data && r.data.results, r.data && r.data.answer);
   }
 
+  // Selection-bar answers go through the FAST /write/answer endpoint — one
+  // direct Groq call, no agent graph / tools / memory — so replies land as
+  // quickly as Groq can produce them. (The full agent, with memory + tools,
+  // lives behind "Open in panel" for when you want depth over speed.)
+  // `question` may be a specific ask or the Answer-mode prompt; either way the
+  // selected text is sent as context.
   async function ask(question) {
     const q = (question || "").trim();
-    if (!q) return;
-    showAnswer("Thinking… (can take a bit if the server was asleep)", false, true);
+    if (!q && !lastSelectionText) return;
+    showAnswer("Thinking…", false, true);
 
-    if (!assistantAgentId) {
-      const r = await send({ type: "API_CALL", path: "/agents", method: "GET" });
-      if (r.ok) {
-        const a = r.data.find((x) => x.name === "Assistant") || r.data[0];
-        assistantAgentId = a?.id || null;
-      }
-    }
-    if (!assistantAgentId) {
-      showAnswer("Couldn't reach AgentFury — sign in via the extension icon.", true);
-      return;
-    }
-    const message = lastSelectionText
-      ? `Regarding this text: "${lastSelectionText.slice(0, 1500)}"\n\n${q}`
-      : q;
-    const r2 = await send(
-      { type: "API_CALL", path: `/agents/${assistantAgentId}/chat`, method: "POST", body: { message } },
+    // If the user typed a real question, pass it as `question`; the Answer-mode
+    // prompt (long, canned) is treated as "no explicit question" so the backend
+    // uses its own smart default on the selection.
+    const isCanned = q.startsWith("Respond to the highlighted text");
+    const body = {
+      text: lastSelectionText.slice(0, 6000),
+      question: isCanned ? "" : q,
+    };
+    const r = await send(
+      { type: "API_CALL", path: "/write/answer", method: "POST", body },
       45000
     );
-    if (!r2.ok) {
-      showAnswer(friendlyError(r2), true);
+    if (!r.ok) {
+      showAnswer(friendlyError(r), true);
       return;
     }
-    showAnswer(r2.data.reply, false);
+    showAnswer((r.data && r.data.answer) || "No answer.", false);
   }
 
   // One-click actions that DON'T ask the AI anything — they just save the
