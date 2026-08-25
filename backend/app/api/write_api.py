@@ -13,8 +13,30 @@ from pydantic import BaseModel
 
 from app.auth import get_current_user
 from app.models import User
+from app.security.ratelimit import rate_limit
 
 router = APIRouter(prefix="/api/write", tags=["write"])
+
+
+@router.get("/search")
+def web_search_inline(
+    q: str,
+    user: User = Depends(get_current_user),
+    _: None = Depends(rate_limit(30, 60)),
+):
+    """Real web results for the extension's inline 'search appears below the
+    bar' feature — the user selects text, taps Web, and sees links + snippets
+    right in the popup instead of being redirected to a new tab. Uses the same
+    free multi-backend search as the agent's web_search tool."""
+    from app.tools.web import web_search_results
+
+    query = (q or "").strip()[:400]
+    if not query:
+        return {"results": []}
+    try:
+        return {"results": web_search_results(query, max_results=6)}
+    except Exception:
+        return {"results": []}
 
 
 class PolishRequest(BaseModel):
