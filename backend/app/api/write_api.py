@@ -39,6 +39,118 @@ def web_search_inline(
         return {"results": []}
 
 
+class QuickAnswer(BaseModel):
+    text: str = ""      # the selected text
+    question: str = ""  # optional user question about it
+
+
+@router.post("/answer")
+def quick_answer(
+    payload: QuickAnswer,
+    user: User = Depends(get_current_user),
+    _: None = Depends(rate_limit(40, 60)),
+):
+    """Fast selection-bar answer: ONE direct model call — no agent graph, no
+    tools, no memory lookup — so it returns as fast as Groq can go. Handles
+    questions/MCQs, term explanations, and code. Separate from the full agent
+    chat (which is richer but slower); this path exists purely for speed."""
+    from app.llm.router import get_fast_groq
+
+    text = (payload.text or "").strip()[:6000]
+    question = (payload.question or "").strip()[:1000]
+    if not text and not question:
+        raise HTTPException(400, "Nothing to answer.")
+
+    if question:
+        prompt = (
+            f"Selected text:\n{text}\n\nUser's question: {question}\n\n"
+            "Answer directly and concisely. If code is the best answer, return it "
+            "in a fenced ```code block``` with the right language. No preamble."
+        )
+    else:
+        prompt = (
+            f"Selected text:\n{text}\n\n"
+            "Respond based on what it is:\n"
+            "- A question (incl. multiple choice): give the correct answer first "
+            "(name the option, e.g. 'C'), then a one-line reason.\n"
+            "- A term/concept: explain clearly in 1–3 sentences.\n"
+            "- A statement: say whether it's correct and why, briefly.\n"
+            "- If code is asked for or is the best answer, return it in a fenced "
+            "```code block``` with the right language.\n"
+            "Be accurate and concise. No preamble."
+        )
+
+    llm = None
+    last_exc: Exception | None = None
+    for _attempt in range(3):
+        try:
+            llm = llm or get_fast_groq(0.4)
+            if llm is None:
+                break
+            out = llm.invoke(prompt)
+            answer = out.content if isinstance(out.content, str) else str(out.content)
+            return {"answer": answer.strip()}
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            llm = None
+            continue
+    raise HTTPException(503, f"AI is busy — try again in a moment. ({last_exc})")
+
+
+@router.get("/search-answer")
+def web_search_answer(
+    q: str,
+    user: User = Depends(get_current_user),
+    _: None = Depends(rate_limit(20, 60)),
+):
+    """Search + verdict ("Google AI mode", but cheap): run the free web search,
+    hand the snippets to a fast model, and return a synthesized ANSWER plus the
+    sources it drew from — instead of dumping raw links the user has to sift.
+    Cost stays low: ddgs is free and get_fast_groq is the cheapest model."""
+    from app.llm.router import get_fast_groq
+    from app.tools.web import web_search_results
+
+    query = (q or "").strip()[:400]
+    if not query:
+        return {"answer": "", "results": []}
+
+    try:
+        results = web_search_results(query, max_results=6)
+    except Exception:
+        results = []
+
+    context = "\n\n".join(
+        f"[{i}] {r.get('title','')}\n{r.get('snippet','')}\n{r.get('url','')}"
+        for i, r in enumerate(results, 1)
+    )
+    prompt = (
+        f"Question or topic: {query}\n\n"
+        f"Web results:\n{context or '(no results returned)'}\n\n"
+        "Give a direct, correct answer in 1–4 sentences. If it's a question "
+        "(including multiple choice), state the answer first (name the correct "
+        "option). Prefer the web results; cite them inline like [1] when you use "
+        "one. If the results don't actually address it, answer from your own "
+        "knowledge and say the web didn't have a direct source. No preamble."
+    )
+
+    llm = None
+    last_exc: Exception | None = None
+    for _attempt in range(3):
+        try:
+            llm = llm or get_fast_groq(0.3)
+            if llm is None:
+                break
+            out = llm.invoke(prompt)
+            answer = out.content if isinstance(out.content, str) else str(out.content)
+            return {"answer": answer.strip(), "results": results}
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            llm = None
+            continue
+    # Model unavailable — still return the raw results so the user gets something.
+    return {"answer": "", "results": results, "error": str(last_exc) if last_exc else ""}
+
+
 class PolishRequest(BaseModel):
     text: str = ""
     instruction: str = ""  # e.g. "write a polite follow-up asking for status"
