@@ -3,7 +3,7 @@
   "name": "AgentFury",
   "short_name": "AgentFury",
   "description": "Agent Fury: AI agent & assistant in your browser — ask about any text you select, write & fix email in Gmail, plus reminders.",
-  "version": "1.15.0",
+  "version": "1.16.0",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -29,6 +29,12 @@
         "default": "Alt+Shift+H"
       },
       "description": "Privacy mode — hide/show AgentFury's on-page UI everywhere"
+    },
+    "open-assistant": {
+      "suggested_key": {
+        "default": "Alt+Shift+A"
+      },
+      "description": "Open the AgentFury side panel (and warm up the server)"
     }
   },
   "permissions": [

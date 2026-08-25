@@ -330,9 +330,26 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // every content script already listens on chrome.storage.onChanged, so this
 // takes effect in every open tab at once, no messaging fan-out needed.
 chrome.commands.onCommand.addListener(async (command) => {
-  if (command !== "toggle-privacy") return;
-  const { af_privacy_mode } = await chrome.storage.local.get("af_privacy_mode");
-  await chrome.storage.local.set({ af_privacy_mode: !af_privacy_mode });
+  if (command === "toggle-privacy") {
+    const { af_privacy_mode } = await chrome.storage.local.get("af_privacy_mode");
+    await chrome.storage.local.set({ af_privacy_mode: !af_privacy_mode });
+    return;
+  }
+  // Alt+Shift+A — open the side panel from anywhere and quietly wake the
+  // backend at the same moment, so by the time the panel finishes loading the
+  // server (Render free tier) is already spinning up instead of cold. A
+  // command counts as a user gesture, which sidePanel.open() requires.
+  if (command === "open-assistant") {
+    fetch(`${API_BASE}/health`).catch(() => {}); // fire-and-forget wake-up
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab && tab.id != null) {
+        await chrome.sidePanel.open({ tabId: tab.id });
+      }
+    } catch (e) {
+      /* some pages (chrome://, the store) can't host a panel — nothing to do */
+    }
+  }
 });
 
 // Badge the toolbar icon whenever privacy mode changes, from ANY source (the

@@ -15,6 +15,36 @@ from bs4 import BeautifulSoup
 from langchain_core.tools import tool
 
 
+def web_search_results(query: str, max_results: int = 6, region: str = "in-en") -> list[dict]:
+    """Structured web results (title/url/snippet) for the extension's inline
+    'search appears below the bar' feature — same multi-backend logic as the
+    web_search tool, but returns data instead of an LLM-formatted string."""
+    from ddgs import DDGS
+
+    backends = ["auto", "google", "bing", "brave", "duckduckgo"]
+    for backend in backends:
+        try:
+            with DDGS() as ddgs:
+                results = list(
+                    ddgs.text(
+                        query, region=region, safesearch="off",
+                        max_results=max_results, backend=backend,
+                    )
+                )
+        except Exception:
+            continue
+        if results:
+            out = []
+            for r in results:
+                out.append({
+                    "title": r.get("title", ""),
+                    "url": r.get("href", "") or r.get("url", ""),
+                    "snippet": r.get("body", ""),
+                })
+            return out
+    return []
+
+
 @tool
 def web_search(query: str, max_results: int = 5, region: str = "in-en") -> str:
     """Search the public web and return the top results.

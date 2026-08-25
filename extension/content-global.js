@@ -80,7 +80,7 @@
   --icon-bg:#ffffff; --icon-fg:#111214;
   position: fixed; z-index: 2147483000; display: flex; flex-direction: column; gap: 7px;
   padding: 8px 9px; background: var(--bg); color: var(--fg);
-  border: 1px solid var(--border); border-radius: 14px;
+  border: 1px solid var(--border); border-radius: 18px;
   box-shadow: 0 8px 30px rgba(0,0,0,.30);
   font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   max-width: 360px; min-width: 300px; box-sizing: border-box;
@@ -118,6 +118,12 @@
 @keyframes af-spin { to { transform: rotate(360deg); } }
 .af-copy { background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 8px; padding: 4px 11px; font-size: 11px; cursor: pointer; }
 .af-copy:hover { color: var(--fg); }
+.af-result { display: block; padding: 9px 0; border-bottom: 1px solid var(--border); text-decoration: none; }
+.af-result:last-child { border-bottom: none; }
+.af-result:hover .af-result-title { text-decoration: underline; }
+.af-result-title { color: var(--accent); font-size: 12.5px; font-weight: 600; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.af-result-url { color: var(--muted); font-size: 10.5px; margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.af-result-snippet { color: var(--fg); font-size: 11.5px; line-height: 1.45; opacity: .82; }
 .af-bubble { position: fixed; bottom: 22px; right: 22px; z-index: 2147483000; width: 40px; height: 40px; border-radius: 50%; background: #fff; color: #000; border: none; font-size: 11px; font-weight: 800; letter-spacing: -.02em; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.35); font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif; opacity: 0; transform: scale(.8); transition: opacity .18s ease, transform .18s cubic-bezier(.2,.8,.3,1), box-shadow .12s ease; padding: 0; }
 .af-bubble.af-in { opacity: 1; transform: scale(1); }
 .af-bubble:hover { box-shadow: 0 8px 26px rgba(0,0,0,.5); transform: scale(1.06); }
@@ -459,6 +465,66 @@
     }
   }
 
+  function prettyUrl(u) {
+    try {
+      return new URL(u).hostname.replace(/^www\./, "");
+    } catch {
+      return u || "";
+    }
+  }
+  function safeUrl(u) {
+    try {
+      const x = new URL(u);
+      return x.protocol === "http:" || x.protocol === "https:" ? x.href : "#";
+    } catch {
+      return "#";
+    }
+  }
+
+  // Render real web results in the answer box below the bar — brings the
+  // "search appears here" experience inline instead of redirecting to a new
+  // tab. Results come from our backend's free web search (ddgs), so this
+  // costs zero LLM/Groq credits. Clicking a result opens that page (expected).
+  function showResults(results) {
+    if (!bar) return;
+    let box = bar.querySelector(".af-sel-answer");
+    if (!box) {
+      box = document.createElement("div");
+      box.className = "af-sel-answer";
+      bar.appendChild(box);
+      requestAnimationFrame(() => box.classList.add("af-in"));
+    }
+    box.classList.remove("af-err");
+    if (!results || !results.length) {
+      box.innerHTML = `<div class="af-sel-answer-text">No web results — try the AI answer (→) instead.</div>`;
+      return;
+    }
+    box.innerHTML = results
+      .map(
+        (r) => `
+      <a class="af-result" href="${safeUrl(r.url)}" target="_blank" rel="noopener noreferrer">
+        <div class="af-result-title">${escapeHtml(r.title || prettyUrl(r.url))}</div>
+        <div class="af-result-url">${escapeHtml(prettyUrl(r.url))}</div>
+        <div class="af-result-snippet">${escapeHtml((r.snippet || "").slice(0, 180))}</div>
+      </a>`
+      )
+      .join("");
+  }
+
+  async function searchWeb() {
+    showAnswer("Searching the web…", false, true);
+    const r = await send({
+      type: "API_CALL",
+      path: `/write/search?q=${encodeURIComponent(lastSelectionText.slice(0, 400))}`,
+      method: "GET",
+    });
+    if (!r.ok) {
+      showAnswer(friendlyError(r), true);
+      return;
+    }
+    showResults(r.data && r.data.results);
+  }
+
   async function ask(question) {
     const q = (question || "").trim();
     if (!q) return;
@@ -699,9 +765,9 @@
         <button type="button" class="af-sel-send" title="Get an AI answer (Enter)">${SVG_SEND}</button>
       </div>
       <div class="af-sel-chips">
-        <button type="button" class="af-sel-chip" data-search="google" title="Search Google">Google</button>
-        <button type="button" class="af-sel-chip" data-search="gemini" title="Ask Gemini (Google AI Mode)">Gemini</button>
-        <button type="button" class="af-sel-chip" data-search="chatgpt" title="Ask ChatGPT">ChatGPT</button>
+        <button type="button" class="af-sel-chip" data-web="1" title="Search the web — results appear right here, no redirect">Google</button>
+        <button type="button" class="af-sel-chip" data-search="gemini" title="Open Gemini (Google AI Mode) in a new tab">Gemini ↗</button>
+        <button type="button" class="af-sel-chip" data-search="chatgpt" title="Open ChatGPT in a new tab">ChatGPT ↗</button>
         <button type="button" class="af-sel-chip af-more-btn" data-more="1">More</button>
       </div>
       <div class="af-sel-more" hidden>
@@ -736,6 +802,8 @@
     bar.querySelectorAll(".af-sel-chip[data-q]").forEach((c) => {
       c.onclick = () => ask(c.dataset.q);
     });
+    const webChip = bar.querySelector(".af-sel-chip[data-web]");
+    if (webChip) webChip.onclick = () => searchWeb();
     bar.querySelectorAll(".af-sel-action[data-action]").forEach((c) => {
       c.onclick = () => quickAction(c.dataset.action);
     });
