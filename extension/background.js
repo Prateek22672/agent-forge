@@ -57,6 +57,35 @@ async function apiCall(path, { method = "GET", body, auth = true } = {}) {
   }
 }
 
+// Multipart file upload → /api/files/extract. Kept separate from apiCall
+// because that one JSON-encodes the body; here we send FormData. The popup
+// hands us the file bytes (an ArrayBuffer, which passes cleanly through
+// chrome messaging) plus the name, and we do the authenticated upload.
+async function uploadExtract(name, bytes) {
+  const token = await getToken();
+  if (!token) return { ok: false, status: 401, error: "not_logged_in" };
+  try {
+    const fd = new FormData();
+    fd.append("file", new Blob([bytes]), name || "file");
+    const res = await fetch(`${API_BASE}/files/extract`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "X-AF-Client": "extension" },
+      body: fd,
+    });
+    const text = await res.text();
+    let data;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = text;
+    }
+    if (!res.ok) return { ok: false, status: res.status, error: data?.detail || data || res.statusText };
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, status: 0, error: String(e.message || e) };
+  }
+}
+
 // ---------- Google sign-in via chrome.identity.launchWebAuthFlow ----------
 // Extensions can't use the website's redirect-to-a-page flow, so Chrome gives
 // this extension its own https://<ext-id>.chromiumapp.org/ redirect URI, and
@@ -206,6 +235,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
       case "API_CALL": {
         const r = await apiCall(msg.path, { method: msg.method, body: msg.body });
+        sendResponse(r);
+        return;
+      }
+      case "UPLOAD_EXTRACT": {
+        const r = await uploadExtract(msg.name, msg.bytes);
         sendResponse(r);
         return;
       }
