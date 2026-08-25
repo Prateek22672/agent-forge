@@ -766,13 +766,13 @@
       </div>
       <div class="af-sel-chips">
         <button type="button" class="af-sel-chip" data-web="1" title="Search the web — results appear right here, no redirect">Google</button>
-        <button type="button" class="af-sel-chip" data-search="gemini" title="Open Gemini (Google AI Mode) in a new tab">Gemini ↗</button>
-        <button type="button" class="af-sel-chip" data-search="chatgpt" title="Open ChatGPT in a new tab">ChatGPT ↗</button>
+        <button type="button" class="af-sel-chip" data-q="Summarize this concisely.">Summarize</button>
+        <button type="button" class="af-sel-chip af-sel-action" data-action="note" title="Save to your Notes">Save</button>
         <button type="button" class="af-sel-chip af-more-btn" data-more="1">More</button>
       </div>
       <div class="af-sel-more" hidden>
-        <button type="button" class="af-sel-chip" data-q="Summarize this concisely.">Summarize</button>
-        <button type="button" class="af-sel-chip af-sel-action" data-action="note" title="Save to your Notes">Save note</button>
+        <button type="button" class="af-sel-chip" data-search="gemini" title="Open Gemini (Google AI Mode) in a new tab">Gemini ↗</button>
+        <button type="button" class="af-sel-chip" data-search="chatgpt" title="Open ChatGPT in a new tab">ChatGPT ↗</button>
         <button type="button" class="af-sel-chip af-sel-action" data-action="remind" title="Add as a reminder">Remind</button>
         <button type="button" class="af-sel-chip af-sel-action" data-action="brain" title="Teach your AI's memory">Brain</button>
         <button type="button" class="af-sel-chip" data-open="1" title="Open in the side panel — roomier for code or long text">Open in panel ↗</button>
