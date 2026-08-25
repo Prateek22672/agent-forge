@@ -95,7 +95,7 @@
 .af-sel-bar * { box-sizing: border-box; }
 .af-sel-bar.af-in { opacity: 1; transform: translateY(0) scale(1); }
 .af-sel-row { display: flex; align-items: center; gap: 7px; }
-.af-sel-icon { flex-shrink: 0; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: var(--icon-bg); color: var(--icon-fg); border-radius: 7px; font-size: 9px; font-weight: 800; letter-spacing: -.02em; }
+.af-sel-icon { flex-shrink: 0; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: var(--icon-bg); color: var(--icon-fg); border-radius: 50%; font-size: 9px; font-weight: 800; letter-spacing: -.02em; }
 .af-sel-input { flex: 1; min-width: 110px; background: transparent; border: none; color: var(--fg); font-size: 13px; outline: none; font-family: inherit; padding: 0; margin: 0; }
 .af-sel-input::placeholder { color: var(--muted); }
 .af-ic { flex-shrink: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 8px; color: var(--muted); cursor: pointer; padding: 0; }
@@ -111,6 +111,8 @@
 .af-more-btn { margin-left: auto; background: transparent; color: var(--muted); }
 .af-more-btn:hover { background: var(--chip); color: var(--fg); }
 .af-sel-action:hover { background: var(--accent); color: #fff; }
+.af-answer { background: var(--accent); color: #fff; font-weight: 600; }
+.af-answer:hover { background: var(--accent); filter: brightness(1.1); }
 .af-sel-answer { position: absolute; top: 100%; left: 0; margin-top: 8px; width: 340px; max-height: 240px; overflow-y: auto; background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,.28); padding: 12px 13px; font-size: 12.5px; line-height: 1.55; opacity: 0; transform: translateY(4px); transition: opacity .14s ease, transform .14s ease; box-sizing: border-box; }
 .af-sel-answer.af-in { opacity: 1; transform: translateY(0); }
 .af-sel-answer.af-err { color: #e5484d; }
@@ -596,11 +598,24 @@
       .join("");
   }
 
+  // Turn a messy selection into a good web query. A multiple-choice question
+  // selected whole (stem + A/B/C/D options) makes a terrible search — the engine
+  // latches onto a stray word (e.g. "following") and returns junk. Prefer the
+  // question stem: everything up to and including the first '?'. Otherwise the
+  // first line, capped, drops the option noise.
+  function searchQuery(text) {
+    const q = (text || "").trim();
+    const qm = q.indexOf("?");
+    if (qm > 10 && qm < 220) return q.slice(0, qm + 1);
+    const firstLine = q.split(/\n/)[0].trim();
+    return (firstLine.length > 8 ? firstLine : q).slice(0, 220);
+  }
+
   async function searchWeb() {
     showAnswer("Searching the web…", false, true);
     const r = await send({
       type: "API_CALL",
-      path: `/write/search?q=${encodeURIComponent(lastSelectionText.slice(0, 400))}`,
+      path: `/write/search?q=${encodeURIComponent(searchQuery(lastSelectionText))}`,
       method: "GET",
     });
     if (!r.ok) {
@@ -852,12 +867,13 @@
         <button type="button" class="af-sel-send" title="Get an AI answer (Enter)">${SVG_SEND}</button>
       </div>
       <div class="af-sel-chips">
+        <button type="button" class="af-sel-chip af-answer" data-answer="1" title="Answer or explain this — solves questions and multiple-choice directly">Answer</button>
         <button type="button" class="af-sel-chip" data-web="1" title="Search the web — results appear right here, no redirect">Google</button>
-        <button type="button" class="af-sel-chip" data-q="Summarize this concisely.">Summarize</button>
         <button type="button" class="af-sel-chip af-sel-action" data-action="note" title="Save to your Notes">Save</button>
         <button type="button" class="af-sel-chip af-more-btn" data-more="1">More</button>
       </div>
       <div class="af-sel-more" hidden>
+        <button type="button" class="af-sel-chip" data-q="Summarize this concisely.">Summarize</button>
         <button type="button" class="af-sel-chip" data-search="gemini" title="Open Gemini (Google AI Mode) in a new tab">Gemini ↗</button>
         <button type="button" class="af-sel-chip" data-search="chatgpt" title="Open ChatGPT in a new tab">ChatGPT ↗</button>
         <button type="button" class="af-sel-chip af-sel-action" data-action="remind" title="Add as a reminder">Remind</button>
@@ -877,7 +893,19 @@
     // One smart "ask": typed question if there is one, else a merged
     // explain+summarize default (this replaces the separate Explain/Summarize
     // chips — one better inline answer, like a lens for text).
-    const smartAsk = () => ask(input.value.trim() || "Explain this clearly and concisely.");
+    // "Answer" mode prompt — the trained default for both the Answer chip and
+    // the send button when nothing is typed. Handles the three things people
+    // actually select: a question / MCQ (answer it), a term or concept
+    // (explain it), or a claim (say if it's right). Kept tight so the reply is
+    // short and lands fast.
+    const ANSWER_PROMPT =
+      "Respond to the highlighted text based on what it is:\n" +
+      "- If it is a question (including multiple choice), give the correct answer directly, then a one-line reason. For multiple choice, name the correct option (e.g. \"C\") and its text.\n" +
+      "- If it is a term, concept, or phrase, explain it clearly in 1–3 sentences.\n" +
+      "- If it is a statement/claim, say whether it is correct and briefly why.\n" +
+      "Be accurate and concise. No preamble.";
+
+    const smartAsk = () => ask(input.value.trim() || ANSWER_PROMPT);
     bar.querySelector(".af-sel-send").onclick = smartAsk;
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -885,6 +913,9 @@
         smartAsk();
       }
     });
+
+    const answerChip = bar.querySelector("[data-answer]");
+    if (answerChip) answerChip.onclick = () => ask(ANSWER_PROMPT);
 
     bar.querySelectorAll(".af-sel-chip[data-q]").forEach((c) => {
       c.onclick = () => ask(c.dataset.q);
