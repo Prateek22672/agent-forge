@@ -36,9 +36,12 @@ html, body {
   margin: 0;
   background: var(--af-bg);
   color: var(--af-fg);
-  font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  font-family: "Inter", -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   font-size: 13px;
+  font-weight: 400;
+  letter-spacing: .003em;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 #app { display: flex; flex-direction: column; }
 
@@ -68,7 +71,7 @@ body.af-sidepanel .panel {
   font-size: 10px; font-weight: 800; letter-spacing: -0.02em;
   flex-shrink: 0;
 }
-.brand-name { font-weight: 700; font-size: 13px; letter-spacing: 0.01em; }
+.brand-name { font-weight: 550; font-size: 13.5px; letter-spacing: -0.01em; }
 .header-right { display: flex; align-items: center; gap: 10px; }
 
 .iconBtn {
@@ -141,6 +144,19 @@ body.af-sidepanel .panel {
 .chat-hint a { color: var(--af-muted); }
 .chat-hint a:hover { color: var(--af-fg); }
 
+/* Markdown inside AI bubbles — tables/lists/headers render cleanly. */
+.chat-bubble.ai p { margin: 0 0 7px; }
+.chat-bubble.ai p:last-child { margin-bottom: 0; }
+.chat-bubble.ai .md-h { font-weight: 600; margin: 4px 0 5px; }
+.chat-bubble.ai ul, .chat-bubble.ai ol { margin: 4px 0 7px; padding-left: 18px; }
+.chat-bubble.ai li { margin: 2px 0; }
+.chat-bubble.ai code { background: var(--af-bg-alt); border: 1px solid var(--af-border-soft); border-radius: 4px; padding: 1px 5px; font-family: ui-monospace, "Cascadia Code", monospace; font-size: 11px; }
+.chat-bubble.ai a { color: var(--af-accent); }
+.md-table-wrap { overflow-x: auto; margin: 4px 0 8px; }
+.chat-bubble.ai .md-table { border-collapse: collapse; width: 100%; font-size: 11.5px; }
+.chat-bubble.ai .md-table th, .chat-bubble.ai .md-table td { border: 1px solid var(--af-border); padding: 5px 7px; text-align: left; vertical-align: top; }
+.chat-bubble.ai .md-table th { background: var(--af-bg-alt); font-weight: 550; }
+
 input, textarea {
   width: 100%;
   background: var(--af-bg-alt);
@@ -202,7 +218,7 @@ button.secondary:hover { border-color: var(--af-muted); opacity: 1; }
   margin-bottom: 8px;
   background: var(--af-chip-bg);
 }
-.item .title { font-size: 12.5px; font-weight: 600; }
+.item .title { font-size: 12.5px; font-weight: 500; }
 .item .sub { font-size: 11px; color: var(--af-muted); margin-top: 3px; line-height: 1.4; }
 .item .row { display: flex; gap: 7px; margin-top: 9px; }
 .item .row button { flex: 1; font-size: 11.5px; padding: 7px; }
@@ -233,13 +249,14 @@ button.secondary:hover { border-color: var(--af-muted); opacity: 1; }
 .af-welcome-sub { font-size: 12px; color: var(--af-muted); margin-top: 3px; }
 
 .af-section-label {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--af-muted-2);
-  margin: 4px 0 8px;
+  margin: 12px 0 7px;
 }
+.af-section-label:first-child { margin-top: 0; }
 
 .tools-grid {
   display: grid;
