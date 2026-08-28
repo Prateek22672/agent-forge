@@ -5,30 +5,55 @@
 <style>
   * { box-sizing: border-box; }
   body {
-    width: 268px; margin: 0; padding: 16px;
+    width: 292px; margin: 0; padding: 16px 16px 18px;
     font-family: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
-    font-size: 13px; background: #14151a; color: #f3f4f7;
+    font-size: 13px; color: #eceef4;
+    background:
+      radial-gradient(130% 90% at 50% -20%, rgba(109,123,255,.16), transparent 62%),
+      #131419;
     -webkit-font-smoothing: antialiased;
   }
-  .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-  .brand { display: flex; align-items: center; gap: 9px; }
-  .logo { width: 26px; height: 26px; border-radius: 8px; }
-  .name { font-weight: 650; font-size: 16px; letter-spacing: -0.01em; }
+  .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 13px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .logo { width: 30px; height: 30px; border-radius: 9px; }
+  .name { font-weight: 500; font-size: 16px; letter-spacing: -0.01em; }
 
-  .switch { position: relative; width: 44px; height: 26px; cursor: pointer; }
+  .switch { position: relative; width: 46px; height: 27px; cursor: pointer; flex: none; }
   .switch input { opacity: 0; width: 0; height: 0; }
-  .slider { position: absolute; inset: 0; background: rgba(255,255,255,.16); border-radius: 999px; transition: .18s; }
-  .slider::before { content: ""; position: absolute; width: 20px; height: 20px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .18s; }
-  .switch input:checked + .slider { background: #5b6cf0; }
-  .switch input:checked + .slider::before { transform: translateX(18px); }
+  .slider { position: absolute; inset: 0; background: rgba(255,255,255,.13); border-radius: 999px; transition: .2s; }
+  .slider::before {
+    content: ""; position: absolute; width: 21px; height: 21px; left: 3px; top: 3px;
+    background: #fff; border-radius: 50%; transition: .2s; box-shadow: 0 1px 3px rgba(0,0,0,.35);
+  }
+  .switch input:checked + .slider { background: #6d7bff; }
+  .switch input:checked + .slider::before { transform: translateX(19px); }
+
+  .site {
+    display: flex; align-items: center; gap: 9px; padding: 10px 12px; margin-bottom: 12px;
+    background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.06); border-radius: 13px;
+  }
+  .site img { width: 16px; height: 16px; border-radius: 4px; flex: none; }
+  .site .host {
+    font-weight: 400; font-size: 12.5px; color: #d6d9e3;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+  }
+  .site .dot {
+    width: 7px; height: 7px; border-radius: 50%; background: #4ade80; flex: none; margin-left: auto;
+    box-shadow: 0 0 7px rgba(74,222,128,.65);
+  }
+  .site.off .dot { background: rgba(255,255,255,.28); box-shadow: none; }
 
   .stat { display: flex; gap: 10px; }
-  .box { flex: 1; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 16px 12px; text-align: center; }
-  .box .num { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
-  .box.total .num { color: #5b6cf0; }
-  .box .lbl { font-size: 11px; color: rgba(255,255,255,.5); margin-top: 3px; }
-  .status { text-align: center; font-size: 11.5px; color: rgba(255,255,255,.45); margin-top: 14px; }
-  .status b { color: #f3f4f7; font-weight: 500; }
+  .box {
+    flex: 1; background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.06);
+    border-radius: 16px; padding: 15px 12px; text-align: center;
+  }
+  .box .num { font-size: 28px; font-weight: 500; letter-spacing: -0.02em; line-height: 1; }
+  .box.total .num { color: #7f8cff; }
+  .box .lbl { font-size: 11px; font-weight: 400; color: rgba(255,255,255,.4); margin-top: 6px; }
+
+  .status { text-align: center; font-size: 11.5px; font-weight: 400; color: rgba(255,255,255,.38); margin-top: 14px; }
+  .status b { color: #eceef4; font-weight: 500; }
 </style>
 </head>
 <body>
@@ -36,10 +61,18 @@
     <div class="brand"><img class="logo" src="icons/icon48.png" alt="" /><span class="name">NoAds</span></div>
     <label class="switch"><input type="checkbox" id="power" checked /><span class="slider"></span></label>
   </div>
+
+  <div class="site" id="site">
+    <img id="favicon" src="" alt="" hidden />
+    <span class="host" id="host">—</span>
+    <span class="dot"></span>
+  </div>
+
   <div class="stat">
     <div class="box"><div class="num" id="current">0</div><div class="lbl">this page</div></div>
     <div class="box total"><div class="num" id="total">0</div><div class="lbl">all-time</div></div>
   </div>
+
   <div class="status" id="status"><b>Blocking is on</b></div>
   <script src="popup.js"></script>
 </body>
