@@ -1,8 +1,13 @@
-// Cosmetic ad removal + anti-adblock-nag removal on every page. The DNR rules
-// block ad NETWORK requests; this hides leftover ad containers and removes
-// "disable your ad blocker" nag overlays (and restores the scroll they lock).
-// Counts what it removes so the popup's total reflects it. Fails safe; honours
-// the global pause.
+// Cosmetic ad + anti-adblock-nag removal on every page. The DNR rules block ad
+// NETWORK requests; this hides leftover ad containers and removes "disable your
+// ad blocker" nag overlays (restoring any scroll-lock they apply).
+//
+// LIGHTWEIGHT BY DESIGN — it must never freeze or heat a tab:
+//   * NO whole-page MutationObserver (that fed back on itself and pegged the CPU)
+//   * NO scanning of every <div> on the page — nag candidates are found by
+//     targeted attribute selectors only (usually 0-few matches)
+//   * runs on a slow 1.5s interval, all queries are bounded
+// Honours the global pause.
 (function () {
   let paused = false;
   try {
@@ -12,56 +17,73 @@
     });
   } catch {}
 
+  // Specific leftover ad containers (already network-blocked; this hides shells).
   const AD = [
-    ".adsbygoogle", "ins.adsbygoogle", '[id^="ad-"]', '[id*="google_ads"]', '[id*="-ad-slot"]',
-    '[class*="ad-slot"]', '[class*="ad-banner"]', '[class*="adBanner"]',
-    '[aria-label="Advertisement"]', '[data-ad-slot]',
-    'iframe[src*="doubleclick"]', 'iframe[src*="googlesyndication"]', 'iframe[src*="/ads/"]',
-    "#taboola-below-article", '[id^="taboola"]', '[class*="trc_related"]',
+    ".adsbygoogle",
+    "ins.adsbygoogle",
+    '[id*="google_ads"]',
+    '[id*="-ad-slot"]',
+    '[class*="ad-slot"]',
+    '[class*="ad-banner"]',
+    '[class*="adBanner"]',
+    '[aria-label="Advertisement"]',
+    '[data-ad-slot]',
+    'iframe[src*="doubleclick"]',
+    'iframe[src*="googlesyndication"]',
+    "#taboola-below-article",
+    '[id^="taboola"]',
   ];
-  const NAG = ["adblock", "ad-block", "ad_block", "disable-adblock", "anti-adblock", "adblocker", "detect-adblock"];
 
-  let pending = 0;
-  const flush = () => {
-    if (pending > 0) {
-      try { chrome.runtime.sendMessage({ type: "NOADS_REMOVED", n: pending }); } catch {}
-      pending = 0;
+  // Nag overlays are matched by name only — no full-DOM scan.
+  const NAG_SEL =
+    '[class*="adblock" i],[id*="adblock" i],[class*="ad-block" i],[id*="ad-block" i],' +
+    '[class*="anti-adblock" i],[class*="detect-adblock" i],[class*="adblocker" i],[id*="adblocker" i]';
+
+  const report = (n) => {
+    if (n > 0) {
+      try { chrome.runtime.sendMessage({ type: "NOADS_REMOVED", n }); } catch {}
     }
   };
 
   const clean = () => {
     if (paused) return;
     try {
+      // 1. Leftover ad containers (bounded selectors). Not counted — the network
+      //    block behind them is already counted by the toolbar badge.
       AD.forEach((s) => {
         let nodes;
         try { nodes = document.querySelectorAll(s); } catch { return; }
-        nodes.forEach((el) => { if (el) { el.remove(); pending++; } });
+        nodes.forEach((el) => el && el.remove());
       });
-      const nodes = document.querySelectorAll("div,section,aside,dialog");
-      for (const el of nodes) {
-        const cls = typeof el.className === "string" ? el.className : "";
-        const idc = (el.id + " " + cls).toLowerCase();
-        if (!NAG.some((h) => idc.includes(h))) continue;
+
+      // 2. Anti-adblock nag overlays — only elements literally named like a
+      //    detector, and only if they behave like a blocking overlay.
+      let nags;
+      try { nags = document.querySelectorAll(NAG_SEL); } catch { nags = []; }
+      let removedNag = 0;
+      nags.forEach((el) => {
         let cs;
-        try { cs = getComputedStyle(el); } catch { continue; }
+        try { cs = getComputedStyle(el); } catch { return; }
         if (cs.position === "fixed" || cs.position === "absolute" || (+cs.zIndex || 0) > 999) {
           el.remove();
-          pending++;
+          removedNag++;
         }
+      });
+
+      // 3. Only undo scroll-lock / blur if we actually killed a nag (so we never
+      //    fight normal sites).
+      if (removedNag) {
+        try { if (getComputedStyle(document.body).overflow === "hidden") document.body.style.overflow = "auto"; } catch {}
+        try {
+          const de = document.documentElement;
+          if (getComputedStyle(de).overflow === "hidden") de.style.overflow = "auto";
+        } catch {}
+        try { if (getComputedStyle(document.body).filter !== "none") document.body.style.filter = "none"; } catch {}
+        report(removedNag);
       }
-      if (getComputedStyle(document.body).overflow === "hidden") document.body.style.overflow = "auto";
-      const de = document.documentElement;
-      if (getComputedStyle(de).overflow === "hidden") de.style.overflow = "auto";
-      if (getComputedStyle(document.body).filter !== "none") document.body.style.filter = "none";
     } catch {}
-    flush();
   };
 
-  const start = () => {
-    try { new MutationObserver(clean).observe(document.documentElement, { childList: true, subtree: true }); } catch {}
-    clean();
-  };
-  if (document.body) start();
-  else document.addEventListener("DOMContentLoaded", start);
-  setInterval(clean, 1200);
+  setInterval(clean, 1500);
+  clean();
 })();

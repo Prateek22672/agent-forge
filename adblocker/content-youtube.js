@@ -1,12 +1,12 @@
-// YouTube ad fail-safe. Ads are NOT network-blocked (that stalls the player);
-// yt-adfree.js strips ads from the player response so most never schedule. This
-// is the guaranteed catch-all for ads that still slip through — including ad
-// PODS (2-4 back-to-back, mix of skippable + unskippable):
-//   * skippable ad  -> force-click Skip the instant the button exists
-//                      (YouTube blocks seeking during ads, so a click is the
-//                       only reliable skip)
-//   * unskippable   -> jump to the end, muted, at max speed
-// Reacts within a frame by watching the player's .ad-showing class. Honours pause.
+// YouTube ad fail-safe — MINIMAL & SAFE. The real work is done passively by
+// yt-adfree.js, which strips ads from the player-response JSON so they never
+// schedule. This script only handles anything that slips through, and is
+// deliberately tiny so it can NEVER freeze or heat the tab:
+//   * NO MutationObserver, NO video seeking, NO playbackRate hacks
+//     (those caused the stuck-black frame + CPU meltdown)
+//   * one light 700ms timer: click Skip if present, mute the ad, drop static
+//     ad containers — all bounded queries
+// Honours the global pause.
 (function () {
   let paused = false;
   try {
@@ -21,109 +21,67 @@
     ".ytp-skip-ad-button",
     ".ytp-ad-skip-button",
     ".ytp-ad-skip-button-container button",
-    "button.ytp-ad-skip-button-modern",
-    ".ytp-ad-skip-button-modern button",
-    ".videoAdUiSkipButton",
   ];
-
-  // Some skip buttons listen on pointerup, not click — fire the whole sequence.
-  const forceClick = (el) => {
-    try { el.click(); } catch {}
-    try {
-      ["pointerdown", "mousedown", "pointerup", "mouseup", "click"].forEach((t) =>
-        el.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window }))
-      );
-    } catch {}
-  };
-
   const clickSkip = () => {
     for (const s of SKIP) {
       const el = document.querySelector(s);
-      if (el) { forceClick(el); return true; }
-    }
-    // Fallback: any "skip"-ish button inside the player (class name changes).
-    const p = document.querySelector("#movie_player, .html5-video-player");
-    if (p) {
-      const c = p.querySelector(
-        'button[class*="skip" i], [class*="skip" i][role="button"], a[class*="skip" i]'
-      );
-      if (c) { forceClick(c); return true; }
+      if (el) {
+        try { el.click(); } catch {}
+        try {
+          ["pointerdown", "pointerup", "click"].forEach((t) =>
+            el.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window }))
+          );
+        } catch {}
+        return true;
+      }
     }
     return false;
   };
 
-  const nuke = () => {
+  const report = (n) => {
+    if (n > 0 && !paused) {
+      try { chrome.runtime.sendMessage({ type: "NOADS_REMOVED", n }); } catch {}
+    }
+  };
+
+  let wasAd = false;
+  const tick = () => {
     if (paused) return;
     try {
       const player = document.querySelector(".html5-video-player");
       const adShowing = player && player.classList.contains("ad-showing");
-
       if (adShowing) {
-        // Prefer the Skip button; if there isn't one, fast-forward the ad out.
-        if (!clickSkip()) {
-          const v = player.querySelector("video");
-          if (v) {
-            v.muted = true;
-            const d = v.duration;
-            try { v.currentTime = isFinite(d) && d > 0 ? d : 1e7; } catch {}
-            try { v.playbackRate = 16; } catch {}
-          }
-        }
-      } else {
-        // The Skip button can render a frame before .ad-showing settles.
+        if (!wasAd) { wasAd = true; report(1); } // count each slipped-through ad
         clickSkip();
+        const v = player.querySelector("video");
+        if (v) v.muted = true; // mute only — no seeking (seeking stuck the player)
+      } else {
+        wasAd = false;
       }
 
-      // Overlay / banner / feed / companion ads.
-      document
-        .querySelectorAll(".ytp-ad-overlay-close-button, .ytp-ad-overlay-close-container")
-        .forEach((b) => forceClick(b));
+      // Static overlay / banner / feed / companion ad containers (bounded).
+      document.querySelectorAll(".ytp-ad-overlay-close-button").forEach((b) => {
+        try { b.click(); } catch {}
+      });
       [
         ".ytp-ad-overlay-slot",
-        ".ytp-ad-overlay-container",
         "#player-ads",
         "ytd-ad-slot-renderer",
-        ".ytd-ad-slot-renderer",
         "ytd-in-feed-ad-layout-renderer",
-        "ytd-promoted-sparkles-web-renderer",
         "ytd-companion-slot-renderer",
         "#masthead-ad",
       ].forEach((s) => document.querySelectorAll(s).forEach((el) => el.remove()));
     } catch {}
   };
 
-  // React within a frame: hook the video element's own events, not just a poll.
-  const hook = (v) => {
-    if (!v || v.__noads) return;
-    v.__noads = true;
-    ["timeupdate", "loadedmetadata", "play", "playing", "durationchange", "progress"].forEach(
-      (ev) => v.addEventListener(ev, nuke, true)
-    );
-  };
-  const findVideo = () => {
-    document.querySelectorAll(".html5-main-video, video").forEach(hook);
-  };
+  // Count ads stripped by yt-adfree.js (MAIN world) so the popup number reflects
+  // YouTube ads blocked, not just cosmetic/network ones.
+  window.addEventListener("message", (e) => {
+    if (e.source === window && e.data && e.data.__noads === true && e.data.blocked > 0) {
+      report(e.data.blocked);
+    }
+  });
 
-  const start = () => {
-    try {
-      // attributeFilter:["class"] fires the instant YouTube toggles .ad-showing.
-      new MutationObserver(() => {
-        nuke();
-        findVideo();
-      }).observe(document.documentElement, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ["class"],
-      });
-    } catch {}
-    findVideo();
-    nuke();
-  };
-  if (document.documentElement) start();
-  else document.addEventListener("DOMContentLoaded", start);
-  setInterval(() => {
-    nuke();
-    findVideo();
-  }, 200);
+  setInterval(tick, 700);
+  tick();
 })();
