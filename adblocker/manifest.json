@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "NoAds Ad Blocker Agent",
   "short_name": "NoAds",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Block ads, trackers and pop-ups, skip YouTube ads automatically, and remove anti-adblock nags. Fast, private, zero data collection.",
   "icons": {
     "16": "icons/icon16.png",
@@ -11,9 +11,7 @@
   },
   "permissions": [
     "declarativeNetRequest",
-    "declarativeNetRequestFeedback",
-    "storage",
-    "alarms"
+    "storage"
   ],
   "host_permissions": [
     "<all_urls>"

@@ -31,12 +31,12 @@ device** and are not accessible to us or anyone else:
 
 ## Permissions
 
-- **declarativeNetRequest / declarativeNetRequestFeedback** — to block ad
-  requests with a bundled filter list and to count how many were blocked.
+- **declarativeNetRequest** — to block ad requests with a bundled filter list.
+  Chrome shows the blocked-request count on the toolbar icon; this count stays
+  on your device.
 - **host permissions (all sites)** — because ads appear on any site; used only
   to remove ads locally, never to read or send your page data.
 - **storage** — the on/off preference and local block counter above.
-- **alarms** — a timer that refreshes the block counter.
 
 ## Third parties
 

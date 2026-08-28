@@ -1,95 +1,94 @@
-// NoAds background — blocking toggle, accurate counting, per-tab counts.
+// NoAds background — on/off toggle + block counting via the NATIVE
+// declarativeNetRequest action badge. No privacy-sensitive permissions:
+// only "declarativeNetRequest" + "storage" are used.
 //
-// Counting: onRuleMatchedDebug fires in real time for every blocked request
-// (works while the extension is loaded unpacked — i.e. while testing). In a
-// published build it doesn't fire, so we fall back to polling getMatchedRules.
-// Either way we keep a persistent all-time total + a live per-tab count.
+// displayActionCountAsBadgeText makes Chrome itself show, per tab, how many
+// requests this extension blocked. We read that count with action.getBadgeText
+// (no special permission) and fold new blocks into a persistent all-time total.
+// Cosmetic/YouTube element removals (reported by the content scripts) are added
+// on top. This works identically in a published build and unpacked.
 
 let PAUSED = false;
 chrome.storage.local.get("paused", (r) => (PAUSED = r.paused === true));
 
 function applyBadge() {
   try {
-    chrome.declarativeNetRequest.setExtensionActionOptions({ displayActionCountAsBadgeText: true });
+    chrome.declarativeNetRequest.setExtensionActionOptions({
+      displayActionCountAsBadgeText: !PAUSED,
+    });
   } catch {}
   chrome.action.setBadgeBackgroundColor({ color: "#5b6cf0" });
+  if (PAUSED) chrome.action.setBadgeText({ text: "off" });
 }
 
-// ruleId -> ad domain (for future breakdown; harmless if unused by the popup).
-const RULE_DOMAIN = {};
-async function loadRuleMap() {
+const tabSeen = {}; // tabId -> native block count already folded into the total
+const tabCosmetic = {}; // tabId -> cosmetic removals this page-load
+
+function addTotal(n) {
+  if (n <= 0 || PAUSED) return;
+  chrome.storage.local.get("totalBlocked", (s) => {
+    chrome.storage.local.set({ totalBlocked: (s.totalBlocked || 0) + n });
+  });
+}
+
+async function badgeCount(tabId) {
   try {
-    const rules = await (await fetch(chrome.runtime.getURL("rules.json"))).json();
-    for (const r of rules) {
-      const f = (r.condition && r.condition.urlFilter) || "";
-      const m = f.match(/\|\|([^\^]+)\^/);
-      RULE_DOMAIN[r.id] = m ? m[1] : "other";
-    }
-  } catch {}
-}
-
-const tabCounts = {}; // tabId -> blocked this page-load (live)
-let pendingTotal = 0;
-let flushTimer = null;
-
-function flushSoon() {
-  if (flushTimer) return;
-  flushTimer = setTimeout(async () => {
-    flushTimer = null;
-    if (pendingTotal <= 0) return;
-    const add = pendingTotal;
-    pendingTotal = 0;
-    const s = await chrome.storage.local.get("totalBlocked");
-    await chrome.storage.local.set({ totalBlocked: (s.totalBlocked || 0) + add });
-  }, 1200);
-}
-
-function countBlock(tabId) {
-  if (PAUSED) return;
-  pendingTotal++;
-  if (tabId != null && tabId >= 0) tabCounts[tabId] = (tabCounts[tabId] || 0) + 1;
-  flushSoon();
-}
-
-// Real-time, accurate (unpacked/dev builds).
-try {
-  if (chrome.declarativeNetRequest.onRuleMatchedDebug) {
-    chrome.declarativeNetRequest.onRuleMatchedDebug.addListener((info) => {
-      countBlock(info.request && info.request.tabId);
-    });
+    const t = await chrome.action.getBadgeText({ tabId });
+    return parseInt((t || "").replace(/[^\d]/g, ""), 10) || 0;
+  } catch {
+    return 0;
   }
-} catch {}
+}
 
-// Reset a tab's live count when it navigates; drop it when it closes.
+// Read a tab's native block count and add any new blocks to the all-time total.
+async function syncTab(tabId) {
+  if (PAUSED || tabId == null || tabId < 0) return;
+  const n = await badgeCount(tabId);
+  const seen = tabSeen[tabId] || 0;
+  if (n > seen) {
+    addTotal(n - seen);
+    tabSeen[tabId] = n;
+  }
+}
+
 chrome.tabs.onUpdated.addListener((tabId, info) => {
-  if (info.status === "loading") tabCounts[tabId] = 0;
+  if (info.status === "loading") {
+    tabSeen[tabId] = 0;
+    tabCosmetic[tabId] = 0;
+  }
+  syncTab(tabId);
 });
 chrome.tabs.onRemoved.addListener((tabId) => {
-  delete tabCounts[tabId];
+  delete tabSeen[tabId];
+  delete tabCosmetic[tabId];
 });
 
 function init() {
   applyBadge();
-  loadRuleMap();
 }
 chrome.runtime.onInstalled.addListener(init);
 chrome.runtime.onStartup.addListener(init);
 init();
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  // Cosmetic / YouTube removals count toward the all-time total too.
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  // Cosmetic / YouTube removals count toward the totals too.
   if (msg && msg.type === "NOADS_REMOVED" && msg.n > 0 && !PAUSED) {
-    pendingTotal += msg.n;
-    flushSoon();
+    const tabId = sender.tab && sender.tab.id;
+    if (tabId != null) tabCosmetic[tabId] = (tabCosmetic[tabId] || 0) + msg.n;
+    addTotal(msg.n);
   }
-  // Popup asks for the active tab's live count.
+  // Popup asks for the active tab's live count: native badge + cosmetic.
   if (msg && msg.type === "NOADS_TAB_COUNT") {
-    sendResponse({ count: tabCounts[msg.tabId] || 0 });
+    (async () => {
+      const n = await badgeCount(msg.tabId);
+      sendResponse({ count: n + (tabCosmetic[msg.tabId] || 0) });
+    })();
+    return true; // keep the message channel open for the async response
   }
   return false;
 });
 
-// The on/off switch: disable/enable the whole ruleset, stop counting, clear badge.
+// The on/off switch: disable/enable the whole ruleset, toggle the auto badge.
 chrome.storage.onChanged.addListener(async (changes, area) => {
   if (area !== "local" || !("paused" in changes)) return;
   PAUSED = changes.paused.newValue === true;
@@ -99,8 +98,9 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
     );
   } catch {}
   try {
-    // Off = truly off: turn the auto badge off and show "off".
-    chrome.declarativeNetRequest.setExtensionActionOptions({ displayActionCountAsBadgeText: !PAUSED });
+    chrome.declarativeNetRequest.setExtensionActionOptions({
+      displayActionCountAsBadgeText: !PAUSED,
+    });
   } catch {}
   chrome.action.setBadgeText({ text: PAUSED ? "off" : "" });
 });
