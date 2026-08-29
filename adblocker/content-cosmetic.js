@@ -10,10 +10,17 @@
 // Honours the global pause.
 (function () {
   let paused = false;
+  let pausedHosts = [];
+  const HOST = location.hostname.replace(/^www\./, "");
+  const isPaused = () => paused || pausedHosts.indexOf(HOST) !== -1;
   try {
-    chrome.storage.local.get("paused", (r) => (paused = r.paused === true));
+    chrome.storage.local.get(["paused", "pausedHosts"], (r) => {
+      paused = r.paused === true;
+      pausedHosts = Array.isArray(r.pausedHosts) ? r.pausedHosts : [];
+    });
     chrome.storage.onChanged.addListener((c) => {
       if (c.paused) paused = c.paused.newValue === true;
+      if (c.pausedHosts) pausedHosts = Array.isArray(c.pausedHosts.newValue) ? c.pausedHosts.newValue : [];
     });
   } catch {}
 
@@ -46,7 +53,7 @@
   };
 
   const clean = () => {
-    if (paused) return;
+    if (isPaused()) return;
     try {
       // 1. Leftover ad containers (bounded selectors). Not counted — the network
       //    block behind them is already counted by the toolbar badge.

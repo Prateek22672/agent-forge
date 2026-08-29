@@ -3,57 +3,60 @@
 <head>
 <meta charset="utf-8" />
 <style>
+  :root {
+    --bg: #ffffff; --fg: #16171b; --muted: #6b6f76;
+    --card: #f6f7f9; --card-brd: rgba(0,0,0,.07);
+    --accent: #3b6ef6; --green: #16a34a; --green-bg: #e7f6ec; --amber: #b45309; --amber-bg: #fdf1e3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15161b; --fg: #eceef4; --muted: #9a9da6;
+      --card: #1e2027; --card-brd: rgba(255,255,255,.08);
+      --accent: #6d7bff; --green: #4ade80; --green-bg: rgba(74,222,128,.13); --amber: #fbbf24; --amber-bg: rgba(251,191,36,.12);
+    }
+  }
   * { box-sizing: border-box; }
   body {
-    width: 292px; margin: 0; padding: 16px 16px 18px;
+    width: 300px; margin: 0; padding: 14px;
     font-family: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
-    font-size: 13px; color: #eceef4;
-    background:
-      radial-gradient(130% 90% at 50% -20%, rgba(109,123,255,.16), transparent 62%),
-      #131419;
-    -webkit-font-smoothing: antialiased;
+    font-size: 13px; background: var(--bg); color: var(--fg); -webkit-font-smoothing: antialiased;
   }
-  .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 13px; }
-  .brand { display: flex; align-items: center; gap: 10px; }
-  .logo { width: 30px; height: 30px; border-radius: 9px; }
-  .name { font-weight: 500; font-size: 16px; letter-spacing: -0.01em; }
+  .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .brand { display: flex; align-items: center; gap: 9px; }
+  .logo { width: 28px; height: 28px; border-radius: 8px; }
+  .name { font-weight: 700; font-size: 17px; letter-spacing: -0.02em; }
 
   .switch { position: relative; width: 46px; height: 27px; cursor: pointer; flex: none; }
   .switch input { opacity: 0; width: 0; height: 0; }
-  .slider { position: absolute; inset: 0; background: rgba(255,255,255,.13); border-radius: 999px; transition: .2s; }
-  .slider::before {
-    content: ""; position: absolute; width: 21px; height: 21px; left: 3px; top: 3px;
-    background: #fff; border-radius: 50%; transition: .2s; box-shadow: 0 1px 3px rgba(0,0,0,.35);
-  }
-  .switch input:checked + .slider { background: #6d7bff; }
+  .slider { position: absolute; inset: 0; background: rgba(120,124,132,.35); border-radius: 999px; transition: .2s; }
+  .slider::before { content: ""; position: absolute; width: 21px; height: 21px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; box-shadow: 0 1px 3px rgba(0,0,0,.28); }
+  .switch input:checked + .slider { background: var(--accent); }
   .switch input:checked + .slider::before { transform: translateX(19px); }
 
-  .site {
-    display: flex; align-items: center; gap: 9px; padding: 10px 12px; margin-bottom: 12px;
-    background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.06); border-radius: 13px;
-  }
+  .card { position: relative; background: var(--card); border: 1px solid var(--card-brd); border-radius: 15px; padding: 14px; overflow: hidden; }
+  .card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--green); opacity: 1; transition: background .2s; }
+  .card.off::before { background: rgba(120,124,132,.5); }
+  .card.sitepaused::before { background: var(--amber); }
+
+  .site { display: flex; align-items: center; gap: 8px; margin-bottom: 11px; }
   .site img { width: 16px; height: 16px; border-radius: 4px; flex: none; }
-  .site .host {
-    font-weight: 400; font-size: 12.5px; color: #d6d9e3;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
-  }
-  .site .dot {
-    width: 7px; height: 7px; border-radius: 50%; background: #4ade80; flex: none; margin-left: auto;
-    box-shadow: 0 0 7px rgba(74,222,128,.65);
-  }
-  .site.off .dot { background: rgba(255,255,255,.28); box-shadow: none; }
+  .site .host { font-weight: 500; font-size: 12.5px; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+  .pill { flex: none; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--green-bg); color: var(--green); }
+  .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .card.off .pill { background: rgba(120,124,132,.15); color: var(--muted); }
+  .card.sitepaused .pill { background: var(--amber-bg); color: var(--amber); }
 
-  .stat { display: flex; gap: 10px; }
-  .box {
-    flex: 1; background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.06);
-    border-radius: 16px; padding: 15px 12px; text-align: center;
-  }
-  .box .num { font-size: 28px; font-weight: 500; letter-spacing: -0.02em; line-height: 1; }
-  .box.total .num { color: #7f8cff; }
-  .box .lbl { font-size: 11px; font-weight: 400; color: rgba(255,255,255,.4); margin-top: 6px; }
+  .headline { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 12px; }
 
-  .status { text-align: center; font-size: 11.5px; font-weight: 400; color: rgba(255,255,255,.38); margin-top: 14px; }
-  .status b { color: #eceef4; font-weight: 500; }
+  .stats { display: flex; gap: 9px; margin-bottom: 12px; }
+  .stat { flex: 1; background: var(--bg); border: 1px solid var(--card-brd); border-radius: 12px; padding: 12px 10px; text-align: center; }
+  .stat .num { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+  .stat .num.total { color: var(--accent); }
+  .stat .lbl { font-size: 10.5px; font-weight: 500; color: var(--muted); margin-top: 5px; }
+
+  .btn { width: 100%; padding: 10px; border-radius: 11px; border: 1px solid var(--card-brd); background: var(--bg); color: var(--fg); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background .12s, opacity .12s; }
+  .btn:hover { background: var(--card); }
+  .btn:disabled { opacity: .45; cursor: default; }
 </style>
 </head>
 <body>
@@ -62,18 +65,20 @@
     <label class="switch"><input type="checkbox" id="power" checked /><span class="slider"></span></label>
   </div>
 
-  <div class="site" id="site">
-    <img id="favicon" src="" alt="" hidden />
-    <span class="host" id="host">—</span>
-    <span class="dot"></span>
+  <div class="card" id="card">
+    <div class="site">
+      <img id="favicon" src="" alt="" hidden />
+      <span class="host" id="host">—</span>
+      <span class="pill" id="pill">Active</span>
+    </div>
+    <div class="headline" id="headline">This page is being cleaned</div>
+    <div class="stats">
+      <div class="stat"><div class="num" id="current">0</div><div class="lbl">this page</div></div>
+      <div class="stat"><div class="num total" id="total">0</div><div class="lbl">all-time</div></div>
+    </div>
+    <button class="btn" id="pauseSite">Pause on this site</button>
   </div>
 
-  <div class="stat">
-    <div class="box"><div class="num" id="current">0</div><div class="lbl">this page</div></div>
-    <div class="box total"><div class="num" id="total">0</div><div class="lbl">all-time</div></div>
-  </div>
-
-  <div class="status" id="status"><b>Blocking is on</b></div>
   <script src="popup.js"></script>
 </body>
 </html>
