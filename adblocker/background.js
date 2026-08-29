@@ -11,6 +11,18 @@
 let PAUSED = false;
 chrome.storage.local.get("paused", (r) => (PAUSED = r.paused === true));
 
+// Earlier builds over-counted (re-counted the same ad on every player re-fetch,
+// counted re-inserted cosmetic shells, etc.), so the stored all-time total is
+// inflated and not trustworthy. Reset it ONCE on upgrade to this counting model
+// so the number the user sees from here on is genuine — one count per real,
+// de-duplicated ad blocked.
+const COUNT_VERSION = 2;
+chrome.storage.local.get("countVersion", (r) => {
+  if (r.countVersion !== COUNT_VERSION) {
+    chrome.storage.local.set({ totalBlocked: 0, countVersion: COUNT_VERSION });
+  }
+});
+
 function applyBadge() {
   try {
     chrome.declarativeNetRequest.setExtensionActionOptions({
