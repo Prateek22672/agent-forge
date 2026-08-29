@@ -120,8 +120,28 @@
 .af-more-btn { margin-left: auto; background: transparent; border-color: transparent; color: var(--muted); }
 .af-more-btn:hover { background: var(--chip); color: var(--fg); border-color: transparent; }
 .af-sel-action:hover { background: var(--accent); color: #fff; border-color: transparent; }
-.af-answer { background: linear-gradient(180deg, #6d7bff, #4f5cd8); color: #fff; font-weight: 500; border-color: transparent; box-shadow: 0 2px 9px rgba(79,92,216,.42), inset 0 1px 0 rgba(255,255,255,.22); }
-.af-answer:hover { border-color: transparent; filter: brightness(1.06); box-shadow: 0 3px 12px rgba(79,92,216,.5), inset 0 1px 0 rgba(255,255,255,.22); }
+.af-answer { background: linear-gradient(180deg, #45464d, #2b2c31); color: #fff; font-weight: 500; border-color: transparent; box-shadow: 0 2px 9px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.1); }
+.af-answer:hover { border-color: transparent; filter: brightness(1.14); box-shadow: 0 3px 12px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.12); }
+.af-answer:hover { background: linear-gradient(180deg, #45464d, #2b2c31); } /* keep grey on hover, not the accent */
+
+/* Drag handle / minimize / resize for the selection bar. */
+.af-sel-handle { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: -3px -3px 3px; padding: 1px 3px; cursor: grab; user-select: none; }
+.af-sel-handle:active { cursor: grabbing; }
+.af-grip { display: inline-flex; align-items: center; color: var(--muted); padding: 2px 2px; }
+.af-grip:hover { color: var(--fg); }
+.af-min-label { display: none; font-size: 12px; font-weight: 500; color: var(--fg); }
+.af-min { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 20px; background: transparent; border: none; color: var(--muted); cursor: pointer; border-radius: 6px; padding: 0; }
+.af-min:hover { background: var(--chip); color: var(--fg); }
+.af-sel-bar.af-min-state { min-width: 0 !important; width: auto !important; }
+.af-sel-bar.af-min-state .af-sel-row,
+.af-sel-bar.af-min-state .af-sel-chips,
+.af-sel-bar.af-min-state .af-sel-more,
+.af-sel-bar.af-min-state .af-sel-answer { display: none !important; }
+.af-sel-bar.af-min-state .af-min-label { display: inline; }
+.af-sel-bar.af-min-state .af-resize { display: none; }
+.af-resize { position: absolute; right: 2px; bottom: 2px; width: 16px; height: 16px; cursor: nwse-resize; opacity: .55; }
+.af-resize::after { content: ""; position: absolute; right: 3px; bottom: 3px; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); border-bottom-right-radius: 2px; }
+.af-resize:hover { opacity: 1; }
 /* Static flex child (not absolutely positioned) so the bar's own size includes
    it and positionBar keeps the whole thing on screen. max-height is set per
    render in JS (fitAnswerBox) to the space left below/above the bar, so it
@@ -389,6 +409,10 @@
   let bar = null;
   let assistantAgentId = null;
   let lastSelectionText = "";
+  // Drag / resize state for the bar (reset each time a new bar is shown).
+  let barMoved = false; // user dragged it → stop auto-repositioning on scroll
+  let userBarWidth = null; // user-set width via the resize handle
+  let userAnswerHeight = null; // user-set answer-box height via the resize handle
 
   // Select-to-ask and the floating bubble can both be turned off from the
   // popup (Settings). Cached locally and kept live via storage.onChanged, so
@@ -582,6 +606,7 @@
   //    bar off-screen or has it appear detached ("going up") from the text.
   function positionBar(rect) {
     if (!bar) return;
+    if (barMoved) return; // user dragged it somewhere — leave it put
     const m = 8;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
@@ -624,13 +649,90 @@
     const box = bar && bar.querySelector(".af-sel-answer");
     if (!box) return;
     const barRect = bar.getBoundingClientRect();
-    const below = window.innerHeight - barRect.bottom - 16;
-    const above = barRect.top - 16;
-    // Give it whichever side has more room; hard cap so it always fits.
-    const avail = Math.max(below, above, 140);
-    box.style.maxHeight = Math.min(avail, Math.round(window.innerHeight * 0.6)) + "px";
+    if (userAnswerHeight) {
+      // User set a height with the resize handle — honour it.
+      box.style.maxHeight = userAnswerHeight + "px";
+    } else {
+      const below = window.innerHeight - barRect.bottom - 16;
+      const above = barRect.top - 16;
+      // Give it whichever side has more room; hard cap so it always fits.
+      const avail = Math.max(below, above, 140);
+      box.style.maxHeight = Math.min(avail, Math.round(window.innerHeight * 0.6)) + "px";
+    }
     const r = anchorRect();
     if (r) positionBar(r);
+  }
+
+  // Wire the bar's drag handle, minimize button, and resize corner.
+  function wireBarChrome(barEl) {
+    const handle = barEl.querySelector(".af-sel-handle");
+    const minBtn = barEl.querySelector(".af-min");
+    const resizer = barEl.querySelector(".af-resize");
+
+    // Drag by the handle (but not when clicking the minimize button).
+    if (handle) {
+      handle.addEventListener("mousedown", (e) => {
+        if (e.target.closest(".af-min")) return;
+        e.preventDefault();
+        const r = barEl.getBoundingClientRect();
+        const start = { x: e.clientX, y: e.clientY, left: r.left, top: r.top };
+        const move = (ev) => {
+          barMoved = true;
+          let nl = start.left + (ev.clientX - start.x);
+          let nt = start.top + (ev.clientY - start.y);
+          nl = Math.max(4, Math.min(nl, window.innerWidth - barEl.offsetWidth - 4));
+          nt = Math.max(4, Math.min(nt, window.innerHeight - 28));
+          barEl.style.left = nl + "px";
+          barEl.style.top = nt + "px";
+        };
+        const up = () => {
+          window.removeEventListener("mousemove", move, true);
+          window.removeEventListener("mouseup", up, true);
+        };
+        window.addEventListener("mousemove", move, true);
+        window.addEventListener("mouseup", up, true);
+      });
+    }
+
+    // Minimize / restore — collapse to just the handle strip.
+    if (minBtn) {
+      minBtn.onclick = (e) => {
+        e.stopPropagation();
+        const min = barEl.classList.toggle("af-min-state");
+        minBtn.innerHTML = min ? SVG_EXPAND : SVG_MIN;
+        minBtn.title = min ? "Restore" : "Minimize";
+      };
+    }
+
+    // Resize from the bottom-right corner: width + answer-box height.
+    if (resizer) {
+      resizer.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const r = barEl.getBoundingClientRect();
+        const start = { x: e.clientX, y: e.clientY, w: r.width };
+        let lastY = e.clientY;
+        const move = (ev) => {
+          const nw = Math.max(300, Math.min(start.w + (ev.clientX - start.x), Math.min(760, window.innerWidth - 20)));
+          userBarWidth = nw;
+          barEl.style.width = nw + "px";
+          barEl.style.maxWidth = "none";
+          const box = barEl.querySelector(".af-sel-answer");
+          if (box) {
+            const cur = box.getBoundingClientRect().height || 140;
+            userAnswerHeight = Math.max(90, cur + (ev.clientY - lastY));
+            box.style.maxHeight = userAnswerHeight + "px";
+          }
+          lastY = ev.clientY;
+        };
+        const up = () => {
+          window.removeEventListener("mousemove", move, true);
+          window.removeEventListener("mouseup", up, true);
+        };
+        window.addEventListener("mousemove", move, true);
+        window.addEventListener("mouseup", up, true);
+      });
+    }
   }
 
   // Render text with fenced ```code blocks``` as real code blocks (monospace,
@@ -1019,6 +1121,12 @@
     '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
   const SVG_SEND =
     '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>';
+  const SVG_GRIP =
+    '<svg width="18" height="10" viewBox="0 0 18 10" fill="currentColor"><circle cx="3" cy="3" r="1.35"/><circle cx="9" cy="3" r="1.35"/><circle cx="15" cy="3" r="1.35"/><circle cx="3" cy="7" r="1.35"/><circle cx="9" cy="7" r="1.35"/><circle cx="15" cy="7" r="1.35"/></svg>';
+  const SVG_MIN =
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg>';
+  const SVG_EXPAND =
+    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4H4v5M15 20h5v-5"/></svg>';
 
   // Decide light vs dark by the page's actual background luminance, so the bar
   // blends into whatever site it's on instead of always being a dark block on
@@ -1050,7 +1158,15 @@
     if (anchorRange) drawHighlightOverlay(anchorRange);
     bar = document.createElement("div");
     bar.className = "af-sel-bar" + (pageIsLight() ? " af-light" : "");
+    barMoved = false;
+    userBarWidth = null;
+    userAnswerHeight = null;
     bar.innerHTML = `
+      <div class="af-sel-handle">
+        <span class="af-grip" title="Drag to move">${SVG_GRIP}</span>
+        <span class="af-min-label">AgentFury</span>
+        <button type="button" class="af-min" title="Minimize">${SVG_MIN}</button>
+      </div>
       <div class="af-sel-row">
         <input type="text" class="af-sel-input" placeholder="Ask about this…" />
         <button type="button" class="af-ic af-copy-ic" title="Copy (works even where copying is blocked)">${SVG_COPY}</button>
@@ -1070,10 +1186,12 @@
         <button type="button" class="af-sel-chip af-sel-action" data-action="brain" title="Teach your AI's memory">Brain</button>
         <button type="button" class="af-sel-chip" data-open="1" title="Open in the side panel — roomier for code or long text">Open in panel ↗</button>
       </div>
+      <div class="af-resize" title="Drag to resize"></div>
     `;
     getAfRoot().appendChild(bar);
     positionBar(rect); // measure real size, then place viewport-aware
     requestAnimationFrame(() => bar.classList.add("af-in"));
+    wireBarChrome(bar); // drag handle, minimize, resize
 
     const input = bar.querySelector(".af-sel-input");
     enablePasteBypass(input);
