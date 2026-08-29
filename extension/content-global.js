@@ -380,10 +380,37 @@
   // talk to the Clipboard API ourselves.
   function forceCopy(text) {
     if (!text) return Promise.resolve(false);
-    return navigator.clipboard
-      .writeText(text)
-      .then(() => true)
-      .catch(() => false);
+    // 1) The async Clipboard API — best when available and permitted.
+    const viaApi = () => {
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          return navigator.clipboard.writeText(text).then(() => true).catch(() => false);
+        }
+      } catch {}
+      return Promise.resolve(false);
+    };
+    // 2) Fallback: a hidden textarea + execCommand('copy'). This works in many
+    //    places the async API refuses (page not focused, clipboard permission
+    //    blocked). restoreCopyPaste()'s capture-phase 'copy' listener stops the
+    //    page's own copy-blocker from cancelling it.
+    const viaExec = () => {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.setAttribute("readonly", "");
+        ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;";
+        (document.body || document.documentElement).appendChild(ta);
+        ta.focus();
+        ta.select();
+        try { ta.setSelectionRange(0, text.length); } catch {}
+        const ok = document.execCommand("copy");
+        ta.remove();
+        return ok;
+      } catch {
+        return false;
+      }
+    };
+    return viaApi().then((ok) => ok || viaExec());
   }
 
   function enablePasteBypass(el) {
