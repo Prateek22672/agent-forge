@@ -414,6 +414,75 @@
   let userBarWidth = null; // user-set width via the resize handle
   let userAnswerHeight = null; // user-set answer-box height via the resize handle
 
+  // Remembered bar state so closing and reopening doesn't lose what you typed or
+  // the answer you got. Kept in memory AND mirrored to sessionStorage, so it also
+  // survives a page reload (per tab). Restored every time the bar is shown.
+  let savedQuestion = "";
+  let savedAnswer = null;
+  let savedAnswerError = false;
+  let savedWidth = null;
+  let savedAnswerHeight = null;
+  let savedMinimized = false;
+  let savedPos = null; // { left, top }
+  try {
+    const raw = sessionStorage.getItem("af_bar_state");
+    if (raw) {
+      const s = JSON.parse(raw);
+      savedQuestion = s.q || "";
+      savedAnswer = s.a != null ? s.a : null;
+      savedAnswerError = !!s.e;
+      savedWidth = s.w || null;
+      savedAnswerHeight = s.ah || null;
+      savedMinimized = !!s.m;
+      savedPos = s.p || null;
+    }
+  } catch {}
+  function persistBarState() {
+    try {
+      sessionStorage.setItem(
+        "af_bar_state",
+        JSON.stringify({
+          q: savedQuestion,
+          a: savedAnswer,
+          e: savedAnswerError,
+          w: savedWidth,
+          ah: savedAnswerHeight,
+          m: savedMinimized,
+          p: savedPos,
+        })
+      );
+    } catch {}
+  }
+  // Apply remembered size / position / minimized / answer onto a freshly built bar.
+  function restoreBarState(barEl) {
+    if (savedWidth) {
+      userBarWidth = savedWidth;
+      barEl.style.width = savedWidth + "px";
+      barEl.style.maxWidth = "none";
+    }
+    if (savedAnswerHeight) userAnswerHeight = savedAnswerHeight;
+    if (savedPos) {
+      barMoved = true;
+      const w = barEl.offsetWidth || 320;
+      const h = barEl.offsetHeight || 120;
+      const left = Math.max(4, Math.min(savedPos.left, window.innerWidth - w - 4));
+      const top = Math.max(4, Math.min(savedPos.top, window.innerHeight - h - 4));
+      barEl.style.left = left + "px";
+      barEl.style.top = top + "px";
+    }
+    if (savedMinimized) {
+      barEl.classList.add("af-min-state");
+      const mb = barEl.querySelector(".af-min");
+      if (mb) {
+        mb.innerHTML = SVG_EXPAND;
+        mb.title = "Restore";
+      }
+    }
+    if (savedAnswer != null && savedAnswer !== "") {
+      showAnswer(savedAnswer, savedAnswerError, false);
+    }
+  }
+
   // Select-to-ask and the floating bubble can both be turned off from the
   // popup (Settings). Cached locally and kept live via storage.onChanged, so
   // toggling takes effect on every open tab immediately — no refresh needed.
@@ -684,6 +753,8 @@
           nt = Math.max(4, Math.min(nt, window.innerHeight - 28));
           barEl.style.left = nl + "px";
           barEl.style.top = nt + "px";
+          savedPos = { left: nl, top: nt };
+          persistBarState();
         };
         const up = () => {
           window.removeEventListener("mousemove", move, true);
@@ -701,6 +772,8 @@
         const min = barEl.classList.toggle("af-min-state");
         minBtn.innerHTML = min ? SVG_EXPAND : SVG_MIN;
         minBtn.title = min ? "Restore" : "Minimize";
+        savedMinimized = min;
+        persistBarState();
       };
     }
 
@@ -724,6 +797,9 @@
             box.style.maxHeight = userAnswerHeight + "px";
           }
           lastY = ev.clientY;
+          savedWidth = userBarWidth;
+          savedAnswerHeight = userAnswerHeight;
+          persistBarState();
         };
         const up = () => {
           window.removeEventListener("mousemove", move, true);
@@ -785,6 +861,10 @@
       return;
     }
     renderRich(box, text);
+    // Remember this answer so reopening the bar restores it.
+    savedAnswer = text;
+    savedAnswerError = !!isError;
+    persistBarState();
     if (!isError) {
       const copyBtn = document.createElement("button");
       copyBtn.type = "button";
@@ -834,6 +914,10 @@
       v.className = "af-verdict";
       renderRich(v, verdict); // supports code blocks in the verdict too
       box.appendChild(v);
+      // Remember the searched answer so reopening restores it.
+      savedAnswer = verdict;
+      savedAnswerError = false;
+      persistBarState();
       const copyBtn = document.createElement("button");
       copyBtn.type = "button";
       copyBtn.className = "af-copy";
@@ -1192,11 +1276,17 @@
     positionBar(rect); // measure real size, then place viewport-aware
     requestAnimationFrame(() => bar.classList.add("af-in"));
     wireBarChrome(bar); // drag handle, minimize, resize
+    restoreBarState(bar); // bring back last size / position / minimized / answer
 
     const input = bar.querySelector(".af-sel-input");
     enablePasteBypass(input);
-    if (prefill) input.value = prefill;
+    input.value = prefill || savedQuestion || "";
     if (autoFocus) input.focus();
+    // Remember what's typed so reopening restores it.
+    input.addEventListener("input", () => {
+      savedQuestion = input.value;
+      persistBarState();
+    });
 
     // One smart "ask": typed question if there is one, else a merged
     // explain+summarize default (this replaces the separate Explain/Summarize
