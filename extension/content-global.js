@@ -183,6 +183,41 @@
 .af-capture-open:hover { color: #fff; }
 .af-capture-msg { font-size: 11px; color: rgba(255,255,255,.55); margin-top: 8px; min-height: 14px; }
 .af-capture-msg.af-err { color: #ff8a8a; }
+
+/* Copy button on the collapsed pill — copy the selection without expanding. */
+.af-pill-main { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.af-pill-copy { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 24px; padding: 0; background: transparent; border: none; border-left: 1px solid var(--border); color: var(--muted); cursor: pointer; }
+.af-pill-copy:hover { color: var(--fg); }
+.af-pill-copy.af-ok { color: #22c55e; }
+
+/* Document assistant card — shown when a PDF/doc is open in the tab. */
+.af-doc-card { position: fixed; top: 16px; right: 16px; z-index: 2147483000; width: 340px; max-width: calc(100vw - 32px); background: rgba(18,18,22,.93); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); color: #f4f4f6; border: 1px solid rgba(255,255,255,.1); border-radius: 16px; box-shadow: 0 16px 48px rgba(0,0,0,.5); padding: 14px; font-family: -apple-system, "Segoe UI", "Inter", ui-sans-serif, system-ui, sans-serif; box-sizing: border-box; opacity: 0; transform: translateY(-6px) scale(.98); transition: opacity .16s ease, transform .16s cubic-bezier(.2,.8,.3,1); }
+.af-doc-card * { box-sizing: border-box; }
+.af-doc-card.af-in { opacity: 1; transform: translateY(0) scale(1); }
+.af-doc-head { display: flex; align-items: center; gap: 10px; }
+.af-doc-ic { font-size: 20px; line-height: 1; }
+.af-doc-titles { flex: 1; min-width: 0; }
+.af-doc-title { font-size: 13px; font-weight: 600; }
+.af-doc-name { font-size: 11px; color: rgba(255,255,255,.5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.af-doc-x { flex: none; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; color: rgba(255,255,255,.5); font-size: 15px; cursor: pointer; border-radius: 7px; padding: 0; }
+.af-doc-x:hover { background: rgba(255,255,255,.1); color: #fff; }
+.af-doc-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
+.af-doc-btn { background: rgba(255,255,255,.06); color: #f4f4f6; border: 1px solid rgba(255,255,255,.09); border-radius: 9px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit; }
+.af-doc-btn:hover { background: rgba(255,255,255,.12); }
+.af-doc-btn.primary { background: linear-gradient(180deg, #6d7bff, #4f5cd8); border-color: transparent; box-shadow: 0 2px 9px rgba(79,92,216,.4); }
+.af-doc-search { width: 100%; margin-top: 10px; background: #15151a; border: 1px solid rgba(255,255,255,.14); border-radius: 8px; color: #fff; font-size: 12px; padding: 7px 10px; outline: none; font-family: inherit; }
+.af-doc-search:focus { border-color: rgba(255,255,255,.4); }
+.af-doc-status { font-size: 11px; color: rgba(255,255,255,.5); margin-top: 8px; }
+.af-doc-status:empty { display: none; }
+.af-doc-status.err { color: #ff8a8a; }
+.af-doc-body { margin-top: 10px; max-height: 320px; overflow-y: auto; font-size: 12px; line-height: 1.55; color: #e6e6ea; }
+.af-doc-body:empty { display: none; }
+.af-doc-text { white-space: pre-wrap; word-break: break-word; }
+.af-doc-hit { background: rgba(109,123,255,.5); color: #fff; border-radius: 2px; }
+.af-doc-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+.af-doc-tool { background: transparent; color: rgba(255,255,255,.6); border: 1px solid rgba(255,255,255,.14); border-radius: 7px; padding: 4px 10px; font-size: 11px; cursor: pointer; font-family: inherit; }
+.af-doc-tool:hover { color: #fff; }
+.af-doc-spin { display: inline-block; width: 11px; height: 11px; border: 2px solid rgba(255,255,255,.2); border-top-color: #fff; border-radius: 50%; margin-right: 7px; vertical-align: -1px; animation: af-spin .7s linear infinite; }
 `;
 
   let afHost = null;
@@ -227,6 +262,7 @@
     removeBar();
     closeCapture();
     unmountBubble();
+    removeDocCard();
     // Drop the shadow host itself so nothing of ours remains in the page.
     if (afHost) {
       afHost.remove();
@@ -371,6 +407,7 @@
         if (privacyMode) return; // stay fully off — don't mount anything
         if (bubbleEnabled) mountBubble();
         restoreCopyPaste();
+        initDocAssistant();
       }
     );
     chrome.storage.onChanged.addListener((changes, area) => {
@@ -393,6 +430,7 @@
   } catch {
     /* extension context not ready yet — defaults to enabled */
     restoreCopyPaste();
+    initDocAssistant();
   }
 
   let highlightOverlay = null;
@@ -483,7 +521,7 @@
     }
     pill = document.createElement("div");
     pill.className = "af-sel-pill" + (pageIsLight() ? " af-light" : "");
-    pill.innerHTML = `<span class="af-pill-label">Ask</span><span class="af-sel-icon af-logo">AF</span>`;
+    pill.innerHTML = `<span class="af-pill-main"><span class="af-pill-label">Ask</span><span class="af-sel-icon af-logo">AF</span></span><button type="button" class="af-pill-copy" title="Copy selection (works even where copying is blocked)">${SVG_COPY}</button>`;
     getAfRoot().appendChild(pill);
     // Position just under the selection start, clamped to the viewport.
     const m = 8;
@@ -503,10 +541,26 @@
       e.preventDefault();
       e.stopPropagation();
     });
-    pill.onclick = () => {
+    // The "Ask AF" part expands to the full bar…
+    pill.querySelector(".af-pill-main").onclick = () => {
       const r = anchorRect() || rect;
       removePill();
       showBar(r, "", false);
+    };
+    // …and the copy icon copies the selection directly, without expanding —
+    // through the Clipboard API, so it works even where the page blocks copying.
+    const pillCopy = pill.querySelector(".af-pill-copy");
+    pillCopy.onclick = async (e) => {
+      e.stopPropagation();
+      const ok = await forceCopy(lastSelectionText);
+      pillCopy.innerHTML = ok ? SVG_CHECK : SVG_COPY;
+      pillCopy.classList.toggle("af-ok", ok);
+      setTimeout(() => {
+        if (pillCopy) {
+          pillCopy.innerHTML = SVG_COPY;
+          pillCopy.classList.remove("af-ok");
+        }
+      }, 1400);
     };
   }
 
@@ -1238,5 +1292,259 @@
     });
   } catch {
     /* extension context not ready — WARM_UP above will have already no-op'd */
+  }
+
+  // ============================ Document assistant =========================
+  // When a PDF/doc is open directly in the tab, a small card offers to parse,
+  // read, search, summarize or explain it — using the SAME backend extractor as
+  // the popup's file upload (PDF/Word/Excel/CSV/text). Files opened in the
+  // browser can't be highlighted the normal way, so the selection bar can't help
+  // there; this fills that gap. Dismissible, remembered per-URL for the session.
+  let docCard = null;
+  let docText = null; // cached extracted text for this doc
+  let docMeta = null; // { name, isPdf }
+
+  function detectDoc() {
+    try {
+      const path = (location.pathname || "").toLowerCase();
+      const ct = (document.contentType || "").toLowerCase();
+      const isPdf =
+        ct.includes("application/pdf") ||
+        path.endsWith(".pdf") ||
+        !!document.querySelector('embed[type="application/pdf"]');
+      const isDoc = /\.(docx?|xlsx?|pptx?|csv|txt|rtf|odt|ods)$/i.test(path);
+      if (!isPdf && !isDoc) return null;
+      let name = "document";
+      try {
+        name = decodeURIComponent((location.pathname.split("/").pop() || "").split("?")[0]) || "document";
+      } catch {}
+      if (!/\.\w{2,5}$/.test(name)) name += isPdf ? ".pdf" : "";
+      return { name, isPdf };
+    } catch {
+      return null;
+    }
+  }
+
+  function removeDocCard() {
+    if (docCard) {
+      docCard.remove();
+      docCard = null;
+    }
+  }
+
+  function setDocStatus(el, text, isErr, busy) {
+    if (!el) return;
+    el.className = "af-doc-status" + (isErr ? " err" : "");
+    el.innerHTML = busy ? `<span class="af-doc-spin"></span>${escapeHtml(text)}` : escapeHtml(text || "");
+  }
+
+  function downloadText(name, text) {
+    try {
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      (document.body || document.documentElement).appendChild(a);
+      a.click();
+      setTimeout(() => {
+        a.remove();
+        URL.revokeObjectURL(url);
+      }, 1000);
+    } catch {}
+  }
+
+  // Fetch the document's own bytes and run them through the backend extractor.
+  async function ensureDocText(statusEl) {
+    if (docText != null) return docText;
+    setDocStatus(statusEl, "Reading the document…", false, true);
+    let buf;
+    try {
+      const res = await fetch(location.href, { credentials: "include" });
+      if (!res.ok) throw new Error("http " + res.status);
+      buf = await res.arrayBuffer();
+    } catch {
+      setDocStatus(statusEl, "Couldn't read this file from the page.", true);
+      return null;
+    }
+    if (buf.byteLength > 15 * 1024 * 1024) {
+      setDocStatus(statusEl, "This file is over 15 MB — too large to parse.", true);
+      return null;
+    }
+    const r = await send({ type: "UPLOAD_EXTRACT", name: docMeta.name, bytes: buf }, 60000);
+    if (!r || !r.ok) {
+      setDocStatus(
+        statusEl,
+        r && r.status === 401 ? "Sign in via the AgentFury icon first." : "Couldn't parse this document.",
+        true
+      );
+      return null;
+    }
+    docText = (r.data && r.data.text) || "";
+    setDocStatus(statusEl, "", false);
+    return docText;
+  }
+
+  // Render the extracted text, highlighting matches of `query` and scrolling to
+  // the first one — this is the in-document search.
+  function renderDocText(body, text, query) {
+    body.innerHTML = "";
+    const div = document.createElement("div");
+    div.className = "af-doc-text";
+    const q = (query || "").trim().toLowerCase();
+    if (q.length >= 2) {
+      const parts = [];
+      const lower = text.toLowerCase();
+      let i = 0, idx;
+      while ((idx = lower.indexOf(q, i)) !== -1) {
+        parts.push(escapeHtml(text.slice(i, idx)));
+        parts.push('<mark class="af-doc-hit">' + escapeHtml(text.slice(idx, idx + q.length)) + "</mark>");
+        i = idx + q.length;
+      }
+      parts.push(escapeHtml(text.slice(i)));
+      div.innerHTML = parts.join("");
+    } else {
+      div.textContent = text;
+    }
+    body.appendChild(div);
+    const first = body.querySelector(".af-doc-hit");
+    if (first) first.scrollIntoView({ block: "center" });
+  }
+
+  function ensureDocTools(card, text) {
+    const old = card.querySelector(".af-doc-tools");
+    if (old) old.remove();
+    const tools = document.createElement("div");
+    tools.className = "af-doc-tools";
+
+    const copy = document.createElement("button");
+    copy.className = "af-doc-tool";
+    copy.textContent = "Copy all";
+    copy.onclick = async () => {
+      const ok = await forceCopy(text);
+      copy.textContent = ok ? "Copied" : "Copy failed";
+      setTimeout(() => (copy.textContent = "Copy all"), 1400);
+    };
+
+    const dl = document.createElement("button");
+    dl.className = "af-doc-tool";
+    dl.textContent = "Download .txt";
+    dl.onclick = () =>
+      downloadText(((docMeta && docMeta.name) || "document").replace(/\.\w+$/, "") + ".txt", text);
+
+    const open = document.createElement("button");
+    open.className = "af-doc-tool";
+    open.textContent = "Open in AgentFury ↗";
+    open.onclick = () => {
+      try {
+        chrome.storage.local.set({ af_pending_selection: text.slice(0, 6000) });
+        chrome.runtime.sendMessage({ type: "AF_OPEN_PANEL" }).catch(() => {});
+      } catch {}
+    };
+
+    tools.appendChild(copy);
+    tools.appendChild(dl);
+    tools.appendChild(open);
+    card.appendChild(tools);
+  }
+
+  async function docAction(kind, card) {
+    const status = card.querySelector(".af-doc-status");
+    const body = card.querySelector(".af-doc-body");
+    const search = card.querySelector(".af-doc-search");
+    const text = await ensureDocText(status);
+    if (text == null) return;
+    if (!text.trim()) {
+      setDocStatus(status, "No readable text found — it may be a scanned image.", true);
+      return;
+    }
+
+    if (kind === "parse") {
+      search.hidden = false;
+      renderDocText(body, text, search.value);
+      ensureDocTools(card, text);
+      setDocStatus(status, `${text.length.toLocaleString()} characters · type above to search`, false);
+      return;
+    }
+
+    search.hidden = true;
+    const questions = {
+      summarize: "Summarize this document with the key points as a short bulleted list.",
+      explain: "Explain what this document is about in simple, clear terms.",
+    };
+    body.innerHTML = `<div class="af-doc-status"><span class="af-doc-spin"></span>Thinking…</div>`;
+    const r = await send(
+      {
+        type: "API_CALL",
+        path: "/write/answer",
+        method: "POST",
+        body: { text: text.slice(0, 6000), question: questions[kind] || "Summarize this." },
+      },
+      45000
+    );
+    if (!r || !r.ok) {
+      body.innerHTML = "";
+      setDocStatus(status, "Couldn't generate — try again.", true);
+      return;
+    }
+    setDocStatus(status, "", false);
+    const answer = (r.data && r.data.answer) || "No answer.";
+    renderRich(body, answer);
+    ensureDocTools(card, answer);
+  }
+
+  function showDocCard(meta) {
+    if (docCard || privacyMode) return;
+    docMeta = meta;
+    docText = null;
+    docCard = document.createElement("div");
+    docCard.className = "af-doc-card";
+    docCard.innerHTML = `
+      <div class="af-doc-head">
+        <span class="af-doc-ic">📄</span>
+        <div class="af-doc-titles">
+          <div class="af-doc-title">Ask AgentFury about this</div>
+          <div class="af-doc-name">${escapeHtml(meta.name)}</div>
+        </div>
+        <button type="button" class="af-doc-x" title="Dismiss">✕</button>
+      </div>
+      <div class="af-doc-actions">
+        <button type="button" class="af-doc-btn primary" data-doc="parse">Parse &amp; read</button>
+        <button type="button" class="af-doc-btn" data-doc="summarize">Summarize</button>
+        <button type="button" class="af-doc-btn" data-doc="explain">Explain</button>
+      </div>
+      <input type="text" class="af-doc-search" placeholder="Search in document…" hidden />
+      <div class="af-doc-status"></div>
+      <div class="af-doc-body"></div>
+    `;
+    getAfRoot().appendChild(docCard);
+    requestAnimationFrame(() => docCard.classList.add("af-in"));
+
+    docCard.querySelector(".af-doc-x").onclick = () => {
+      try { sessionStorage.setItem("af_doc_dismissed_" + location.href, "1"); } catch {}
+      removeDocCard();
+    };
+    docCard.querySelectorAll("[data-doc]").forEach((b) => {
+      b.onclick = () => docAction(b.dataset.doc, docCard);
+    });
+    const search = docCard.querySelector(".af-doc-search");
+    enablePasteBypass(search);
+    search.addEventListener("input", () => {
+      if (docText != null) renderDocText(docCard.querySelector(".af-doc-body"), docText, search.value);
+    });
+    docCard.addEventListener("mousedown", (e) => e.stopPropagation());
+  }
+
+  function initDocAssistant() {
+    if (privacyMode || docCard) return;
+    const meta = detectDoc();
+    if (!meta) return;
+    try {
+      if (sessionStorage.getItem("af_doc_dismissed_" + location.href)) return;
+    } catch {}
+    // Small delay so the browser's PDF viewer settles first.
+    setTimeout(() => {
+      if (!docCard && !privacyMode) showDocCard(meta);
+    }, 900);
   }
 })();
