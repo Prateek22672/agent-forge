@@ -40,6 +40,14 @@ async def lifespan(app: FastAPI):
     # Startup: ensure tables exist, then upgrade existing 'Assistant' agents so
     # accounts made before reminders/notes/email gain those tools automatically.
     init_db()
+    # Open the model connections in the background before anyone asks a
+    # question - see warm_fast_models() for the 0.5s vs 2.2s measurement.
+    try:
+        from app.llm.router import warm_fast_models
+
+        warm_fast_models()
+    except Exception:
+        pass
     from app.database import SessionLocal
     from app.seed import upgrade_assistants
 
@@ -136,6 +144,15 @@ app.include_router(files_api.router)
 
 @app.get("/api/health")
 def health():
+    # The extension pings this on every page load specifically to wake a
+    # sleeping instance. Use that ping for the LLM connections too, so the
+    # user's first question doesn't pay for the handshake (throttled inside).
+    try:
+        from app.llm.router import warm_fast_models
+
+        warm_fast_models()
+    except Exception:
+        pass
     return {
         "status": "ok",
         "default_model": settings.default_model,

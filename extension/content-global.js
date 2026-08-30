@@ -351,6 +351,40 @@
 .af-edit-badge:hover { opacity: 1; transform: scale(1.06); }
 .af-edit-badge .af-ib-logo { width: 15px; height: 15px; border-radius: 50%; flex: none; }
 .af-edit-menu { width: 288px; max-width: calc(100vw - 24px); padding: 12px; }
+/* The badge turns into a live count the moment there's something to fix. */
+.af-edit-badge.af-has-issues { background: #b4451f; opacity: .95; }
+.af-edit-badge.af-has-issues .af-badge-label { font-weight: 700; }
+.af-suggests { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 9px; max-height: 190px; overflow-y: auto; }
+.af-suggest-head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+.af-suggest { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left;
+  background: var(--chip); border: 1px solid var(--chip-brd); border-radius: 9px; padding: 6px 9px;
+  margin-bottom: 5px; color: var(--fg); font-family: inherit; font-size: 12px; cursor: pointer; }
+.af-suggest:hover { background: var(--chip-hover); }
+.af-suggest s { color: var(--muted); text-decoration-color: #e5484d; }
+.af-suggest b { font-weight: 600; }
+.af-suggest-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.af-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; }
+.af-suggest-empty { font-size: 11.5px; color: var(--muted); }
+
+/* Confirmation for actions with no UI of their own (shortcut / menu copy). */
+.af-toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(8px);
+  z-index: 2147483005; background: rgba(18,18,22,.95); color: #fff; padding: 9px 16px;
+  border: 1px solid rgba(255,255,255,.14); border-radius: 999px; box-shadow: 0 8px 26px rgba(0,0,0,.42);
+  font: 500 12.5px -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  opacity: 0; transition: opacity .14s ease, transform .14s ease; pointer-events: none; white-space: nowrap; }
+.af-toast.af-in { opacity: 1; transform: translateX(-50%) translateY(0); }
+.af-toast.af-err { background: rgba(120,26,30,.95); }
+
+/* ---------- Snip & read: the drag-a-box-over-anything overlay ---------- */
+.af-snip { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 2147483004;
+  cursor: crosshair; background: rgba(10,10,14,.34); }
+.af-snip-hint { position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+  background: rgba(18,18,22,.94); color: #fff; padding: 8px 15px; border-radius: 999px;
+  font: 500 12.5px -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  border: 1px solid rgba(255,255,255,.14); box-shadow: 0 6px 20px rgba(0,0,0,.4); white-space: nowrap; }
+.af-snip-box { position: fixed; border: 1.5px solid #7d8bff; background: rgba(125,139,255,.16);
+  border-radius: 2px; box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
 /* Inline code from renderRich's light markdown pass. */
 .af-sel-answer code, .af-body code { background: rgba(127,127,127,.18); padding: 1px 4px;
   border-radius: 4px; font-family: ui-monospace, "Cascadia Code", "Consolas", monospace; font-size: .94em; }
@@ -537,6 +571,38 @@
     }
   }
 
+  // A page stylesheet does NOT cross a shadow boundary, so a component that
+  // sets user-select:none inside its OWN shadow root is completely untouched
+  // by the override above — which is why the odd widget (a quiz card, an
+  // embedded reader, a design-system component) still refuses to be selected
+  // on a page where everything else works. Fix it by putting the same rules
+  // INSIDE each open shadow root. No tree walk: the composed path of whatever
+  // the user just reached for is exactly the chain of roots involved, so this
+  // costs nothing and only touches components actually being used.
+  const shadowPatched = new WeakSet();
+  function unblockShadowRoot(root) {
+    if (!root || shadowPatched.has(root)) return;
+    shadowPatched.add(root);
+    try {
+      const st = document.createElement("style");
+      st.textContent = restoreStyle
+        ? restoreStyle.textContent
+        : "* { -webkit-user-select: text !important; user-select: text !important; }";
+      root.appendChild(st);
+    } catch {
+      /* a closed root can't be reached from here at all — nothing to do */
+    }
+  }
+
+  function unblockAlongPath(e) {
+    const path = (e.composedPath && e.composedPath()) || [];
+    for (let i = 0; i < Math.min(path.length, 24); i++) {
+      const node = path[i];
+      if (node && node.nodeType === 11 && node.host) unblockShadowRoot(node);
+    }
+    stripInlineUserSelect(path[0] || e.target);
+  }
+
   let copyPasteRestored = false;
   let restoreStyle = null;
   function restoreCopyPaste() {
@@ -579,7 +645,11 @@
     // about how the site implemented the block. Note we never preventDefault:
     // the browser's own copy still happens, we only silence the page's
     // reaction to it.
-    ["selectstart", "copy", "cut", "beforecopy", "beforecut", "contextmenu"].forEach((type) => {
+    // Paste belongs on this list as much as copy does: "paste is disabled in
+    // this field" (confirm-your-email boxes, exam portals, banking forms) is
+    // the same trick pointed the other way, and it is just as easily undone —
+    // stop the page's handler, let the browser's own paste happen.
+    ["selectstart", "copy", "cut", "paste", "beforecopy", "beforecut", "beforepaste", "contextmenu"].forEach((type) => {
       window.addEventListener(type, (e) => e.stopImmediatePropagation(), true);
     });
 
@@ -595,12 +665,17 @@
       (e) => {
         const key = (e.key || "").toLowerCase();
         if (!(e.ctrlKey || e.metaKey)) return;
-        if (key === "c" || key === "x" || (key === "a" && hardUnblocked)) {
+        if (key === "c" || key === "x" || key === "v" || (key === "a" && hardUnblocked)) {
           e.stopImmediatePropagation();
         }
       },
       true
     );
+
+    // Runs on every page, not just hostile ones: it is cheap (a short path
+    // walk on a click you already made) and it is the only thing that reaches
+    // inside a shadow-DOM component or beats an inline `!important`.
+    window.addEventListener("mousedown", unblockAlongPath, true);
 
     if (blocked) applyHardUnblock();
   }
@@ -617,10 +692,6 @@
     // instant it appears. selectionchange is fired at `document`, so a capture
     // listener on window sees it first and can stop it reaching the page.
     window.addEventListener("selectionchange", (e) => e.stopImmediatePropagation(), true);
-
-    // Undo inline `user-select: none !important` (the one form our stylesheet
-    // can't outrank) on whatever the user is reaching for, as they reach for it.
-    window.addEventListener("mousedown", (e) => stripInlineUserSelect(e.target), true);
 
     // Blocked pages are also the ones that cancel dragstart to stop images and
     // text being dragged out. Safe to neutralize HERE, where we already know
@@ -780,6 +851,9 @@
   // never gets found. Same live-toggle wiring as the other two.
   let imageAiEnabled = true;
   let autoEditEnabled = true;
+  // Live suggestions call the backend on a typing pause, so they get their own
+  // switch rather than riding on auto-edit's.
+  let proofEnabled = true;
   try {
     chrome.storage.local.get(
       [
@@ -788,12 +862,14 @@
         "af_privacy_mode",
         "af_image_ai_enabled",
         "af_autoedit_enabled",
+        "af_proof_enabled",
       ],
       (r) => {
         if (typeof r.af_select_enabled === "boolean") selectEnabled = r.af_select_enabled;
         if (typeof r.af_bubble_enabled === "boolean") bubbleEnabled = r.af_bubble_enabled;
         if (typeof r.af_image_ai_enabled === "boolean") imageAiEnabled = r.af_image_ai_enabled;
         if (typeof r.af_autoedit_enabled === "boolean") autoEditEnabled = r.af_autoedit_enabled;
+        if (typeof r.af_proof_enabled === "boolean") proofEnabled = r.af_proof_enabled;
         privacyMode = r.af_privacy_mode === true;
         if (privacyMode) return; // stay fully off — don't mount anything
         if (bubbleEnabled) mountBubble();
@@ -823,6 +899,13 @@
         if (!imageAiEnabled) {
           removeImgBadge();
           removeImgCard();
+        }
+      }
+      if ("af_proof_enabled" in changes) {
+        proofEnabled = changes.af_proof_enabled.newValue !== false;
+        if (!proofEnabled) {
+          proofIssues = [];
+          paintProofCount();
         }
       }
       if ("af_autoedit_enabled" in changes) {
@@ -1593,6 +1676,7 @@
         <button type="button" class="af-sel-chip" data-search="chatgpt" title="Open ChatGPT in a new tab">ChatGPT ↗</button>
         <button type="button" class="af-sel-chip af-sel-action" data-action="remind" title="Add as a reminder">Remind</button>
         <button type="button" class="af-sel-chip af-sel-action" data-action="brain" title="Teach your AI's memory">Brain</button>
+        <button type="button" class="af-sel-chip" data-copypage="1" title="Copy all the readable text on this page — works where the site blocks copying">Copy page text</button>
         <button type="button" class="af-sel-chip" data-open="1" title="Open in the side panel — roomier for code or long text">Open in panel ↗</button>
       </div>
       <div class="af-resize" title="Drag to resize"></div>
@@ -1692,6 +1776,15 @@
             copyIc.classList.remove("af-ok");
           }
         }, 1400);
+      };
+    }
+    const copyPageChip = bar.querySelector(".af-sel-chip[data-copypage]");
+    if (copyPageChip) {
+      copyPageChip.onclick = async () => {
+        const text = pageText();
+        const ok = text ? await forceCopy(text) : false;
+        copyPageChip.textContent = ok ? `Copied ${text.length.toLocaleString()} chars` : "Copy failed";
+        setTimeout(() => (copyPageChip.textContent = "Copy page text"), 1800);
       };
     }
     const openChip = bar.querySelector(".af-sel-chip[data-open]");
@@ -1822,6 +1915,36 @@
         // Right-click is explicit intent → open the full bar directly (not the
         // pill), focused, so they can type straight away.
         showBar(rect, "", true);
+      }
+      // Copy, from the shortcut or the right-click menu — the route that still
+      // works when the page has taken the normal ones away.
+      if (msg.type === "AF_FORCE_COPY") forceCopyContext(msg.text || "");
+      if (msg.type === "AF_COPY_PAGE") {
+        const text = pageText();
+        forceCopy(text).then((ok) =>
+          toast(ok ? `Copied ${text.length.toLocaleString()} characters` : "Copy was blocked", !ok)
+        );
+      }
+      // Snip & read: the background captured the tab and handed us the shot.
+      if (msg.type === "AF_SNIP" && msg.shot) startSnip(msg.shot);
+      // Right-click → "Read text in this image": the reliable route when the
+      // hover badge is awkward to reach (tiny grid cells, overlays, a picture
+      // that scrolls under the cursor).
+      if (msg.type === "AF_IMAGE_OCR" && msg.src) {
+        const src = String(msg.src);
+        // Prefer the real element if it's on this page — its pixels are
+        // readable even when the URL needs a login the server doesn't have.
+        let el = null;
+        try {
+          el = document.querySelector(`img[src="${CSS.escape(src)}"]`);
+        } catch {}
+        openImageCard(
+          el ||
+            (src.startsWith("data:")
+              ? { dataUrl: src, label: "Image", rect: null }
+              : { url: src, label: "Image", rect: null })
+        );
+        imgAction("ocr", "");
       }
     });
   } catch {
@@ -2148,6 +2271,69 @@
     }
   }
 
+  // Small confirmation for actions with no visible UI of their own (copying
+  // from a keyboard shortcut or the right-click menu).
+  let toastEl = null;
+  let toastTimer = 0;
+  function toast(message, isErr) {
+    if (privacyMode) return;
+    if (toastEl) toastEl.remove();
+    toastEl = document.createElement("div");
+    toastEl.className = "af-toast" + (isErr ? " af-err" : "");
+    toastEl.textContent = message;
+    getAfRoot().appendChild(toastEl);
+    requestAnimationFrame(() => toastEl && toastEl.classList.add("af-in"));
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      if (toastEl) {
+        toastEl.remove();
+        toastEl = null;
+      }
+    }, 1800);
+  }
+
+  // Everything readable on the page, cleaned up — for "copy the whole thing"
+  // on sites that hand it to you a paragraph at a time.
+  function pageText() {
+    const main =
+      document.querySelector("article") ||
+      document.querySelector("main") ||
+      document.querySelector('[role="main"]') ||
+      document.body;
+    const raw = (main && (main.innerText || main.textContent)) || "";
+    return raw
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+      .slice(0, 100000);
+  }
+
+  // Copy whatever the user means right now: an explicit string, else the
+  // selection, else the block under the pointer. That last fallback is what
+  // makes the shortcut work on a page where nothing can be selected at all.
+  async function forceCopyContext(explicit) {
+    let text = (explicit || "").trim();
+    if (!text) {
+      try {
+        text = String(window.getSelection() || "").trim();
+      } catch {}
+    }
+    if (!text) text = lastSelectionText;
+    if (!text && imgPointer.x >= 0) {
+      try {
+        const under = document.elementFromPoint(imgPointer.x, imgPointer.y);
+        const grab = under && blockTextFrom(under);
+        if (grab) text = grab.text;
+      } catch {}
+    }
+    if (!text) {
+      toast("Nothing to copy here", true);
+      return;
+    }
+    const ok = await forceCopy(text);
+    toast(ok ? `Copied ${text.length.toLocaleString()} characters` : "Copy was blocked — try again", !ok);
+  }
+
   function mkTool(label, onClick) {
     const b = document.createElement("button");
     b.type = "button";
@@ -2190,7 +2376,8 @@
   let imgBadge = null;
   let imgBadgeTarget = null;
   let imgCard = null;
-  let imgCardTarget = null;
+  let imgCardTarget = null; // the <img>/<canvas> on the page, when there is one
+  let imgCardData = null;   // or an ad-hoc image: a screen snip / a URL from the right-click menu
   let imgHideTimer = 0;
   let imgHoverThrottle = 0;
 
@@ -2391,6 +2578,15 @@
       imgCard = null;
     }
     imgCardTarget = null;
+    imgCardData = null;
+  }
+
+  // Where to anchor the card: the image itself when it's a real element,
+  // otherwise wherever the snip was taken (or a sane spot near the top).
+  function imgAnchorRect() {
+    if (imgCardTarget && imgCardTarget.isConnected) return imgCardTarget.getBoundingClientRect();
+    if (imgCardData && imgCardData.rect) return imgCardData.rect;
+    return { top: 90, bottom: 90, left: 40, right: 40, width: 0, height: 0 };
   }
 
   function ensureImgTools(text) {
@@ -2405,6 +2601,46 @@
         const ok = await forceCopy(text);
         b.textContent = ok ? "Copied" : "Copy failed";
         setTimeout(() => (b.textContent = "Copy text"), 1400);
+      })
+    );
+    // The picture itself, for pasting into a doc or a chat — the other thing a
+    // blocked right-click menu takes away.
+    tools.appendChild(
+      mkTool("Copy image", async (b) => {
+        b.textContent = "Copying…";
+        let ok = false;
+        try {
+          const payload = imgCardData
+            ? imgCardData.dataUrl || imgCardData.url
+            : imgCardTarget
+            ? readPixels(imgCardTarget) || elImageSrc(imgCardTarget)
+            : "";
+          if (payload) {
+            const blob = await (await fetch(payload)).blob();
+            // The clipboard only accepts PNG, so anything else goes through a
+            // canvas first.
+            const png =
+              blob.type === "image/png"
+                ? blob
+                : await new Promise((resolve) => {
+                    const url = URL.createObjectURL(blob);
+                    loadImage(url).then((im) => {
+                      if (!im) return resolve(null);
+                      const c = document.createElement("canvas");
+                      c.width = im.naturalWidth;
+                      c.height = im.naturalHeight;
+                      c.getContext("2d").drawImage(im, 0, 0);
+                      c.toBlob(resolve, "image/png");
+                    });
+                  });
+            if (png) {
+              await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+              ok = true;
+            }
+          }
+        } catch {}
+        b.textContent = ok ? "Copied ✓" : "Couldn't copy";
+        setTimeout(() => (b.textContent = "Copy image"), 1600);
       })
     );
     tools.appendChild(
@@ -2425,7 +2661,7 @@
     tools.appendChild(
       mkTool("Ask AI about this ↗", () => {
         const el = imgCardTarget;
-        const rect = el ? el.getBoundingClientRect() : { top: 80, bottom: 80, left: 40 };
+        const rect = imgAnchorRect();
         lastSelectionText = text.slice(0, 6000);
         // Anchor the bar to the IMAGE, so it follows it on scroll and the
         // highlight shows which picture the answer is about.
@@ -2445,7 +2681,7 @@
   }
 
   async function imgAction(mode, question) {
-    if (!imgCard || !imgCardTarget) return;
+    if (!imgCard || (!imgCardTarget && !imgCardData)) return;
     const status = imgCard.querySelector(".af-status");
     const body = imgCard.querySelector(".af-body");
     const oldTools = imgCard.querySelector(".af-tools");
@@ -2453,7 +2689,13 @@
     body.innerHTML = "";
     setPanelStatus(status, mode === "ocr" ? "Reading the text…" : "Looking at the image…", false, true);
 
-    const payload = await imagePayload(imgCardTarget);
+    // An ad-hoc image already IS the pixels (or a plain URL the server can
+    // fetch); only a real page element needs the three-way read.
+    const payload = imgCardData
+      ? imgCardData.dataUrl
+        ? { image_b64: imgCardData.dataUrl }
+        : { image_url: imgCardData.url }
+      : await imagePayload(imgCardTarget);
     if (!payload) {
       setPanelStatus(status, "Couldn't read this image — the page won't release it.", true);
       return;
@@ -2476,15 +2718,21 @@
     if (!imgCard) return; // closed while we were waiting
     renderRich(body, text);
     ensureImgTools(text);
-    if (imgCardTarget) placePanel(imgCard, imgCardTarget.getBoundingClientRect()); // it grew — keep it on screen
+    placePanel(imgCard, imgAnchorRect()); // it grew — keep it on screen
   }
 
-  function openImageCard(el) {
-    if (!el || privacyMode || !imageAiEnabled) return;
+  // `source` is either an element on the page, or an ad-hoc image:
+  // { dataUrl | url, label, rect } — a screen snip, or the image behind a
+  // right-click.
+  function openImageCard(source) {
+    if (!source || privacyMode || !imageAiEnabled) return;
+    const el = source.nodeType === 1 ? source : null;
+    const data = el ? null : source;
     removeImgBadge();
     removeImgCard();
     imgCardTarget = el;
-    const src = elImageSrc(el);
+    imgCardData = data;
+    const src = el ? elImageSrc(el) : data.dataUrl || data.url || "";
     const httpSrc = /^https?:/i.test(src) ? src : "";
 
     imgCard = document.createElement("div");
@@ -2494,7 +2742,7 @@
         <span class="af-card-ic af-logo"></span>
         <div class="af-card-titles">
           <div class="af-card-title">Image AI</div>
-          <div class="af-card-sub">${escapeHtml(imgLabel(el, src))}</div>
+          <div class="af-card-sub">${escapeHtml(el ? imgLabel(el, src) : data.label || "Image")}</div>
         </div>
         <button type="button" class="af-x" title="Close">✕</button>
       </div>
@@ -2514,20 +2762,20 @@
       <div class="af-body"></div>
     `;
     getAfRoot().appendChild(imgCard);
-    placePanel(imgCard, el.getBoundingClientRect());
+    placePanel(imgCard, imgAnchorRect());
     keepOnScreen(imgCard, el);
     requestAnimationFrame(() => imgCard && imgCard.classList.add("af-in"));
 
     // A preview, so it's obvious WHICH image is being read on a busy page.
     const thumb = imgCard.querySelector(".af-img-thumb");
-    const thumbSrc = src === "canvas:" ? readPixels(el) : src;
+    const thumbSrc = el && src === "canvas:" ? readPixels(el) : src;
     if (thumbSrc) {
       thumb.src = thumbSrc;
       thumb.hidden = false;
       // The card was measured before the picture had loaded — once it has,
       // the card is ~110px taller, so place it again.
       thumb.onload = () => {
-        if (imgCard && imgCardTarget) placePanel(imgCard, imgCardTarget.getBoundingClientRect());
+        if (imgCard) placePanel(imgCard, imgAnchorRect());
       };
       thumb.onerror = () => {
         thumb.hidden = true;
@@ -2567,43 +2815,107 @@
     });
   }
 
+  // Where the pointer is, in viewport coordinates. Kept fresh so a hit test
+  // can run at ANY moment, not only when the browser happens to fire a
+  // mouseover — see the trailing test below for why that matters.
+  const imgPointer = { x: -1, y: -1 };
+  let imgHitTimer = 0;
+
+  // What image, if any, is under the cursor right now? Three sources, in
+  // order of reliability:
+  //  1. the event's composed path — which pierces open shadow DOM, where a
+  //     plain e.target only ever reports the outer host element;
+  //  2. a hit test through the whole stack at the cursor — this is what finds
+  //     an image sitting UNDER a transparent overlay, the standard way
+  //     galleries, stock sites and "protected" viewers hide theirs;
+  //  3. the same hit test again inside any open shadow root at that point.
+  function imageAt(x, y, path) {
+    if (path) {
+      for (let i = 0; i < Math.min(path.length, 4); i++) {
+        const hit = imageCandidate(path[i]);
+        if (hit) return hit;
+      }
+    }
+    if (x < 0) return null;
+    try {
+      const stack = document.elementsFromPoint(x, y);
+      for (let i = 0; i < Math.min(stack.length, 6); i++) {
+        const hit = imageCandidate(stack[i]);
+        if (hit) return hit;
+        const sr = stack[i].shadowRoot;
+        if (sr && sr.elementsFromPoint) {
+          const inner = sr.elementsFromPoint(x, y);
+          for (let j = 0; j < Math.min(inner.length, 4); j++) {
+            const deep = imageCandidate(inner[j]);
+            if (deep) return deep;
+          }
+        }
+      }
+    } catch {}
+    return null;
+  }
+
+  function runImageHitTest(path) {
+    if (!imageAiEnabled || privacyMode || isTinyFrame() || imgCard || snipLayer) return;
+    const el = imageAt(imgPointer.x, imgPointer.y, path);
+    if (el) {
+      showImgBadge(el);
+      return;
+    }
+    if (!imgBadge) return;
+    // Only drop the badge once the pointer has really left its image. Moving
+    // across an image's own child nodes fires a stream of mouseout events,
+    // and hiding on those is what made the badge flicker and vanish while you
+    // were still hovering it.
+    let r = null;
+    try {
+      r = imgBadgeTarget && imgBadgeTarget.getBoundingClientRect();
+    } catch {}
+    const inside =
+      r &&
+      imgPointer.x >= r.left - 2 &&
+      imgPointer.x <= r.right + 2 &&
+      imgPointer.y >= r.top - 2 &&
+      imgPointer.y <= r.bottom + 2;
+    if (!inside) scheduleBadgeHide();
+  }
+
+  function onPointerActivity(e) {
+    imgPointer.x = e.clientX;
+    imgPointer.y = e.clientY;
+    const now = Date.now();
+    if (now - imgHoverThrottle >= 80) {
+      imgHoverThrottle = now;
+      if (imgHitTimer) {
+        clearTimeout(imgHitTimer);
+        imgHitTimer = 0;
+      }
+      // composedPath() allocates, so only build it on a test we actually run.
+      runImageHitTest(e.composedPath ? e.composedPath() : null);
+      return;
+    }
+    // Inside the throttle window. Schedule a TRAILING test instead of
+    // dropping this one: if the pointer now STOPS — exactly what people do
+    // when they want the badge — no further event ever arrives, and the badge
+    // shows up "late" or never. That was the reported delay.
+    if (!imgHitTimer) {
+      imgHitTimer = setTimeout(() => {
+        imgHitTimer = 0;
+        imgHoverThrottle = Date.now();
+        runImageHitTest(null); // re-derive from the pointer position alone
+      }, 90);
+    }
+  }
+
   function initImageAI() {
     if (imageAiInit) return;
     imageAiInit = true;
-    window.addEventListener(
-      "mouseover",
-      (e) => {
-        if (!imageAiEnabled || privacyMode || isTinyFrame() || imgCard) return;
-        const now = Date.now();
-        if (now - imgHoverThrottle < 90) return;
-        imgHoverThrottle = now;
-        let el = imageCandidate(e.target);
-        if (!el) {
-          // Galleries and "protected" viewers cover the picture with a
-          // transparent overlay, so the pointer never touches the <img>
-          // itself. Look through the stack under the cursor instead of
-          // trusting the event target — that also keeps the badge alive while
-          // the pointer is on the badge (our own host is skipped).
-          try {
-            const stack = document.elementsFromPoint(e.clientX, e.clientY);
-            for (let i = 0; i < Math.min(stack.length, 6); i++) {
-              el = imageCandidate(stack[i]);
-              if (el) break;
-            }
-          } catch {}
-        }
-        if (el) showImgBadge(el);
-        else scheduleBadgeHide();
-      },
-      true
-    );
-    window.addEventListener(
-      "mouseout",
-      () => {
-        if (!imgCard) scheduleBadgeHide();
-      },
-      true
-    );
+    // mousemove is the primary driver, not mouseover: on grid layouts (Google
+    // Images, stock sites) the pointer often enters a cell's overlay rather
+    // than the image, so mouseover fires once for a wrapper and never again
+    // while you sit on the picture itself.
+    window.addEventListener("mousemove", onPointerActivity, true);
+    window.addEventListener("mouseover", onPointerActivity, true);
   }
 
   // ======================================================================
@@ -2631,6 +2943,12 @@
   let editField = null;
   let editMenu = null;
   let editUndoText = null;
+  // Live-suggestion state (see the proofing section below).
+  const proofWatched = new WeakSet();
+  let proofIssues = [];
+  let proofField = null;
+  let proofTimer = 0;
+  let proofLastText = "";
 
   function editableTarget(node) {
     let el = node;
@@ -2778,10 +3096,16 @@
     editBadge = document.createElement("div");
     editBadge.className = "af-edit-badge";
     editBadge.title = "Edit this text with AgentFury — fix, rewrite, or answer";
-    editBadge.innerHTML = `<span class="af-ib-logo af-logo"></span><span>AI</span>`;
+    editBadge.innerHTML = `<span class="af-ib-logo af-logo"></span><span class="af-badge-label">AI</span>`;
     getAfRoot().appendChild(editBadge);
     positionEditBadge();
     requestAnimationFrame(() => editBadge && editBadge.classList.add("af-in"));
+    // Start watching what they type, and check what's already in the box.
+    watchFieldTyping(el);
+    proofIssues = [];
+    proofLastText = "";
+    paintProofCount();
+    scheduleProof(el);
     // Never let the click steal focus from the field — losing the caret would
     // lose the selection we're about to rewrite.
     editBadge.addEventListener("mousedown", (e) => {
@@ -2885,6 +3209,8 @@
     keepOnScreen(editMenu, editField);
     requestAnimationFrame(() => editMenu && editMenu.classList.add("af-in"));
 
+    if (proofEnabled) renderSuggestions();
+
     const tools = editMenu.querySelector(".af-tools");
     tools.appendChild(
       mkTool("Undo", () => {
@@ -2949,6 +3275,378 @@
     );
   }
 
+
+
+  // ======================================================================
+  //  Live suggestions while you type (the Grammarly-shaped part)
+  // ======================================================================
+  // Two passes, and the split is the whole design:
+  //
+  //   LOCAL, instantly, free — a small rule + misspelling table that runs on
+  //   every keystroke pause with no network at all. It catches the things
+  //   people notice themselves a second later (teh, recieve, "i" not
+  //   capitalised, doubled words, a space before a comma), so the feature
+  //   feels immediate instead of feeling like a request.
+  //
+  //   MODEL, debounced, cached — /write/proof, only once typing has actually
+  //   paused, only when there is enough new text to be worth it, and never
+  //   for text already checked. It returns exact { before → after } fragments
+  //   rather than a rewrite, so accepting one suggestion leaves the rest of
+  //   the sentence exactly as written.
+  //
+  // Nothing is ever changed without a click, and every accept goes through
+  // the same undo-able path as the rest of auto-edit.
+
+  const PROOF_MIN_CHARS = 25;   // below this there is nothing worth checking
+  const PROOF_DEBOUNCE = 900;   // ms of quiet before the model pass
+  const PROOF_MIN_DELTA = 10;   // don't re-ask the model over one typed word
+
+  // Misspellings common enough to be worth fixing without a round trip.
+  const TYPOS = {
+    teh: "the", recieve: "receive", recieved: "received", seperate: "separate",
+    definately: "definitely", occured: "occurred", untill: "until", wich: "which",
+    thier: "their", becuase: "because", tommorow: "tomorrow", tomorow: "tomorrow",
+    adress: "address", arguement: "argument", calender: "calendar",
+    enviroment: "environment", goverment: "government", independant: "independent",
+    neccessary: "necessary", occassion: "occasion", publically: "publicly",
+    recomend: "recommend", refered: "referred", succesful: "successful",
+    wierd: "weird", youre: "you're", dont: "don't", doesnt: "doesn't",
+    didnt: "didn't", isnt: "isn't", cant: "can't", wont: "won't", ive: "I've",
+    im: "I'm", thats: "that's", alot: "a lot", sucess: "success",
+    priviledge: "privilege", maintainance: "maintenance", greatful: "grateful",
+    beleive: "believe", acheive: "achieve", wierdly: "weirdly", agressive: "aggressive",
+  };
+
+  const LOCAL_RULES = [
+    { re: /\bi\b/g, to: () => "I", type: "grammar", note: "capitalise I" },
+    { re: /[ \t]{2,}/g, to: () => " ", type: "punctuation", note: "double space" },
+    { re: /\s+([,.;:!?])/g, to: (m, p1) => p1, type: "punctuation", note: "space before punctuation" },
+    { re: /([,;:])(?=[A-Za-z])/g, to: (m, p1) => p1 + " ", type: "punctuation", note: "missing space" },
+    { re: /\b(\w+)\s+\1\b/gi, to: (m, p1) => p1, type: "grammar", note: "repeated word" },
+  ];
+
+  // Every issue carries the INDEX it was found at, not just the text: "i" as a
+  // word appears inside a dozen other words, so applying by naive string
+  // replace would corrupt the sentence.
+  function localIssues(text) {
+    const out = [];
+    const seen = new Set();
+    const push = (index, before, after, type, note) => {
+      if (!before || before === after || seen.has(index)) return;
+      seen.add(index);
+      out.push({ index, before, after, type, note, local: true });
+    };
+
+    const words = /[A-Za-z']+/g;
+    let m;
+    while ((m = words.exec(text)) && out.length < 8) {
+      const lower = m[0].toLowerCase();
+      const fix = TYPOS[lower];
+      if (!fix) continue;
+      // Keep the writer's capitalisation of the first letter.
+      const cased = m[0][0] === m[0][0].toUpperCase() ? fix[0].toUpperCase() + fix.slice(1) : fix;
+      push(m.index, m[0], cased, "spelling", "common misspelling");
+    }
+    for (const rule of LOCAL_RULES) {
+      rule.re.lastIndex = 0;
+      let r;
+      while ((r = rule.re.exec(text)) && out.length < 10) {
+        const after = rule.to(r[0], r[1]);
+        push(r.index, r[0], after, rule.type, rule.note);
+      }
+    }
+    return out.sort((a, b) => a.index - b.index).slice(0, 10);
+  }
+
+  function mergeIssues(local, remote, text) {
+    const all = local.slice();
+    const taken = new Set(local.map((i) => i.index));
+    for (const r of remote) {
+      const index = text.indexOf(r.before);
+      if (index < 0) continue; // the fragment isn't there any more — user typed on
+      if (taken.has(index)) continue;
+      taken.add(index);
+      all.push({ ...r, index });
+    }
+    return all.sort((a, b) => a.index - b.index).slice(0, 10);
+  }
+
+  function paintProofCount() {
+    if (!editBadge) return;
+    const n = proofIssues.length;
+    const label = editBadge.querySelector(".af-badge-label");
+    if (label) label.textContent = n ? String(n) : "AI";
+    editBadge.classList.toggle("af-has-issues", n > 0);
+    editBadge.title = n
+      ? `${n} suggestion${n === 1 ? "" : "s"} — click to review`
+      : "Edit this text with AgentFury — fix, rewrite, or answer";
+  }
+
+  async function runProof(el) {
+    if (!proofEnabled || !el || !el.isConnected) return;
+    const text = fieldValue(el);
+    proofField = el;
+    proofIssues = localIssues(text); // instant, free
+    paintProofCount();
+    if (proofMenuOpen()) renderSuggestions();
+
+    if (text.length < PROOF_MIN_CHARS) return;
+    if (Math.abs(text.length - proofLastText.length) < PROOF_MIN_DELTA && text === proofLastText) return;
+    proofLastText = text;
+
+    const r = await send(
+      { type: "API_CALL", path: "/write/proof", method: "POST", body: { text: text.slice(0, 3000) } },
+      20000
+    );
+    // Typing-time failures are silent by design — the local pass already
+    // showed whatever it found, and a red error under a text box while
+    // someone is mid-sentence is worse than no suggestion.
+    if (!r || !r.ok || !r.data || proofField !== el) return;
+    const live = fieldValue(el);
+    proofIssues = mergeIssues(localIssues(live), r.data.issues || [], live);
+    paintProofCount();
+    if (proofMenuOpen()) renderSuggestions();
+  }
+
+  function scheduleProof(el) {
+    if (!proofEnabled) return;
+    clearTimeout(proofTimer);
+    proofTimer = setTimeout(() => runProof(el), PROOF_DEBOUNCE);
+  }
+
+  function watchFieldTyping(el) {
+    if (proofWatched.has(el)) return;
+    proofWatched.add(el);
+    el.addEventListener("input", () => {
+      if (editField !== el) return;
+      // The local pass is cheap enough to run on the keystroke itself, so the
+      // count updates as you type; only the model pass waits for a pause.
+      proofIssues = localIssues(fieldValue(el));
+      paintProofCount();
+      scheduleProof(el);
+    });
+  }
+
+  function proofMenuOpen() {
+    return !!(editMenu && editMenu.querySelector(".af-suggests"));
+  }
+
+  // Apply one suggestion by INDEX, then re-check. The caret is put back where
+  // it was (shifted by the length delta) so accepting a fix mid-sentence
+  // doesn't throw the writer to the end of the box.
+  function applyIssue(issue) {
+    const el = editField;
+    if (!el || !el.isConnected) return;
+    const text = fieldValue(el);
+    let idx = issue.index;
+    if (text.slice(idx, idx + issue.before.length) !== issue.before) {
+      idx = text.indexOf(issue.before); // the text moved while it sat there
+      if (idx < 0) return;
+    }
+    let caret = null;
+    try {
+      caret = el.isContentEditable ? null : el.selectionStart;
+    } catch {}
+    const next = text.slice(0, idx) + issue.after + text.slice(idx + issue.before.length);
+    editUndoText = text;
+    setFieldValue(el, next, null);
+    if (caret != null) {
+      const delta = issue.after.length - issue.before.length;
+      const at = caret > idx ? Math.max(idx, caret + delta) : caret;
+      try {
+        el.setSelectionRange(at, at);
+      } catch {}
+    }
+    proofIssues = localIssues(next);
+    paintProofCount();
+    renderSuggestions();
+    scheduleProof(el);
+  }
+
+  function applyAllIssues() {
+    const el = editField;
+    if (!el || !proofIssues.length) return;
+    const before = fieldValue(el);
+    let text = before;
+    // Right to left, so each replacement can't shift the index of the next.
+    [...proofIssues]
+      .sort((a, b) => b.index - a.index)
+      .forEach((i) => {
+        if (text.slice(i.index, i.index + i.before.length) === i.before) {
+          text = text.slice(0, i.index) + i.after + text.slice(i.index + i.before.length);
+        }
+      });
+    if (text === before) return;
+    editUndoText = before;
+    setFieldValue(el, text, null);
+    proofIssues = localIssues(text);
+    paintProofCount();
+    renderSuggestions();
+    scheduleProof(el);
+  }
+
+  const ISSUE_DOT = { spelling: "#e5484d", grammar: "#f5a524", punctuation: "#8b8b93", clarity: "#5b6cf0" };
+
+  function renderSuggestions() {
+    if (!editMenu) return;
+    let box = editMenu.querySelector(".af-suggests");
+    if (!box) {
+      box = document.createElement("div");
+      box.className = "af-suggests";
+      editMenu.insertBefore(box, editMenu.querySelector(".af-row-wrap"));
+    }
+    if (!proofIssues.length) {
+      box.innerHTML = `<div class="af-suggest-empty">No issues found — looks clean.</div>`;
+      return;
+    }
+    box.innerHTML =
+      `<div class="af-suggest-head"><span>${proofIssues.length} suggestion${proofIssues.length === 1 ? "" : "s"}</span>` +
+      `<button type="button" class="af-tool" data-fixall>Fix all</button></div>` +
+      proofIssues
+        .map(
+          (i, n) => `
+        <button type="button" class="af-suggest" data-fix="${n}" title="${escapeHtml(i.note || "")}">
+          <span class="af-dot" style="background:${ISSUE_DOT[i.type] || ISSUE_DOT.grammar}"></span>
+          <span class="af-suggest-text"><s>${escapeHtml(i.before)}</s> → <b>${escapeHtml(i.after)}</b></span>
+        </button>`
+        )
+        .join("");
+    box.querySelectorAll("[data-fix]").forEach((b) => {
+      b.onclick = () => applyIssue(proofIssues[Number(b.dataset.fix)]);
+    });
+    const all = box.querySelector("[data-fixall]");
+    if (all) all.onclick = () => applyAllIssues();
+  }
+
+  // ======================================================================
+  //  Snip & read — OCR any region of the screen
+  // ======================================================================
+  // The final answer to "this text can't be copied". Everything above works
+  // on the DOM: restore selection, grab a block, read an <img>. None of it
+  // helps when the words aren't in the DOM or in an image element at all —
+  // text painted on a <canvas> (Google Docs, map labels, chart annotations,
+  // some readers), a frame of a video, a PDF plugin's own viewport, or a
+  // component that resists every other route.
+  //
+  // So: capture what's actually on the screen and read THAT. The background
+  // takes the screenshot (chrome.tabs.captureVisibleTab, on the activeTab
+  // permission the keyboard shortcut / right-click grants for that one tab),
+  // hands it here, and the user drags a box over the words. We crop those
+  // pixels and send them to the same OCR the image badge uses.
+  //
+  // Deliberately gesture-gated: no capture ever happens unless the user
+  // invokes the shortcut or the menu item, and the screenshot never leaves
+  // the tab except as the region they drew.
+
+  let snipLayer = null;
+  let snipShot = null;
+
+  function closeSnip() {
+    if (snipLayer) {
+      snipLayer.remove();
+      snipLayer = null;
+    }
+    snipShot = null;
+  }
+
+  async function cropAndRead(rect) {
+    let img = null;
+    try {
+      img = await loadImage(snipShot);
+    } catch {}
+    closeSnip();
+    if (!img || !img.naturalWidth) return;
+    try {
+      // captureVisibleTab returns the viewport at DEVICE pixels, so a CSS-pixel
+      // rect has to be scaled by the ratio the shot actually came back at (not
+      // by devicePixelRatio, which lies when the page is zoomed).
+      const scale = img.naturalWidth / window.innerWidth;
+      const sx = Math.max(0, Math.round(rect.left * scale));
+      const sy = Math.max(0, Math.round(rect.top * scale));
+      const sw = Math.min(img.naturalWidth - sx, Math.round(rect.width * scale));
+      const sh = Math.min(img.naturalHeight - sy, Math.round(rect.height * scale));
+      if (sw < 4 || sh < 4) return;
+
+      // Only ever scale DOWN, and only when the crop is genuinely huge: small
+      // UI text is exactly what people snip, and shrinking it further is the
+      // fastest way to make OCR guess.
+      const k = Math.min(1, MAX_IMG_EDGE / Math.max(sw, sh));
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(sw * k));
+      c.height = Math.max(1, Math.round(sh * k));
+      const ctx = c.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
+
+      openImageCard({
+        dataUrl: c.toDataURL("image/jpeg", 0.92),
+        label: `Screen selection · ${Math.round(rect.width)}×${Math.round(rect.height)}`,
+        rect: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, width: rect.width, height: rect.height },
+      });
+      // A snip only ever means one thing — read it. Don't make them click again.
+      imgAction("ocr", "");
+    } catch {
+      /* canvas unavailable (rare: blocked or out of memory) — nothing to read */
+    }
+  }
+
+  function startSnip(shot) {
+    if (privacyMode || !imageAiEnabled || !IS_TOP) return;
+    closeSnip();
+    removeImgBadge();
+    removeImgCard();
+    snipShot = shot;
+
+    snipLayer = document.createElement("div");
+    snipLayer.className = "af-snip";
+    snipLayer.innerHTML = `
+      <div class="af-snip-hint">Drag over anything to read its text — Esc to cancel</div>
+      <div class="af-snip-box" hidden></div>
+    `;
+    getAfRoot().appendChild(snipLayer);
+
+    const box = snipLayer.querySelector(".af-snip-box");
+    let sx = 0;
+    let sy = 0;
+    let dragging = false;
+
+    const rectOf = (x, y) => ({
+      left: Math.min(sx, x),
+      top: Math.min(sy, y),
+      right: Math.max(sx, x),
+      bottom: Math.max(sy, y),
+      width: Math.abs(x - sx),
+      height: Math.abs(y - sy),
+    });
+
+    snipLayer.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragging = true;
+      sx = e.clientX;
+      sy = e.clientY;
+      box.hidden = false;
+      box.style.cssText = `left:${sx}px;top:${sy}px;width:0;height:0`;
+    });
+    snipLayer.addEventListener("mousemove", (e) => {
+      if (!dragging) return;
+      const r = rectOf(e.clientX, e.clientY);
+      box.style.cssText = `left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px`;
+    });
+    snipLayer.addEventListener("mouseup", (e) => {
+      if (!dragging) return;
+      dragging = false;
+      const r = rectOf(e.clientX, e.clientY);
+      // A stray click (or a tiny drag) means "never mind", not "read 3 pixels".
+      if (r.width < 12 || r.height < 8) {
+        closeSnip();
+        return;
+      }
+      cropAndRead(r);
+    });
+  }
+
   // ======================================================================
   //  Ask without highlighting — Alt+click any block or image
   // ======================================================================
@@ -2960,10 +3658,15 @@
 
   function blockTextFrom(el) {
     let node = el && el.nodeType === 3 ? el.parentElement : el;
-    for (let i = 0; i < 10 && node && node !== document.body; i++) {
+    for (let i = 0; i < 12 && node && node !== document.body; i++) {
       const t = ((node.innerText || node.textContent) || "").trim();
       if (t.length >= 40) return { el: node, text: t.slice(0, 6000) };
-      node = node.parentElement;
+      // parentElement is null at the top of a shadow tree — step out through
+      // the host instead of giving up, or a component's text is unreachable.
+      const parent = node.parentElement;
+      if (parent) node = parent;
+      else if (node.parentNode && node.parentNode.nodeType === 11) node = node.parentNode.host;
+      else break;
     }
     return null;
   }
@@ -2982,8 +3685,11 @@
       (e) => {
         if (!e.altKey || privacyMode || isTinyFrame()) return;
         if (e.target === afHost) return;
+        // composedPath()[0] is the real element, even inside an open shadow
+        // root, where e.target is only ever the host.
+        const target = (e.composedPath && e.composedPath()[0]) || e.target;
         if (imageAiEnabled) {
-          const img = imageCandidate(e.target);
+          const img = imageCandidate(target) || imageAt(e.clientX, e.clientY, e.composedPath && e.composedPath());
           if (img) {
             e.preventDefault();
             e.stopPropagation();
@@ -2992,7 +3698,8 @@
           }
         }
         if (!selectEnabled) return;
-        const grab = blockTextFrom(e.target);
+        unblockAlongPath(e); // make the component selectable for next time, too
+        const grab = blockTextFrom(target);
         if (!grab) return;
         e.preventDefault();
         e.stopPropagation();
@@ -3017,6 +3724,7 @@
   // ---------- Shared lifecycle for the three surfaces above ----------
 
   function teardownExtras() {
+    closeSnip();
     removeImgBadge();
     removeImgCard();
     closeEditMenu();
@@ -3049,6 +3757,7 @@
         "keydown",
         (e) => {
           if (e.key === "Escape") {
+            closeSnip();
             removeImgCard();
             closeEditMenu();
           }

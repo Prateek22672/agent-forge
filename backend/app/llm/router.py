@@ -32,6 +32,7 @@ AVAILABLE_MODELS: dict[str, str] = {
 
 
 import threading
+import time
 
 from app import keys as key_manager
 from app import usage
@@ -158,14 +159,22 @@ def get_groq(model: str, temperature: float = 0.2):
 
 
 def get_fast_groq(temperature: float = 0.4):
-    """A fast Groq model for INTERNAL helpers (follow-up suggestions, the
-    selection-bar answer, brain-fact extraction, email polish), independent of
-    the user's selected provider so it stays cheap and reliable. Uses
-    gpt-oss-20b — Groq deprecated the old llama-*-instant fast models, and
-    20B is both supported and fast on Groq's hardware."""
+    """The model behind every INSTANT path — the selection-bar answer, live
+    proofreading, email polish, brain-fact extraction, follow-up suggestions —
+    independent of the user's provider toggle so it stays cheap and quick.
+
+    Which model that is was measured, not assumed: same prompts, every model
+    on the account, twice each. qwen3.8-27b came out fastest (0.51s best vs
+    0.73s for gpt-oss-20b) and answered correctly, so it is the default, with
+    gpt-oss-20b as the fallback if it ever fails to construct. Flip
+    `fast_model` in runtime settings if Groq retires it."""
     if not key_manager.groq_keys():
         return None
-    return _cached_groq("openai/gpt-oss-20b", temperature, _next_groq_key())
+    model = runtime_settings.get("fast_model") or settings.fast_model
+    try:
+        return _cached_groq(model, temperature, _next_groq_key())
+    except Exception:
+        return _cached_groq("openai/gpt-oss-20b", temperature, _next_groq_key())
 
 
 def get_vision_llms(temperature: float = 0.2) -> list[tuple[object, str]]:
@@ -182,26 +191,67 @@ def get_vision_llms(temperature: float = 0.2) -> list[tuple[object, str]]:
     else (both defaults here had to be replaced once already). If Gemini 404s
     on a stale id, Groq should still answer instead of the feature going dark.
 
-    Order is deliberate: Gemini first (it reads dense screenshots and small UI
-    text noticeably better), then Groq's multimodal model, which keeps the
-    feature alive on a Groq-only install. The rest of the app runs on GPT-OSS,
+    Order is measured, not assumed: on the same OCR, Groq's qwen3.8 took
+    0.75s and Gemini 2.5-6.9s, both reading the image correctly - so Groq
+    leads and Gemini is the failover (flash-lite first, at 1.1s, then the
+    full flash model). The rest of the app runs on GPT-OSS,
     which is text-only — hence this separate seam rather than get_fast_groq().
     """
     out: list[tuple[object, str]] = []
-    gk = _gemini_key()
-    if gk:
-        try:
-            usage.record("gemini", gk[-4:])
-            out.append((_cached_gemini(settings.gemini_model, temperature, gk), "gemini"))
-        except Exception:
-            pass
     if key_manager.groq_keys():
         try:
             model = runtime_settings.get("vision_model") or settings.vision_model
             out.append((_cached_groq(model, temperature, _next_groq_key()), "groq"))
         except Exception:
             pass
+    gk = _gemini_key()
+    if gk:
+        for model in (settings.gemini_vision_model, settings.gemini_model):
+            try:
+                usage.record("gemini", gk[-4:])
+                out.append((_cached_gemini(model, temperature, gk), "gemini"))
+            except Exception:
+                pass
     return out
+
+
+_warm_lock = threading.Lock()
+_warmed_at = 0.0
+
+
+def warm_fast_models(min_gap: float = 240.0) -> None:
+    """Open a connection to the fast model on every key, in the background.
+
+    Measured, because it was surprising: the same question that takes 0.51s on
+    a warm client took 2.24s through the API. None of that gap is generation -
+    it is the TLS handshake and client setup a FRESH ChatGroq pays on its
+    first call, and the key pool guarantees a fresh one several times over
+    (the client cache is keyed by model+temperature+key, so each combination
+    is cold once).
+
+    So pay it up front, off the request path: a one-token "ok" per key at
+    startup, and again when a sleeping instance is pinged awake. Throttled, so
+    the extension's WARM_UP on every page load can call it freely.
+    """
+    global _warmed_at
+    with _warm_lock:
+        if time.monotonic() - _warmed_at < min_gap:
+            return
+        _warmed_at = time.monotonic()
+
+    def _run() -> None:
+        model = runtime_settings.get("fast_model") or settings.fast_model
+        keys = key_manager.groq_keys()[:4]
+        # The temperatures the instant paths actually use: answers 0.3,
+        # JSON/proofread 0.0, vision 0.2, polish 0.4.
+        for temperature in (0.3, 0.0, 0.2, 0.4):
+            for key in keys:
+                try:
+                    _cached_groq(model, temperature, key).invoke("ok")
+                except Exception:
+                    pass
+
+    threading.Thread(target=_run, daemon=True, name="af-warm-llm").start()
 
 
 def get_failover_llms(temperature: float = 0.7) -> list:
