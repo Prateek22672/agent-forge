@@ -3,7 +3,7 @@
   "name": "AgentFury",
   "short_name": "AgentFury",
   "description": "Select to search, select to answer. Read the text in any image, fix any text box, copy anywhere - even where sites block it.",
-  "version": "1.34.0",
+  "version": "1.34.1",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
