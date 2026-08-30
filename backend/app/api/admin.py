@@ -172,6 +172,51 @@ def insights(
     }
 
 
+@router.get("/metrics")
+def performance_metrics(
+    window: int = 60,
+    admin: str = Depends(require_admin),
+):
+    """Everything about how the models are actually performing, plus what to
+    do about it.
+
+    One call rather than five, because a dashboard that refreshes every few
+    seconds should cost one round trip. `window` is in minutes.
+    """
+    from app import metrics
+    from app import runtime_settings
+    from app.config import settings as cfg
+    from app.util.answer_pipeline import answer_cache
+
+    window = max(5, min(int(window or 60), 1440))
+    data = metrics.summary(window)
+    data["suggestions"] = metrics.suggestions(data)
+    # What is actually configured right now - the numbers above mean little
+    # without knowing which models produced them.
+    data["config"] = {
+        "fast_model": runtime_settings.get("fast_model") or cfg.fast_model,
+        "vision_model": runtime_settings.get("vision_model") or cfg.vision_model,
+        "agent_model": runtime_settings.get("default_model") or cfg.default_model,
+        "gemini_vision_model": cfg.gemini_vision_model,
+        "provider": runtime_settings.get("llm_provider"),
+        "groq_keys": len(key_manager.groq_keys()),
+        "gemini_keys": len(key_manager.gemini_keys()),
+        "cache_entries": len(getattr(answer_cache, "_data", {})),
+    }
+    return data
+
+
+@router.post("/metrics/reset")
+def reset_metrics(request: Request, admin: str = Depends(require_admin)):
+    """Clear the rolling window - useful right after fixing something, to see
+    whether the fix actually held."""
+    from app import metrics
+
+    metrics.reset()
+    admin_audit.record(request, "metrics.reset", "")
+    return {"ok": True}
+
+
 @router.get("/users/recent-logins")
 def recent_logins(db: Session = Depends(get_db), admin: str = Depends(require_admin)):
     """Who's actually using AgentFury lately — last 50 logins, newest first."""

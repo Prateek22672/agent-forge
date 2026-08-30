@@ -9,10 +9,12 @@ page the extension is injected into.
 from __future__ import annotations
 
 import re
+import time
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from app import metrics
 from app.auth import get_current_user
 from app.models import User
 from app.security.ratelimit import rate_limit
@@ -143,7 +145,7 @@ def quick_answer(
     survive; detect_kind picks a prompt written for exactly what was selected
     instead of one catch-all; clean_output removes the tics. An identical
     repeat is served from memory."""
-    from app.llm.router import get_fast_groq, get_groq
+    from app.llm.router import get_fast_groq, get_groq, last_key_suffix
     from app.util.answer_pipeline import (
         answer_cache,
         build_answer_prompt,
@@ -162,13 +164,15 @@ def quick_answer(
     cache_key = answer_cache.key("answer", text, question, kind)
     cached = answer_cache.get(cache_key)
     if cached:
+        metrics.record_call("answer", cached=True, extra={"kind": kind})
         return {"answer": cached, "kind": kind, "cached": True}
 
     prompt = build_answer_prompt(text, question, kind)
     model = pick_model(text, kind, question)
 
     last_exc: Exception | None = None
-    for _attempt in range(3):
+    for attempt in range(3):
+        started = time.perf_counter()
         try:
             llm = get_groq(model, 0.3) or get_fast_groq(0.3)
             if llm is None:
@@ -179,9 +183,28 @@ def quick_answer(
             if not answer:
                 raise ValueError("empty answer")
             answer_cache.set(cache_key, answer)
+            metrics.record_call(
+                "answer",
+                model=model,
+                provider="groq",
+                ms=(time.perf_counter() - started) * 1000,
+                fallback=attempt > 0,
+                key_suffix=last_key_suffix(),
+                extra={"kind": kind},
+            )
             return {"answer": answer, "kind": kind, "cached": False}
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
+            metrics.record_call(
+                "answer",
+                model=model,
+                provider="groq",
+                ms=(time.perf_counter() - started) * 1000,
+                ok=False,
+                key_suffix=last_key_suffix(),
+                error=str(exc),
+                extra={"kind": kind},
+            )
             continue
     raise HTTPException(503, f"AI is busy - try again in a moment. ({last_exc})")
 
@@ -205,7 +228,7 @@ def web_search_answer(
 
     Only the sources that were actually packed come back, in the same order
     they are numbered in, so [1] in the answer really is results[0]."""
-    from app.llm.router import get_fast_groq
+    from app.llm.router import get_fast_groq, last_key_suffix
     from app.tools.web import web_search_results
     from app.util.answer_pipeline import (
         answer_cache,
@@ -221,12 +244,25 @@ def web_search_answer(
     cache_key = answer_cache.key("search", query)
     cached = answer_cache.get(cache_key)
     if cached:
+        metrics.record_call("search_answer", cached=True)
         return {**cached, "cached": True}
 
+    search_started = time.perf_counter()
     try:
         results = web_search_results(query, max_results=6)
     except Exception:
         results = []
+    # Retrieval is timed separately: when this endpoint feels slow it is
+    # nearly always the search, not the model, and a single number would hide
+    # which half to fix.
+    metrics.record_call(
+        "web_search",
+        provider="ddgs",
+        ms=(search_started and (time.perf_counter() - search_started) * 1000),
+        ok=bool(results),
+        error="" if results else "no results",
+        extra={"results": len(results)},
+    )
 
     context, used = pack_context(results, query)
     prompt = (
@@ -243,6 +279,7 @@ def web_search_answer(
     llm = None
     last_exc: Exception | None = None
     for _attempt in range(3):
+        started = time.perf_counter()
         try:
             llm = llm or get_fast_groq(0.3)
             if llm is None:
@@ -253,10 +290,25 @@ def web_search_answer(
             payload = {"answer": answer, "results": used}
             if answer:
                 answer_cache.set(cache_key, payload)
+            metrics.record_call(
+                "search_answer",
+                provider="groq",
+                ms=(time.perf_counter() - started) * 1000,
+                key_suffix=last_key_suffix(),
+                extra={"sources": len(used)},
+            )
             return {**payload, "cached": False}
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
             llm = None
+            metrics.record_call(
+                "search_answer",
+                provider="groq",
+                ms=(time.perf_counter() - started) * 1000,
+                ok=False,
+                key_suffix=last_key_suffix(),
+                error=str(exc),
+            )
             continue
     # Model unavailable - still return the ranked results so the user gets
     # something more useful than an error.
@@ -322,18 +374,37 @@ def polish(payload: PolishRequest, user: User = Depends(get_current_user)):
     # Resilience: a single Groq key can transiently rate-limit or hiccup. Retry
     # across a few rotated keys/models instead of letting one failure surface
     # as a raw, unhandled "Internal Server Error" to the extension.
+    from app.llm.router import last_key_suffix
+
     last_exc: Exception | None = None
     for _ in range(3):
+        started = time.perf_counter()
         try:
             candidate = llm or get_fast_groq(0.4)
             if candidate is None:
                 break
             out = candidate.invoke(prompt)
             text = out.content if isinstance(out.content, str) else str(out.content)
+            metrics.record_call(
+                "polish",
+                provider="groq",
+                ms=(time.perf_counter() - started) * 1000,
+                key_suffix=last_key_suffix(),
+                extra={"mode": payload.mode},
+            )
             return {"text": text.strip()}
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
             llm = None  # force a fresh (likely different-key) client next loop
+            metrics.record_call(
+                "polish",
+                provider="groq",
+                ms=(time.perf_counter() - started) * 1000,
+                ok=False,
+                key_suffix=last_key_suffix(),
+                error=str(exc),
+                extra={"mode": payload.mode},
+            )
             continue
     raise HTTPException(503, f"AI is temporarily busy — try again in a moment. ({last_exc})")
 
@@ -516,6 +587,7 @@ def image_understand(
     cache_key = answer_cache.key("image", mode, payload.question or "", b64)
     cached = answer_cache.get(cache_key)
     if cached:
+        metrics.record_call(f"image_{mode}", cached=True)
         return {**cached, "cached": True}
 
     # Transcription wants determinism; description benefits from a little
@@ -529,8 +601,11 @@ def image_understand(
             "with a vision model) in the admin panel.",
         )
 
+    from app.llm.router import last_key_suffix
+
     last_exc: Exception | None = None
     for index, (llm, provider) in enumerate(candidates):
+        started = time.perf_counter()
         # The image block is provider-shaped: Gemini takes the data URI as a
         # plain string, Groq follows the OpenAI {"url": ...} shape.
         image_block = (
@@ -563,13 +638,38 @@ def image_understand(
             # latency exactly when it is already wrong.
             if looks_degenerate(text) and index < len(candidates) - 1:
                 last_exc = ValueError("degenerate output")
+                metrics.record_call(
+                    f"image_{mode}",
+                    model=getattr(llm, "model_name", "") or getattr(llm, "model", ""),
+                    provider=provider,
+                    ms=(time.perf_counter() - started) * 1000,
+                    ok=False,
+                    key_suffix=last_key_suffix(),
+                    error="degenerate output (repeated fragments) - retried on the next provider",
+                )
                 continue
 
             result = {"text": text, "mode": mode, "provider": provider}
             answer_cache.set(cache_key, result)
+            metrics.record_call(
+                f"image_{mode}",
+                model=getattr(llm, "model_name", "") or getattr(llm, "model", ""),
+                provider=provider,
+                ms=(time.perf_counter() - started) * 1000,
+                fallback=index > 0,
+                key_suffix=last_key_suffix(),
+            )
             return result
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
+            metrics.record_call(
+                f"image_{mode}",
+                provider=provider,
+                ms=(time.perf_counter() - started) * 1000,
+                ok=False,
+                key_suffix=last_key_suffix(),
+                error=str(exc),
+            )
             continue
     raise HTTPException(503, f"Couldn't read that image - try again. ({last_exc})")
 
@@ -606,7 +706,7 @@ def proofread(
     """Return exact, applyable corrections for what the user is typing."""
     import json
 
-    from app.llm.router import get_fast_groq
+    from app.llm.router import get_fast_groq, last_key_suffix
     from app.util.answer_pipeline import answer_cache, clean_input
 
     text = clean_input(payload.text, 3000)
@@ -617,6 +717,7 @@ def proofread(
     cache_key = answer_cache.key("proof", text, tone)
     cached = answer_cache.get(cache_key)
     if cached is not None:
+        metrics.record_call("proof", cached=True)
         return {**cached, "cached": True}
 
     tone_line = (
@@ -650,6 +751,7 @@ def proofread(
 
     last_exc: Exception | None = None
     for _attempt in range(2):
+        started = time.perf_counter()
         try:
             llm = get_fast_groq(0.0)
             if llm is None:
@@ -686,9 +788,24 @@ def proofread(
 
             result = {"issues": issues, "count": len(issues)}
             answer_cache.set(cache_key, result)
+            metrics.record_call(
+                "proof",
+                provider="groq",
+                ms=(time.perf_counter() - started) * 1000,
+                key_suffix=last_key_suffix(),
+                extra={"issues": len(issues)},
+            )
             return {**result, "cached": False}
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
+            metrics.record_call(
+                "proof",
+                provider="groq",
+                ms=(time.perf_counter() - started) * 1000,
+                ok=False,
+                key_suffix=last_key_suffix(),
+                error=str(exc),
+            )
             continue
     # Never surface a typing-time failure as an error: the extension's own
     # free rule pass has already shown whatever it found.

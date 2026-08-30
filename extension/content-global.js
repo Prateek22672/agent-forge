@@ -791,6 +791,7 @@
   let savedAnswerHeight = null;
   let savedMinimized = false;
   let savedPos = null; // { left, top }
+  let savedSig = ""; // which selection the saved question/answer belong to
   try {
     const raw = sessionStorage.getItem("af_bar_state");
     if (raw) {
@@ -802,6 +803,7 @@
       savedAnswerHeight = s.ah || null;
       savedMinimized = !!s.m;
       savedPos = s.p || null;
+      savedSig = s.s || "";
     }
   } catch {}
   function persistBarState() {
@@ -816,11 +818,29 @@
           ah: savedAnswerHeight,
           m: savedMinimized,
           p: savedPos,
+          s: savedSig,
         })
       );
     } catch {}
   }
   // Apply remembered size / position / minimized / answer onto a freshly built bar.
+  // A fingerprint of what the bar is currently about. Cheap and stable
+  // enough: two different questions never share their first 160 characters.
+  const barContextSig = (t) => (t || "").trim().slice(0, 160);
+
+  // Drop remembered CONTENT when the bar is opened for something new. Without
+  // this, asking about a new question showed the previous answer until the
+  // reply landed - and if the reply never landed, it just looked wrong.
+  function syncBarContext() {
+    const sig = barContextSig(lastSelectionText);
+    if (savedSig === sig) return;
+    savedSig = sig;
+    savedQuestion = "";
+    savedAnswer = null;
+    savedAnswerError = false;
+    persistBarState();
+  }
+
   function restoreBarState(barEl) {
     if (savedWidth) {
       userBarWidth = savedWidth;
@@ -1688,6 +1708,7 @@
     if (!selectEnabled || privacyMode || isTinyFrame()) return; // one choke point for every switch
     removePill();
     removeBar(); // clears the highlight — redraw it below from anchorRange
+    syncBarContext(); // never show the previous selection's answer
     if (anchorRange) drawHighlightOverlay(anchorRange);
     bar = document.createElement("div");
     bar.className = "af-sel-bar" + (pageIsLight() ? " af-light" : "");
@@ -3808,23 +3829,35 @@
     return t.split(/\s+/).length >= 4;
   }
 
-  // A question and its options are usually siblings, not one node. Walk up
-  // until the container holds the options too (or a radio group), so the
-  // answer is given the choices rather than guessing without them.
+  // A question and its options are usually siblings, not one node, so walk up
+  // until the container holds the options too (or a radio group) - the answer
+  // is far better when the model can see the choices.
+  //
+  // But walking up is dangerous, and this is the bug that shipped: when NO
+  // container had options, the old code returned whatever ancestor it reached
+  // last. On an app-like page that ancestor can be most of the screen, so the
+  // question was sent wrapped in unrelated text - a permission dialog, a
+  // sidebar, a toast - and the model dutifully answered about that instead.
+  //
+  // Now an ancestor has to EARN its place: it must actually contain options,
+  // and it must not be wildly bigger than the question it is supposed to be
+  // wrapping. Failing that, the question element alone is used, which is
+  // always right even if it is sometimes less complete.
   function questionScope(el) {
+    const own = (el.innerText || el.textContent || "").trim();
+    const ceiling = Math.min(1600, own.length * 6 + 500);
     let node = el;
-    let best = { el, text: (el.innerText || el.textContent || "").trim() };
     for (let i = 0; i < 4 && node && node.parentElement; i++) {
       node = node.parentElement;
       const text = (node.innerText || node.textContent || "").trim();
-      if (!text || text.length > 2500) break;
+      if (!text || text.length > ceiling) break; // too much has come along with it
+      if (!text.includes(own.slice(0, Math.min(40, own.length)))) break; // not our question any more
       const hasOptions =
         countOptions(text) >= 2 ||
         (node.querySelectorAll && node.querySelectorAll('input[type="radio"], [role="radio"]').length >= 2);
       if (hasOptions) return { el: node, text };
-      best = { el: node, text };
     }
-    return best;
+    return { el, text: own };
   }
 
   function visibleEnough(el) {
