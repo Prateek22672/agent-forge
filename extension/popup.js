@@ -949,9 +949,23 @@ async function renderExtSettings() {
     </div>
     <div class="item">
       <div class="title">Select-to-ask</div>
-      <div class="sub">Show a small AI bar when you highlight text on any page (including Gmail).</div>
+      <div class="sub">Show a small AI bar when you highlight text on any page (including Gmail). Also re-enables copying and highlighting on sites that block it — and where nothing can be selected at all, Alt+click any paragraph to ask about it.</div>
       <div class="row">
         <button id="selectToggle" class="secondary">…</button>
+      </div>
+    </div>
+    <div class="item">
+      <div class="title">Image AI (OCR)</div>
+      <div class="sub">Hover any image for an AI badge in its corner — extract the text in it, explain it, translate it, solve the question in it, or reverse-search it. Alt+click an image opens the same card.</div>
+      <div class="row">
+        <button id="imageAiToggle" class="secondary">…</button>
+      </div>
+    </div>
+    <div class="item">
+      <div class="title">Auto-edit text boxes</div>
+      <div class="sub">Focus any text field for an AI badge in its corner — fix, shorten, or rewrite what's in it, or answer it, without highlighting anything. Comes with Undo.</div>
+      <div class="row">
+        <button id="autoEditToggle" class="secondary">…</button>
       </div>
     </div>
     <div class="item">
@@ -966,7 +980,8 @@ async function renderExtSettings() {
       <div class="sub" style="line-height:1.7">
         <b>Alt+Shift+F</b> — show the AgentFury bar on the page<br>
         <b>Alt+Shift+A</b> — open this side panel<br>
-        <b>Alt+Shift+H</b> — privacy mode (hide on-page UI)
+        <b>Alt+Shift+H</b> — privacy mode (hide on-page UI)<br>
+        <b>Alt+click</b> — ask about a paragraph or image without selecting it
       </div>
       <div class="row">
         <button type="button" id="customizeKeys" class="secondary">Customize shortcuts</button>
@@ -1034,6 +1049,32 @@ async function renderExtSettings() {
     chrome.storage.local.get("af_select_enabled", (r) => {
       const next = !(r.af_select_enabled !== false);
       chrome.storage.local.set({ af_select_enabled: next }, () => paint(next));
+    });
+  };
+
+  // Image AI + auto-edit: both default ON (they only appear in response to a
+  // hover/focus the user is already doing), so the check is "!== false".
+  const iBtn = document.getElementById("imageAiToggle");
+  const paintImage = (enabled) => {
+    iBtn.textContent = enabled ? "On — tap to turn off" : "Off — tap to turn on";
+  };
+  chrome.storage.local.get("af_image_ai_enabled", (r) => paintImage(r.af_image_ai_enabled !== false));
+  iBtn.onclick = () => {
+    chrome.storage.local.get("af_image_ai_enabled", (r) => {
+      const next = !(r.af_image_ai_enabled !== false);
+      chrome.storage.local.set({ af_image_ai_enabled: next }, () => paintImage(next));
+    });
+  };
+
+  const eBtn = document.getElementById("autoEditToggle");
+  const paintEdit = (enabled) => {
+    eBtn.textContent = enabled ? "On — tap to turn off" : "Off — tap to turn on";
+  };
+  chrome.storage.local.get("af_autoedit_enabled", (r) => paintEdit(r.af_autoedit_enabled !== false));
+  eBtn.onclick = () => {
+    chrome.storage.local.get("af_autoedit_enabled", (r) => {
+      const next = !(r.af_autoedit_enabled !== false);
+      chrome.storage.local.set({ af_autoedit_enabled: next }, () => paintEdit(next));
     });
   };
 
