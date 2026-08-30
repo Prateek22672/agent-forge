@@ -367,6 +367,8 @@
 .af-q-badge.af-in { opacity: .94; transform: translateX(0) scale(1); }
 .af-q-badge:hover { opacity: 1; background: rgba(36,40,66,.97); transform: translateX(0) scale(1.05); }
 .af-q-badge .af-ib-logo { width: 18px; height: 18px; border-radius: 50%; flex: none; }
+.af-q-badge .af-qb-main { display: inline-flex; align-items: center; gap: 6px; }
+.af-q-badge .af-ib-more { border-left-color: rgba(126,140,255,.4); }
 
 /* ---------- Auto-edit: the badge inside any text field + its menu ---------- */
 .af-edit-badge { position: fixed; z-index: 2147483001; display: inline-flex; align-items: center; gap: 4px;
@@ -923,6 +925,8 @@
         "af_autoedit_enabled",
         "af_proof_enabled",
         "af_qspot_enabled",
+        "af_qspot_disabled_sites",
+        "af_qspot_snooze_until",
       ],
       (r) => {
         if (typeof r.af_select_enabled === "boolean") selectEnabled = r.af_select_enabled;
@@ -933,6 +937,8 @@
         if (typeof r.af_autoedit_enabled === "boolean") autoEditEnabled = r.af_autoedit_enabled;
         if (typeof r.af_proof_enabled === "boolean") proofEnabled = r.af_proof_enabled;
         if (typeof r.af_qspot_enabled === "boolean") questionSpotEnabled = r.af_qspot_enabled;
+        if (Array.isArray(r.af_qspot_disabled_sites)) qDisabledSites = r.af_qspot_disabled_sites;
+        if (typeof r.af_qspot_snooze_until === "number") qSnoozeUntil = r.af_qspot_snooze_until;
         privacyMode = r.af_privacy_mode === true;
         if (privacyMode) return; // stay fully off — don't mount anything
         if (bubbleEnabled) mountBubble();
@@ -976,6 +982,14 @@
         questionSpotEnabled = changes.af_qspot_enabled.newValue !== false;
         if (questionSpotEnabled) scheduleQuestionScan(200);
         else removeQBadge();
+      }
+      if ("af_qspot_disabled_sites" in changes) {
+        qDisabledSites = changes.af_qspot_disabled_sites.newValue || [];
+        if (!questionSpotActive()) removeQBadge();
+      }
+      if ("af_qspot_snooze_until" in changes) {
+        qSnoozeUntil = changes.af_qspot_snooze_until.newValue || 0;
+        if (!questionSpotActive()) removeQBadge();
       }
       if ("af_proof_enabled" in changes) {
         proofEnabled = changes.af_proof_enabled.newValue !== false;
@@ -3938,6 +3952,10 @@
   let qSpotterInit = false;
   let qBadge = null;
   let qTarget = null;
+  let qScopeEl = null;
+  let qMenu = null;
+  let qDisabledSites = [];
+  let qSnoozeUntil = 0;
   let qText = "";
   let qScanTimer = 0;
 
@@ -3987,6 +4005,29 @@
     if (!Q_ENDS.test(t) && !Q_STARTS.test(t)) return false;
     // "Search?" and other one-word UI chrome aren't questions worth answering.
     return t.split(/\s+/).length >= 4;
+  }
+
+  // Page furniture that happens to be phrased as a question.
+  const CHROME_HOST = "nav, header, footer, aside, form, [role=navigation], [role=banner], [role=contentinfo], a, button, [role=button], summary, dialog, [role=dialog], [role=alert]";
+
+  // The real test: is this something a person would actually want answered?
+  //
+  // A choice list settles it - options mean a quiz, always worth offering. In
+  // its absence the bar is deliberately high, because a false badge on an
+  // ordinary page is worse than a missed one on a quiz: the text has to be a
+  // proper sentence, not sitting in page chrome, and not carrying a link or a
+  // button (which is what "Wrong email address? Log in again." looks like
+  // structurally - a prompt, not a question).
+  function questionWorthAnswering(el, text) {
+    const scope = questionScope(el);
+    if (optionCount(scope.el, el) >= 2) return scope;
+    try {
+      if (el.closest && el.closest(CHROME_HOST)) return null;
+      if (el.querySelector && el.querySelector("a, button, input, select, [role=button]")) return null;
+    } catch {}
+    const words = text.trim().split(/\s+/).length;
+    if (words < 8 || text.trim().length < 40) return null;
+    return scope;
   }
 
   // A question and its options are usually siblings, not one node, so walk up
@@ -4065,10 +4106,11 @@
       const text = (el.innerText || el.textContent || "").trim();
       if (!looksLikeQuestion(text)) continue;
       const dist = Math.abs(r.top + r.height / 2 - middle);
-      if (dist < winnerDist) {
-        winnerDist = dist;
-        winner = el;
-      }
+      if (dist >= winnerDist) continue;
+      const scope = questionWorthAnswering(el, text);
+      if (!scope) continue;
+      winnerDist = dist;
+      winner = { el, scope };
     }
     return winner;
   }
@@ -4078,12 +4120,93 @@
       qBadge.remove();
       qBadge = null;
     }
+    closeQMenu();
     qTarget = null;
+    qScopeEl = null;
     qText = "";
+  }
+
+  function closeQMenu() {
+    if (qMenu) {
+      qMenu.remove();
+      qMenu = null;
+    }
+  }
+
+  function questionSpotActive() {
+    if (!questionSpotEnabled || privacyMode) return false;
+    if (qSnoozeUntil && Date.now() < qSnoozeUntil) return false;
+    try {
+      if (qDisabledSites.includes(location.hostname)) return false;
+    } catch {}
+    return true;
+  }
+
+  function openQMenu() {
+    if (!qBadge) return;
+    closeQMenu();
+    const host = (() => {
+      try {
+        return location.hostname || "this site";
+      } catch {
+        return "this site";
+      }
+    })();
+    qMenu = document.createElement("div");
+    qMenu.className = panelClass("af-img-menu");
+    qMenu.innerHTML = `
+      <div class="af-menu-title">Answer badge</div>
+      <button type="button" class="af-menu-item" data-off="site">Turn off on ${escapeHtml(host)}</button>
+      <button type="button" class="af-menu-item" data-off="hour">Snooze for 1 hour</button>
+      <button type="button" class="af-menu-item" data-off="global">Turn off everywhere</button>
+      <div class="af-menu-note">Re-enable in the AgentFury popup → Settings.</div>
+    `;
+    getAfRoot().appendChild(qMenu);
+    placePanel(qMenu, qBadge.getBoundingClientRect());
+    requestAnimationFrame(() => qMenu && qMenu.classList.add("af-in"));
+    qMenu.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    qMenu.querySelectorAll("[data-off]").forEach((b) => {
+      b.onclick = (e) => {
+        e.stopPropagation();
+        const what = b.dataset.off;
+        const done = (msg) => {
+          removeQBadge();
+          toast(msg);
+        };
+        try {
+          if (what === "site") {
+            const next = Array.from(new Set([...qDisabledSites, host])).slice(-200);
+            qDisabledSites = next;
+            chrome.storage.local.set({ af_qspot_disabled_sites: next }, () => done(`Answer badge off on ${host}`));
+          } else if (what === "hour") {
+            qSnoozeUntil = Date.now() + 3600000;
+            chrome.storage.local.set({ af_qspot_snooze_until: qSnoozeUntil }, () =>
+              done("Answer badge snoozed for 1 hour")
+            );
+          } else {
+            questionSpotEnabled = false;
+            chrome.storage.local.set({ af_qspot_enabled: false }, () => done("Answer badge turned off everywhere"));
+          }
+        } catch {
+          removeQBadge();
+        }
+      };
+    });
   }
 
   function positionQBadge() {
     if (!qBadge || !qTarget) return;
+    // A quiz that swaps in the next question replaces the node this badge was
+    // built for. Left alone, the badge would still be holding the OLD
+    // question's text and would answer that instead of what is on screen.
+    if (!qTarget.isConnected || (qScopeEl && !qScopeEl.isConnected)) {
+      removeQBadge();
+      scheduleQuestionScan(200);
+      return;
+    }
     const r = visibleEnough(qTarget);
     if (!r) {
       removeQBadge();
@@ -4091,17 +4214,28 @@
     }
     const w = qBadge.offsetWidth || 92;
     const h = qBadge.offsetHeight || 26;
-    // Just outside the question's top-right, tucked back inside when there
-    // isn't room to the right of it.
-    let left = r.right + 8;
-    if (left + w > window.innerWidth - 8) left = Math.max(8, r.right - w - 8);
-    const top = Math.max(8, Math.min(r.top - 2, window.innerHeight - h - 8));
+    // Anchor to the widest of the question and its scope: an inline line of
+    // text ends mid-sentence, and hanging the badge off THAT is how it came to
+    // sit on top of the words it was offering to read.
+    let block = r;
+    try {
+      if (qScopeEl && qScopeEl.isConnected) {
+        const sr = qScopeEl.getBoundingClientRect();
+        if (sr.width > r.width) block = sr;
+      }
+    } catch {}
+    const gutter = window.innerWidth - block.right;
+    // Outside the block when the page leaves a margin (the common case), and
+    // otherwise pinned to the far right of the viewport, clear of the text.
+    let left = gutter >= w + 16 ? block.right + 10 : window.innerWidth - w - 10;
+    left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+    const top = Math.max(8, Math.min(block.top + 2, window.innerHeight - h - 8));
     qBadge.style.left = `${left}px`;
     qBadge.style.top = `${top}px`;
   }
 
-  function showQBadge(el) {
-    const scope = questionScope(el);
+  function showQBadge(el, precomputed) {
+    const scope = precomputed || questionScope(el);
     if (qBadge && qTarget === el) {
       qText = scope.text;
       positionQBadge();
@@ -4109,11 +4243,14 @@
     }
     removeQBadge();
     qTarget = el;
+    qScopeEl = scope.el;
     qText = scope.text;
     qBadge = document.createElement("div");
     qBadge.className = "af-q-badge";
     qBadge.title = "Answer this question with AgentFury";
-    qBadge.innerHTML = `<span class="af-ib-logo af-logo"></span><span>Answer</span>`;
+    qBadge.innerHTML =
+      `<span class="af-qb-main"><span class="af-ib-logo af-logo"></span><span>Answer</span></span>` +
+      `<button type="button" class="af-ib-more" title="Options — turn this off">⋯</button>`;
     getAfRoot().appendChild(qBadge);
     positionQBadge();
     requestAnimationFrame(() => qBadge && qBadge.classList.add("af-in"));
@@ -4136,7 +4273,8 @@
     qBadge.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      answerSpotted(scope);
+      if (e.target.closest && e.target.closest(".af-ib-more")) openQMenu();
+      else answerSpotted(scope);
     });
   }
 
@@ -4144,6 +4282,13 @@
   // said "Answer" and anything else would be a bait-and-switch.
   function answerSpotted(scope) {
     const el = (scope && scope.el) || qTarget;
+    // Same reason as above: never answer a question that has since been
+    // replaced. Re-read it if the node is gone.
+    if (el && !el.isConnected) {
+      removeQBadge();
+      scheduleQuestionScan(150);
+      return;
+    }
     const text = ((scope && scope.text) || qText || "").slice(0, 6000);
     if (!text) return;
     lastSelectionText = text;
@@ -4162,10 +4307,10 @@
   }
 
   function scanForQuestions() {
-    if (!questionSpotEnabled || privacyMode || isTinyFrame()) return;
+    if (!questionSpotActive() || isTinyFrame()) return;
     if (bar || imgCard || editMenu || snipLayer) return; // something is already open
     const found = findQuestion();
-    if (found) showQBadge(found);
+    if (found) showQBadge(found.el, found.scope);
     else removeQBadge();
   }
 
@@ -4303,6 +4448,7 @@
         "keydown",
         (e) => {
           if (e.key === "Escape") {
+            closeQMenu();
             closeImgMenu();
             closeSnip();
             removeImgCard();
@@ -4316,6 +4462,7 @@
       window.addEventListener(
         "mousedown",
         (e) => {
+          if (qMenu && e.target !== afHost) closeQMenu();
           if (imgMenu && e.target !== afHost) closeImgMenu();
           if (imgCard && e.target !== afHost) removeImgCard();
           if (editMenu && e.target !== afHost && e.target !== editField) closeEditMenu();

@@ -956,17 +956,21 @@ async function renderExtSettings() {
     </div>
     <div class="item">
       <div class="title">Image AI (OCR)</div>
-      <div class="sub">Hover any image for an AI badge in its corner — extract the text in it, explain it, translate it, solve the question in it, or reverse-search it. Alt+click an image opens the same card.</div>
+      <div class="sub">Hover any image for an AI badge in its corner — extract the text in it, explain it, translate it, solve the question in it, or reverse-search it. Alt+click an image opens the same card. The ⋯ on the badge turns it off for one site or an hour.</div>
       <div class="row">
         <button id="imageAiToggle" class="secondary">…</button>
+        <button id="imageAiClear" class="secondary" hidden>Re-enable everywhere</button>
       </div>
+      <div class="msg" id="imageAiState"></div>
     </div>
     <div class="item">
       <div class="title">Spot questions on the page</div>
-      <div class="sub">When a page shows a question — a quiz, a worksheet, a form — a small Answer badge appears next to it. One click answers it, with nothing to highlight. Only ever one badge, on the question you're looking at.</div>
+      <div class="sub">When a page shows a question — a quiz, a worksheet, a form — a small Answer badge appears next to it. One click answers it, with nothing to highlight. Only ever one badge, on the question you're looking at, and the ⋯ on it turns it off for one site or an hour.</div>
       <div class="row">
         <button id="qspotToggle" class="secondary">…</button>
+        <button id="qspotClear" class="secondary" hidden>Re-enable everywhere</button>
       </div>
+      <div class="msg" id="qspotState"></div>
     </div>
     <div class="item">
       <div class="title">Suggestions while you type</div>
@@ -1068,6 +1072,45 @@ async function renderExtSettings() {
 
   // Image AI + auto-edit: both default ON (they only appear in response to a
   // hover/focus the user is already doing), so the check is "!== false".
+  // The ⋯ menus on the page badges write these, and a preference you can set
+  // but not see is a preference you can't undo — so Settings shows exactly
+  // where each badge is switched off, and clears it in one click.
+  const paintScope = (ids, keys) => {
+    const state = document.getElementById(ids.state);
+    const clear = document.getElementById(ids.clear);
+    if (!state || !clear) return;
+    chrome.storage.local.get([keys.sites, keys.snooze], (r) => {
+      const sites = Array.isArray(r[keys.sites]) ? r[keys.sites] : [];
+      const until = Number(r[keys.snooze] || 0);
+      const mins = until > Date.now() ? Math.ceil((until - Date.now()) / 60000) : 0;
+      const bits = [];
+      if (sites.length) bits.push(`Off on ${sites.length} site${sites.length === 1 ? "" : "s"}: ${sites.slice(-4).join(", ")}${sites.length > 4 ? "…" : ""}`);
+      if (mins) bits.push(`Snoozed for ${mins} more minute${mins === 1 ? "" : "s"}`);
+      state.textContent = bits.join(" · ");
+      clear.hidden = bits.length === 0;
+    });
+    clear.onclick = () => {
+      chrome.storage.local.set({ [keys.sites]: [], [keys.snooze]: 0, [keys.enabled]: true }, () => {
+        paintScope(ids, keys);
+        const toggle = document.getElementById(ids.toggle);
+        if (toggle) toggle.textContent = "On — tap to turn off";
+      });
+    };
+  };
+
+  const IMG_KEYS = {
+    sites: "af_img_disabled_sites",
+    snooze: "af_img_snooze_until",
+    enabled: "af_image_ai_enabled",
+  };
+  const QSPOT_KEYS = {
+    sites: "af_qspot_disabled_sites",
+    snooze: "af_qspot_snooze_until",
+    enabled: "af_qspot_enabled",
+  };
+  paintScope({ state: "imageAiState", clear: "imageAiClear", toggle: "imageAiToggle" }, IMG_KEYS);
+  paintScope({ state: "qspotState", clear: "qspotClear", toggle: "qspotToggle" }, QSPOT_KEYS);
+
   const iBtn = document.getElementById("imageAiToggle");
   const paintImage = (enabled) => {
     iBtn.textContent = enabled ? "On — tap to turn off" : "Off — tap to turn on";
@@ -1076,7 +1119,13 @@ async function renderExtSettings() {
   iBtn.onclick = () => {
     chrome.storage.local.get("af_image_ai_enabled", (r) => {
       const next = !(r.af_image_ai_enabled !== false);
-      chrome.storage.local.set({ af_image_ai_enabled: next }, () => paintImage(next));
+      // Switching it back on here means ON — a snooze left running would make
+      // the toggle say one thing and the page do another.
+      const patch = next ? { af_image_ai_enabled: true, af_img_snooze_until: 0 } : { af_image_ai_enabled: false };
+      chrome.storage.local.set(patch, () => {
+        paintImage(next);
+        paintScope({ state: "imageAiState", clear: "imageAiClear", toggle: "imageAiToggle" }, IMG_KEYS);
+      });
     });
   };
 
@@ -1100,7 +1149,11 @@ async function renderExtSettings() {
   qsBtn.onclick = () => {
     chrome.storage.local.get("af_qspot_enabled", (r) => {
       const next = !(r.af_qspot_enabled !== false);
-      chrome.storage.local.set({ af_qspot_enabled: next }, () => paintQspot(next));
+      const patch = next ? { af_qspot_enabled: true, af_qspot_snooze_until: 0 } : { af_qspot_enabled: false };
+      chrome.storage.local.set(patch, () => {
+        paintQspot(next);
+        paintScope({ state: "qspotState", clear: "qspotClear", toggle: "qspotToggle" }, QSPOT_KEYS);
+      });
     });
   };
 
