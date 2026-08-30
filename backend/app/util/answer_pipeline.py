@@ -285,6 +285,95 @@ def clean_output(text: str, max_chars: int = 4000) -> str:
     return out
 
 
+def looks_degenerate(text: str) -> bool:
+    """Did the model start repeating itself instead of finishing?
+
+    This is the failure users actually see on OCR: the correct text comes out
+    first, then the model keeps going and emits chopped-up fragments of what
+    it already said -
+
+        "LIVE LIFE WITH NO EXCUSES,
+         TRAVEL WITH NO REGRET".
+         - OSCAR WILDE
+         "LIVE L
+         TRAV
+         IFE WITH NO
+         O EXCUSES,
+
+    Two independent signals, because either alone has false positives: lines
+    that are strict fragments of an earlier line, and one short phrase
+    repeated far more often than any real text repeats it.
+    """
+    if not text:
+        return False
+    lines = [re.sub(r"\W+", " ", l).strip().upper() for l in text.splitlines()]
+    lines = [l for l in lines if len(l) >= 3]
+    fragments = 0
+    for i, line in enumerate(lines):
+        for prev in lines[:i]:
+            if line != prev and line in prev:
+                fragments += 1
+                break
+    if fragments >= 2:
+        return True
+
+    words = re.findall(r"[A-Za-z']+", text.upper())
+    if len(words) >= 12:
+        grams: dict[str, int] = {}
+        for i in range(len(words) - 2):
+            g = " ".join(words[i : i + 3])
+            grams[g] = grams.get(g, 0) + 1
+        if grams and max(grams.values()) >= 4:
+            return True
+    return False
+
+
+def clean_ocr(text: str) -> str:
+    """Post-process extracted text: keep every real line, drop the echoes.
+
+    Only the aggressive de-duplication is conditional on degeneration being
+    detected - a table legitimately repeats short cell values, and stripping
+    those on every response would corrupt good output to fix bad output.
+    """
+    if not text:
+        return ""
+    out = re.sub(r"\n{3,}", "\n\n", "\n".join(l.rstrip() for l in text.splitlines()).strip())
+    if not looks_degenerate(out):
+        # Untouched. A transcription is only useful if it is faithful, and
+        # a table can legitimately repeat a row - so nothing is removed
+        # from output that shows no sign of having gone wrong.
+        return out
+
+    # Degenerate: drop back-to-back repeats, then anything that is merely a
+    # piece of something already said.
+
+    # Degenerate: keep the first occurrence of each line and drop anything that
+    # is merely a piece of something already said.
+    kept: list[str] = []
+    seen: list[str] = []
+    previous = None
+    for line in out.splitlines():
+        if line.strip() and line.strip() == previous:
+            continue
+        previous = line.strip()
+        text_only = line.strip()
+        if not text_only:
+            if kept and kept[-1] != "":
+                kept.append("")
+            continue
+        norm = re.sub(r"\W+", " ", text_only).strip().upper()
+        if len(norm) < 3:
+            kept.append(line)
+            continue
+        if norm in seen:
+            continue
+        if any(norm != prev and norm in prev for prev in seen):
+            continue
+        seen.append(norm)
+        kept.append(line)
+    return "\n".join(kept).strip()
+
+
 def fix_citations(text: str, source_count: int) -> str:
     """Delete citations pointing at sources that were never returned.
 

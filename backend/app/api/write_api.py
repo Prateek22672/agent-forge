@@ -471,6 +471,12 @@ def image_understand(
     answer a question about it. One call, no agent graph - same speed contract
     as /write/answer."""
     from app.llm.router import get_vision_llms
+    from app.util.answer_pipeline import (
+        answer_cache,
+        clean_ocr,
+        clean_output,
+        looks_degenerate,
+    )
 
     mode = (payload.mode or "ocr").strip().lower()
     if mode not in _IMAGE_PROMPTS and mode != "ask":
@@ -502,7 +508,20 @@ def image_understand(
 
     data_uri = f"data:{mime};base64,{b64}"
 
-    candidates = get_vision_llms(0.2)
+    # Reading the same image twice is common (open the card, extract, then
+    # explain, then come back to it) and the pixels are identical, so hash
+    # them once and serve the repeat from memory.
+    # Hash the WHOLE image, not a prefix: two different screenshots from the
+    # same site can share several KB of leading base64 and the same length.
+    cache_key = answer_cache.key("image", mode, payload.question or "", b64)
+    cached = answer_cache.get(cache_key)
+    if cached:
+        return {**cached, "cached": True}
+
+    # Transcription wants determinism; description benefits from a little
+    # freedom.
+    temperature = 0.0 if mode in ("ocr", "translate") else 0.2
+    candidates = get_vision_llms(temperature)
     if not candidates:
         raise HTTPException(
             503,
@@ -511,7 +530,7 @@ def image_understand(
         )
 
     last_exc: Exception | None = None
-    for llm, provider in candidates:
+    for index, (llm, provider) in enumerate(candidates):
         # The image block is provider-shaped: Gemini takes the data URI as a
         # plain string, Groq follows the OpenAI {"url": ...} shape.
         image_block = (
@@ -530,12 +549,25 @@ def image_understand(
             # monologues, "Sure! Here's...", and the LaTeX markers vision
             # models sprinkle through a diagram description ("the focal points
             # ($f$)"), which a plain-text bubble would render literally.
-            from app.util.answer_pipeline import clean_output
-
             text = clean_output(raw)
+            if mode in ("ocr", "translate"):
+                text = clean_ocr(text)
             if not text:
                 raise ValueError("empty response")
-            return {"text": text, "mode": mode, "provider": provider}
+
+            # The fast model is right almost every time and answers in about
+            # half a second, so it stays first - but when it starts repeating
+            # itself (measured: it happens on stylised text over a photo), the
+            # cleanup above can only hide so much. Hand that one image to the
+            # next provider instead of returning a mangled transcription. Costs
+            # latency exactly when it is already wrong.
+            if looks_degenerate(text) and index < len(candidates) - 1:
+                last_exc = ValueError("degenerate output")
+                continue
+
+            result = {"text": text, "mode": mode, "provider": provider}
+            answer_cache.set(cache_key, result)
+            return result
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
             continue

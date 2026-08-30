@@ -340,6 +340,18 @@
   padding: 4px 10px; font-size: 11px; cursor: pointer; font-family: inherit; }
 .af-tool:hover { color: var(--fg); }
 
+/* ---------- The auto-spotted question badge ---------- */
+.af-q-badge { position: fixed; z-index: 2147483001; display: inline-flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 11px 0 5px; background: rgba(24,26,42,.92); color: #eef0ff;
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border: 1px solid rgba(126,140,255,.42); border-radius: 999px; cursor: pointer;
+  font: 600 11.5px -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif; letter-spacing: .01em;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4); opacity: 0; transform: translateX(-4px) scale(.92);
+  transition: opacity .14s ease, transform .14s cubic-bezier(.2,.8,.3,1), background .12s ease; }
+.af-q-badge.af-in { opacity: .94; transform: translateX(0) scale(1); }
+.af-q-badge:hover { opacity: 1; background: rgba(36,40,66,.97); transform: translateX(0) scale(1.05); }
+.af-q-badge .af-ib-logo { width: 18px; height: 18px; border-radius: 50%; flex: none; }
+
 /* ---------- Auto-edit: the badge inside any text field + its menu ---------- */
 .af-edit-badge { position: fixed; z-index: 2147483001; display: inline-flex; align-items: center; gap: 4px;
   height: 22px; padding: 0 7px 0 4px; background: rgba(18,18,22,.82); color: #fff;
@@ -854,6 +866,9 @@
   // Live suggestions call the backend on a typing pause, so they get their own
   // switch rather than riding on auto-edit's.
   let proofEnabled = true;
+  // Spotting questions on the page and offering to answer them, with no
+  // highlighting at all.
+  let questionSpotEnabled = true;
   try {
     chrome.storage.local.get(
       [
@@ -863,6 +878,7 @@
         "af_image_ai_enabled",
         "af_autoedit_enabled",
         "af_proof_enabled",
+        "af_qspot_enabled",
       ],
       (r) => {
         if (typeof r.af_select_enabled === "boolean") selectEnabled = r.af_select_enabled;
@@ -870,6 +886,7 @@
         if (typeof r.af_image_ai_enabled === "boolean") imageAiEnabled = r.af_image_ai_enabled;
         if (typeof r.af_autoedit_enabled === "boolean") autoEditEnabled = r.af_autoedit_enabled;
         if (typeof r.af_proof_enabled === "boolean") proofEnabled = r.af_proof_enabled;
+        if (typeof r.af_qspot_enabled === "boolean") questionSpotEnabled = r.af_qspot_enabled;
         privacyMode = r.af_privacy_mode === true;
         if (privacyMode) return; // stay fully off — don't mount anything
         if (bubbleEnabled) mountBubble();
@@ -900,6 +917,11 @@
           removeImgBadge();
           removeImgCard();
         }
+      }
+      if ("af_qspot_enabled" in changes) {
+        questionSpotEnabled = changes.af_qspot_enabled.newValue !== false;
+        if (questionSpotEnabled) scheduleQuestionScan(200);
+        else removeQBadge();
       }
       if ("af_proof_enabled" in changes) {
         proofEnabled = changes.af_proof_enabled.newValue !== false;
@@ -969,6 +991,13 @@
       bar = null;
     }
     clearHighlightOverlay();
+    // The question badge stands down while the bar is open; once it closes,
+    // look again — the next question is usually right there.
+    try {
+      scheduleQuestionScan(300);
+    } catch {
+      /* spotter not initialised on this page */
+    }
   }
 
   // Collapse-first UX: a selection shows a tiny PILL, not the full bar, so it
@@ -1643,6 +1672,18 @@
     }
   }
 
+  // "Answer" mode prompt — the trained default for both the Answer chip and
+  // the send button when nothing is typed. Handles the three things people
+  // actually select: a question / MCQ (answer it), a term or concept
+  // (explain it), or a claim (say if it's right). Kept tight so the reply is
+  // short and lands fast.
+  const ANSWER_PROMPT =
+    "Respond to the highlighted text based on what it is:\n" +
+    "- If it is a question (including multiple choice), give the correct answer directly, then a one-line reason. For multiple choice, name the correct option (e.g. \"C\") and its text.\n" +
+    "- If it is a term, concept, or phrase, explain it clearly in 1–3 sentences.\n" +
+    "- If it is a statement/claim, say whether it is correct and briefly why.\n" +
+    "Be accurate and concise. No preamble.";
+
   function showBar(rect, prefill, autoFocus) {
     if (!selectEnabled || privacyMode || isTinyFrame()) return; // one choke point for every switch
     removePill();
@@ -1700,18 +1741,6 @@
     // One smart "ask": typed question if there is one, else a merged
     // explain+summarize default (this replaces the separate Explain/Summarize
     // chips — one better inline answer, like a lens for text).
-    // "Answer" mode prompt — the trained default for both the Answer chip and
-    // the send button when nothing is typed. Handles the three things people
-    // actually select: a question / MCQ (answer it), a term or concept
-    // (explain it), or a claim (say if it's right). Kept tight so the reply is
-    // short and lands fast.
-    const ANSWER_PROMPT =
-      "Respond to the highlighted text based on what it is:\n" +
-      "- If it is a question (including multiple choice), give the correct answer directly, then a one-line reason. For multiple choice, name the correct option (e.g. \"C\") and its text.\n" +
-      "- If it is a term, concept, or phrase, explain it clearly in 1–3 sentences.\n" +
-      "- If it is a statement/claim, say whether it is correct and briefly why.\n" +
-      "Be accurate and concise. No preamble.";
-
     const smartAsk = () => ask(input.value.trim() || ANSWER_PROMPT);
     bar.querySelector(".af-sel-send").onclick = smartAsk;
     input.addEventListener("keydown", (e) => {
@@ -2370,7 +2399,11 @@
   //      resort for a public image the page itself won't release.
 
   const MIN_IMG_SIZE = 110; // below this it's an icon/avatar/spacer, not content
-  const MAX_IMG_EDGE = 1280; // downscale before upload: readable, but a small payload
+  // 1000px is where the two curves cross: below it small text starts being
+  // guessed at, above it the vision model's own time climbs steeply (measured
+  // on the same picture: 0.6s at ~320px, 2.8s at 1000px, 10.9s at 1000px PNG).
+  // Never upscale - enlarging a thumbnail adds no detail, just tokens.
+  const MAX_IMG_EDGE = 1000;
 
   let imageAiInit = false;
   let imgBadge = null;
@@ -2380,6 +2413,70 @@
   let imgCardData = null;   // or an ad-hoc image: a screen snip / a URL from the right-click menu
   let imgHideTimer = 0;
   let imgHoverThrottle = 0;
+  let imgPayloadPromise = null; // pixels, fetched while the card is being read
+
+  // Lazy-loading and responsive-image attributes, in the order sites tend to
+  // put the biggest version in.
+  const HI_RES_ATTRS = [
+    "data-zoom-image", "data-large_image", "data-hi-res-src", "data-full-src",
+    "data-original", "data-src-large", "data-src", "data-lazy-src", "data-image",
+  ];
+
+  // The single biggest accuracy lever in the whole image feature: what is
+  // ON SCREEN is often a thumbnail. A search-results grid renders a ~250px
+  // preview, and OCR of a 250px stylised quote is where the model starts
+  // guessing (and then repeating itself). The full-size original is almost
+  // always reachable without any extra request:
+  //   * srcset carries every size the page has, with its width descriptor;
+  //   * lazy-loaders park the real URL in a data- attribute;
+  //   * an image search links to the original, with the URL sitting right
+  //     there in the anchor's imgurl= parameter.
+  function bestImageUrl(el) {
+    if (!el || !el.tagName || el.tagName.toUpperCase() !== "IMG") return "";
+    let best = "";
+    let bestW = 0;
+
+    try {
+      const srcset = el.getAttribute("srcset") || el.getAttribute("data-srcset") || "";
+      srcset.split(",").forEach((part) => {
+        const bits = part.trim().split(/\s+/);
+        if (!bits[0]) return;
+        const w = /(\d+)w$/.test(bits[1] || "") ? parseInt(bits[1], 10) : 0;
+        if (w >= bestW) {
+          bestW = w;
+          best = bits[0];
+        }
+      });
+    } catch {}
+
+    if (!best) {
+      for (const attr of HI_RES_ATTRS) {
+        const v = el.getAttribute && el.getAttribute(attr);
+        if (v && /^(https?:|data:|\/\/|\/)/i.test(v)) {
+          best = v;
+          break;
+        }
+      }
+    }
+
+    // Image-search results: the anchor around the thumbnail carries the
+    // original's URL.
+    if (!best) {
+      try {
+        const a = el.closest("a[href*='imgurl=']");
+        if (a) {
+          const u = new URL(a.href, location.href).searchParams.get("imgurl");
+          if (u && /^https?:/i.test(u)) best = u;
+        }
+      } catch {}
+    }
+
+    try {
+      return best ? new URL(best, location.href).href : "";
+    } catch {
+      return "";
+    }
+  }
 
   function elImageSrc(el) {
     if (!el || !el.tagName) return "";
@@ -2492,7 +2589,9 @@
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, c.width, c.height);
     ctx.drawImage(source, 0, 0, c.width, c.height);
-    return c.toDataURL("image/jpeg", 0.85);
+    // q90 rather than q85: JPEG artefacts land hardest on thin glyph edges,
+    // which is exactly what OCR reads.
+    return c.toDataURL("image/jpeg", 0.9);
   }
 
   function readPixels(el) {
@@ -2527,10 +2626,19 @@
   }
 
   async function imagePayload(el) {
-    const src = elImageSrc(el);
-    // 1. Straight from pixels the browser has already decoded.
-    const direct = readPixels(el);
-    if (direct) return { image_b64: direct };
+    const shown = elImageSrc(el);
+    const full = bestImageUrl(el);
+    // Prefer the full-size original over the thumbnail on screen, but only
+    // when it really is a different (bigger) file.
+    const src = full && full !== shown ? full : shown;
+
+    // 1. Straight from pixels the browser has already decoded - but not when
+    //    a larger original exists, since those decoded pixels ARE the
+    //    thumbnail.
+    if (!full || full === shown) {
+      const direct = readPixels(el);
+      if (direct) return { image_b64: direct };
+    }
     if (!src || src === "canvas:") return null;
     if (src.startsWith("data:")) return { image_b64: src };
     // 2. Fetch the bytes ourselves, cookies included.
@@ -2553,8 +2661,15 @@
     } catch {
       /* cross-origin with no CORS header — fall through to the server */
     }
+    // 2b. The full-size fetch failed (hotlink protection, no CORS): the
+    //     thumbnail's own pixels are still better than nothing.
+    if (src !== shown) {
+      const direct = readPixels(el);
+      if (direct) return { image_b64: direct };
+    }
     // 3. Let the backend fetch it (public http(s) URLs only).
     if (/^https?:/i.test(src)) return { image_url: src.slice(0, 2000) };
+    if (/^https?:/i.test(shown)) return { image_url: shown.slice(0, 2000) };
     return null;
   }
 
@@ -2579,6 +2694,7 @@
     }
     imgCardTarget = null;
     imgCardData = null;
+    imgPayloadPromise = null;
   }
 
   // Where to anchor the card: the image itself when it's a real element,
@@ -2695,7 +2811,7 @@
       ? imgCardData.dataUrl
         ? { image_b64: imgCardData.dataUrl }
         : { image_url: imgCardData.url }
-      : await imagePayload(imgCardTarget);
+      : await (imgPayloadPromise || imagePayload(imgCardTarget));
     if (!payload) {
       setPanelStatus(status, "Couldn't read this image — the page won't release it.", true);
       return;
@@ -2732,6 +2848,11 @@
     removeImgCard();
     imgCardTarget = el;
     imgCardData = data;
+    // Start reading the pixels NOW, while the user is still deciding which
+    // button to press — fetching and re-encoding a full-size image takes
+    // longer than the model call does, and none of it needs to be on the
+    // clock once they click.
+    imgPayloadPromise = el ? imagePayload(el).catch(() => null) : null;
     const src = el ? elImageSrc(el) : data.dataUrl || data.url || "";
     const httpSrc = /^https?:/i.test(src) ? src : "";
 
@@ -3647,6 +3768,213 @@
     });
   }
 
+
+  // ======================================================================
+  //  Question spotter — answer what's on the page without highlighting it
+  // ======================================================================
+  // Selecting a question, then clicking Answer, is two actions too many when
+  // the page is literally a list of questions: a quiz, a worksheet, a practice
+  // paper, a form with a "why do you want this role?" box. So find them.
+  //
+  // Everything here is regex and layout maths — no model call is made to
+  // decide whether something is a question, because that would cost more than
+  // answering it. The badge only appears for the ONE question nearest the
+  // middle of the screen: a badge on every question at once is wallpaper, and
+  // wallpaper gets switched off.
+
+  const Q_ENDS = /\?["'”’)\]]?\s*$/;
+  const Q_STARTS = /^\s*(?:\d{1,2}[.)]\s*)?(who|what|when|where|why|how|which|whose|is|are|was|were|do|does|did|can|could|should|would|will|name|state|define|explain|calculate|find|solve|choose|select|identify)\b/i;
+  const Q_OPTION = /(?:^|\n)\s*\(?[A-Da-d1-4][.):]\s+\S/g;
+  const Q_TAGS = "p,h1,h2,h3,h4,h5,h6,li,dt,dd,td,label,legend,figcaption,blockquote,div,span";
+  const Q_MIN = 14;    // shorter than this isn't a question, it's a label
+  const Q_MAX = 600;   // longer than this is a paragraph that happens to ask something
+
+  let qSpotterInit = false;
+  let qBadge = null;
+  let qTarget = null;
+  let qText = "";
+  let qScanTimer = 0;
+
+  function countOptions(text) {
+    Q_OPTION.lastIndex = 0;
+    return (text.match(Q_OPTION) || []).length;
+  }
+
+  function looksLikeQuestion(text) {
+    const t = (text || "").trim();
+    if (t.length < Q_MIN || t.length > Q_MAX) return false;
+    if (!Q_ENDS.test(t) && !Q_STARTS.test(t)) return false;
+    // "Search?" and other one-word UI chrome aren't questions worth answering.
+    return t.split(/\s+/).length >= 4;
+  }
+
+  // A question and its options are usually siblings, not one node. Walk up
+  // until the container holds the options too (or a radio group), so the
+  // answer is given the choices rather than guessing without them.
+  function questionScope(el) {
+    let node = el;
+    let best = { el, text: (el.innerText || el.textContent || "").trim() };
+    for (let i = 0; i < 4 && node && node.parentElement; i++) {
+      node = node.parentElement;
+      const text = (node.innerText || node.textContent || "").trim();
+      if (!text || text.length > 2500) break;
+      const hasOptions =
+        countOptions(text) >= 2 ||
+        (node.querySelectorAll && node.querySelectorAll('input[type="radio"], [role="radio"]').length >= 2);
+      if (hasOptions) return { el: node, text };
+      best = { el: node, text };
+    }
+    return best;
+  }
+
+  function visibleEnough(el) {
+    let r;
+    try {
+      r = el.getBoundingClientRect();
+    } catch {
+      return null;
+    }
+    if (r.width < 120 || r.height < 14) return null;
+    if (r.bottom < 60 || r.top > window.innerHeight - 40) return null;
+    return r;
+  }
+
+  // The question closest to the middle of the screen — that's the one being
+  // read right now.
+  function findQuestion() {
+    const middle = window.innerHeight / 2;
+    let winner = null;
+    let winnerDist = Infinity;
+    let scanned = 0;
+    let nodes;
+    try {
+      nodes = document.querySelectorAll(Q_TAGS);
+    } catch {
+      return null;
+    }
+    for (let i = 0; i < nodes.length && scanned < 900; i++) {
+      const el = nodes[i];
+      const r = visibleEnough(el);
+      if (!r) continue;
+      scanned++;
+      // Only leaf-ish blocks: a wrapper repeats its children's text and would
+      // always win on "contains a question mark".
+      if (el.children.length > 3) continue;
+      const text = (el.innerText || el.textContent || "").trim();
+      if (!looksLikeQuestion(text)) continue;
+      const dist = Math.abs(r.top + r.height / 2 - middle);
+      if (dist < winnerDist) {
+        winnerDist = dist;
+        winner = el;
+      }
+    }
+    return winner;
+  }
+
+  function removeQBadge() {
+    if (qBadge) {
+      qBadge.remove();
+      qBadge = null;
+    }
+    qTarget = null;
+    qText = "";
+  }
+
+  function positionQBadge() {
+    if (!qBadge || !qTarget) return;
+    const r = visibleEnough(qTarget);
+    if (!r) {
+      removeQBadge();
+      return;
+    }
+    const w = qBadge.offsetWidth || 92;
+    const h = qBadge.offsetHeight || 26;
+    // Just outside the question's top-right, tucked back inside when there
+    // isn't room to the right of it.
+    let left = r.right + 8;
+    if (left + w > window.innerWidth - 8) left = Math.max(8, r.right - w - 8);
+    const top = Math.max(8, Math.min(r.top - 2, window.innerHeight - h - 8));
+    qBadge.style.left = `${left}px`;
+    qBadge.style.top = `${top}px`;
+  }
+
+  function showQBadge(el) {
+    const scope = questionScope(el);
+    if (qBadge && qTarget === el) {
+      qText = scope.text;
+      positionQBadge();
+      return;
+    }
+    removeQBadge();
+    qTarget = el;
+    qText = scope.text;
+    qBadge = document.createElement("div");
+    qBadge.className = "af-q-badge";
+    qBadge.title = "Answer this question with AgentFury";
+    qBadge.innerHTML = `<span class="af-ib-logo af-logo"></span><span>Answer</span>`;
+    getAfRoot().appendChild(qBadge);
+    positionQBadge();
+    requestAnimationFrame(() => qBadge && qBadge.classList.add("af-in"));
+    qBadge.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    qBadge.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      answerSpotted(scope);
+    });
+  }
+
+  // One click, one answer — the bar opens already thinking, because the badge
+  // said "Answer" and anything else would be a bait-and-switch.
+  function answerSpotted(scope) {
+    const el = (scope && scope.el) || qTarget;
+    const text = ((scope && scope.text) || qText || "").slice(0, 6000);
+    if (!text) return;
+    lastSelectionText = text;
+    lastAltGrabAt = Date.now(); // same reason as Alt+click: there's no selection
+    try {
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      anchorRange = r;
+    } catch {
+      anchorRange = null;
+    }
+    const rect = el.getBoundingClientRect();
+    removeQBadge();
+    showBar(rect, "", false);
+    ask(ANSWER_PROMPT);
+  }
+
+  function scanForQuestions() {
+    if (!questionSpotEnabled || privacyMode || isTinyFrame()) return;
+    if (bar || imgCard || editMenu || snipLayer) return; // something is already open
+    const found = findQuestion();
+    if (found) showQBadge(found);
+    else removeQBadge();
+  }
+
+  function scheduleQuestionScan(delay) {
+    clearTimeout(qScanTimer);
+    qScanTimer = setTimeout(scanForQuestions, delay || 350);
+  }
+
+  function initQuestionSpotter() {
+    if (qSpotterInit) return;
+    qSpotterInit = true;
+    scheduleQuestionScan(900); // let the page settle first
+    window.addEventListener("scroll", () => scheduleQuestionScan(250), true);
+    window.addEventListener("resize", () => scheduleQuestionScan(400), true);
+    // Quizzes are single-page apps: the next question replaces the current one
+    // without a navigation. Watch for that, cheaply — childList only, and
+    // debounced hard, so a chatty page can't turn this into a scan loop.
+    try {
+      const mo = new MutationObserver(() => scheduleQuestionScan(600));
+      mo.observe(document.body || document.documentElement, { childList: true, subtree: true });
+    } catch {}
+  }
+
   // ======================================================================
   //  Ask without highlighting — Alt+click any block or image
   // ======================================================================
@@ -3725,6 +4053,7 @@
 
   function teardownExtras() {
     closeSnip();
+    removeQBadge();
     removeImgBadge();
     removeImgCard();
     closeEditMenu();
@@ -3737,11 +4066,13 @@
     initImageAI();
     initAutoEdit();
     initAltClick();
+    initQuestionSpotter();
     if (!extrasWired) {
       extrasWired = true;
       const follow = () => {
         positionImgBadge();
         positionEditBadge();
+        positionQBadge();
       };
       let raf = 0;
       const onMove = () => {

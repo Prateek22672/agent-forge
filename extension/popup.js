@@ -962,6 +962,13 @@ async function renderExtSettings() {
       </div>
     </div>
     <div class="item">
+      <div class="title">Spot questions on the page</div>
+      <div class="sub">When a page shows a question — a quiz, a worksheet, a form — a small Answer badge appears next to it. One click answers it, with nothing to highlight. Only ever one badge, on the question you're looking at.</div>
+      <div class="row">
+        <button id="qspotToggle" class="secondary">…</button>
+      </div>
+    </div>
+    <div class="item">
       <div class="title">Suggestions while you type</div>
       <div class="sub">Spelling and grammar fixes appear on the AI badge as you write, like a built-in proofreader — common typos are caught instantly offline, the rest on a short pause. Nothing changes until you click a suggestion.</div>
       <div class="row">
@@ -1082,6 +1089,18 @@ async function renderExtSettings() {
     chrome.storage.local.get("af_autoedit_enabled", (r) => {
       const next = !(r.af_autoedit_enabled !== false);
       chrome.storage.local.set({ af_autoedit_enabled: next }, () => paintEdit(next));
+    });
+  };
+
+  const qsBtn = document.getElementById("qspotToggle");
+  const paintQspot = (enabled) => {
+    qsBtn.textContent = enabled ? "On — tap to turn off" : "Off — tap to turn on";
+  };
+  chrome.storage.local.get("af_qspot_enabled", (r) => paintQspot(r.af_qspot_enabled !== false));
+  qsBtn.onclick = () => {
+    chrome.storage.local.get("af_qspot_enabled", (r) => {
+      const next = !(r.af_qspot_enabled !== false);
+      chrome.storage.local.set({ af_qspot_enabled: next }, () => paintQspot(next));
     });
   };
 
