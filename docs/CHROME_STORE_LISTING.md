@@ -144,6 +144,92 @@ browser side panel.
 https://agentfury.foliofyx.in/privacy
 ```
 
+## Permission justifications — paste these verbatim
+
+The Developer Dashboard asks for one per permission (Privacy practices tab).
+Each is under the 1,000-character limit.
+
+
+**activeTab**
+```
+Used only for "Snip & read": the user presses the extension's keyboard shortcut (Alt+Shift+S) or picks "AgentFury: read text on screen" from the right-click menu, and Chrome grants a one-off capture of that one visible tab. The user then drags a box over the region they want, and only that cropped region is sent to our API to be read back as text. This is the only way to reach text that is not in the DOM at all - words painted on a canvas, a frame of a video, a scanned page, or a viewer that blocks selection - which is the core purpose of the extension. No capture ever happens without that explicit user gesture, nothing is captured in the background or on a timer, the screenshot never leaves the tab except as the region the user selected, and it is not stored.
+```
+
+**storage**
+```
+Stores the user's AgentFury login session token locally so they stay signed in between browser sessions, and their on/off preferences: select-to-ask, image AI, auto-edit, typing suggestions, the question badge, the floating bubble, theme, privacy mode, and the per-site "turn this off here" and "snooze for an hour" choices they make from the badges on the page. No browsing history or page content is stored.
+```
+
+**identity**
+```
+Used only for the "Continue with Google" sign-in button, via chrome.identity.launchWebAuthFlow, so the user can sign in to their AgentFury account without typing a password. It is not used to read any Google data; Gmail and Calendar access is a separate, explicit consent step the user starts from Settings.
+```
+
+**alarms**
+```
+Schedules a once-per-minute background check for new priority email and AI-drafted replies on the user's own account, so they are notified without having to open the extension. It is a timer only - no page or tab data is read.
+```
+
+**notifications**
+```
+Shows a native OS notification when the user's account has new priority mail or a prepared AI draft waiting, and keeps the unread count on the toolbar icon. Notifications are only ever about the signed-in user's own account.
+```
+
+**contextMenus**
+```
+Adds AgentFury's own right-click entries: "Ask AgentFury about..." on selected text, "Read text in this image", "read text on screen", "Copy with AgentFury", and "copy all text on this page". These are the reliable route to the features on sites that remove or override their own context menu, and each one runs only when the user clicks it.
+```
+
+**sidePanel**
+```
+Opens AgentFury as a native browser side panel when the toolbar icon is clicked - chat, priority inbox, drafts, reminders and notes - instead of a small dropdown that closes as soon as it loses focus.
+```
+
+**Host permission — content script on <all_urls> (all frames)**
+```
+The extension's single purpose is helping the user with the content in front of them, so it has to be able to run on the page they are on. The content script acts ONLY on an explicit user action: selecting text, clicking the AI badge on an image or a text box, clicking the Answer badge on a question, Alt+clicking, or using a shortcut or right-click item. It reads nothing otherwise, and sends to our API only the specific text, image or region the user acted on. It runs in all frames because the pages users most need it on - course players, document viewers, embedded readers and quiz platforms - put their content inside an iframe, where a top-frame-only script would never see it. Small ad/tracking frames get only the copy-restore code and no UI.
+```
+
+**Host permission — https://mail.google.com/***
+```
+Required to detect Gmail's compose box and attach the AI writing toolbar directly above it, and to insert AI-rewritten text back into the message the user is actively editing. Nothing is ever sent automatically - the user reviews the text and sends with Gmail's own Send button.
+```
+
+**Host permission — https://agentfury.foliofyx.in/***
+```
+The extension's own backend API (agentfury.foliofyx.in). Used to authenticate the user and to process the requests they make: answering a selection, reading an image, proofreading what they are typing, rewriting text, and their reminders and notes.
+```
+
+**Are you using remote code?**
+```
+No. The extension executes no remote code. All JavaScript is included in the package; the API returns data (text answers), never code.
+```
+
+**Single purpose description**
+```
+AgentFury helps the user understand and work with the content on the page they are viewing: it answers questions about text they select or a question it spots on the page, reads the text inside images and screen regions, and fixes or rewrites text in the field they are typing in.
+```
+## Store images — ready to upload
+
+All generated from the extension's OWN stylesheet (the bar, badges, cards and
+menus in them are the shipping CSS, not a mockup of it), rendered with headless
+Chrome and flattened to RGB — the store rejects alpha.
+
+| File | Size | Shows |
+|---|---|---|
+| `af-1-answer-any-question.png` | 1280×800 | The Answer badge on a quiz + the answer in the bar |
+| `af-2-read-any-image.png` | 1280×800 | Image AI reading the text out of a slide |
+| `af-3-snip-and-read.png` | 1280×800 | Snip & read over a scanned document |
+| `af-4-fix-as-you-type.png` | 1280×800 | Live spelling/grammar suggestions in a reply box |
+| `af-5-copy-anywhere.png` | 1280×800 | Selecting and copying on a page that blocks it |
+| `af-promo-small-440x280.png` | 440×280 | Small promo tile |
+| `af-promo-marquee-1400x560.png` | 1400×560 | Marquee promo tile |
+
+Regenerate after a UI change: `python docs/store-screenshots/_make_screenshots.py`
+and `_make_promo_tiles.py` (needs Chrome + Pillow). Note both scripts place
+elements from the LEFT — headless Chrome resolves `right` against a box wider
+than the viewport, which silently pushes anything anchored right off the edge.
+
 ## 5. Screenshots (required — at least 1, 1280×800 or 640×400)
 
 Take these on your machine and upload:
