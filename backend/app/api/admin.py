@@ -207,13 +207,17 @@ def performance_metrics(
 
 
 @router.post("/metrics/reset")
-def reset_metrics(request: Request, admin: str = Depends(require_admin)):
+def reset_metrics(
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: str = Depends(require_admin),
+):
     """Clear the rolling window - useful right after fixing something, to see
     whether the fix actually held."""
     from app import metrics
 
     metrics.reset()
-    admin_audit.record(request, "metrics.reset", "")
+    admin_audit.record(db, "metrics.reset", ip=request.client.host if request.client else "")
     return {"ok": True}
 
 
