@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api";
+import MetricsDashboard from "./MetricsDashboard";
 
 // Admin panel: model/key insights + add keys + manage users.
 // Keys are shown MASKED only — the backend never sends full keys.
@@ -9,7 +10,8 @@ export default function AdminPanel({ onClose, standalone = false }) {
   const [logins, setLogins] = useState([]);
   const [flagged, setFlagged] = useState([]);
   const [audit, setAudit] = useState(null);
-  const [tab, setTab] = useState("keys");
+  // Performance is the first thing an operator wants to know, so it leads.
+  const [tab, setTab] = useState("live");
   const [err, setErr] = useState("");
 
   const load = async () => {
@@ -68,7 +70,7 @@ export default function AdminPanel({ onClose, standalone = false }) {
 
         {/* Tabs */}
         <div className="flex gap-2 px-6">
-          {["keys", "users", "review", "insights", "security"].map((t) => (
+          {["live", "keys", "users", "review", "insights", "security"].map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -82,6 +84,8 @@ export default function AdminPanel({ onClose, standalone = false }) {
         </div>
 
         <div className="p-6">
+          {tab === "live" && <MetricsDashboard />}
+
           {tab === "keys" && data && (
             <div className="space-y-6">
               <KeyGroup

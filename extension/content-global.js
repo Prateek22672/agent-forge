@@ -316,6 +316,22 @@
 .af-img-badge.af-in { opacity: 1; transform: scale(1); }
 .af-img-badge:hover { background: rgba(30,30,38,.96); transform: scale(1.05); }
 .af-img-badge .af-ib-logo { width: 18px; height: 18px; border-radius: 50%; flex: none; }
+.af-img-badge .af-ib-main { display: inline-flex; align-items: center; gap: 5px; }
+.af-ib-more { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 22px;
+  margin-left: 1px; padding: 0 0 3px; background: transparent; border: none; border-left: 1px solid rgba(255,255,255,.16);
+  color: rgba(255,255,255,.6); font: 600 13px -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  line-height: 1; cursor: pointer; }
+.af-ib-more:hover { color: #fff; }
+
+/* The badge's own off switch. */
+.af-img-menu { width: 232px; padding: 8px; }
+.af-menu-title { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted); padding: 2px 8px 6px; }
+.af-menu-item { display: block; width: 100%; text-align: left; background: transparent; border: none;
+  border-radius: 9px; color: var(--fg); font-family: inherit; font-size: 12.5px; padding: 7px 9px; cursor: pointer; }
+.af-menu-item:hover { background: var(--chip); }
+.af-menu-note { font-size: 10.5px; color: var(--muted); padding: 7px 9px 2px; line-height: 1.45;
+  border-top: 1px solid var(--border); margin-top: 5px; }
 
 /* The image card itself — actions + result, anchored next to the image. */
 .af-img-card { width: 330px; max-width: calc(100vw - 24px); padding: 13px; }
@@ -882,6 +898,12 @@
   // focusing a text box), and hiding them behind an opt-in is how a feature
   // never gets found. Same live-toggle wiring as the other two.
   let imageAiEnabled = true;
+  // A badge on every image is welcome right up until it isn't - on a photo
+  // site, mid-presentation, or while someone is just reading. Rather than
+  // making them dig through Settings and then forget to turn it back on,
+  // the badge carries its own off switch: this site, an hour, or everywhere.
+  let imgDisabledSites = [];
+  let imgSnoozeUntil = 0;
   let autoEditEnabled = true;
   // Live suggestions call the backend on a typing pause, so they get their own
   // switch rather than riding on auto-edit's.
@@ -896,6 +918,8 @@
         "af_bubble_enabled",
         "af_privacy_mode",
         "af_image_ai_enabled",
+        "af_img_disabled_sites",
+        "af_img_snooze_until",
         "af_autoedit_enabled",
         "af_proof_enabled",
         "af_qspot_enabled",
@@ -904,6 +928,8 @@
         if (typeof r.af_select_enabled === "boolean") selectEnabled = r.af_select_enabled;
         if (typeof r.af_bubble_enabled === "boolean") bubbleEnabled = r.af_bubble_enabled;
         if (typeof r.af_image_ai_enabled === "boolean") imageAiEnabled = r.af_image_ai_enabled;
+        if (Array.isArray(r.af_img_disabled_sites)) imgDisabledSites = r.af_img_disabled_sites;
+        if (typeof r.af_img_snooze_until === "number") imgSnoozeUntil = r.af_img_snooze_until;
         if (typeof r.af_autoedit_enabled === "boolean") autoEditEnabled = r.af_autoedit_enabled;
         if (typeof r.af_proof_enabled === "boolean") proofEnabled = r.af_proof_enabled;
         if (typeof r.af_qspot_enabled === "boolean") questionSpotEnabled = r.af_qspot_enabled;
@@ -937,6 +963,14 @@
           removeImgBadge();
           removeImgCard();
         }
+      }
+      if ("af_img_disabled_sites" in changes) {
+        imgDisabledSites = changes.af_img_disabled_sites.newValue || [];
+        if (!imageAiActive()) closeImageUI();
+      }
+      if ("af_img_snooze_until" in changes) {
+        imgSnoozeUntil = changes.af_img_snooze_until.newValue || 0;
+        if (!imageAiActive()) closeImageUI();
       }
       if ("af_qspot_enabled" in changes) {
         questionSpotEnabled = changes.af_qspot_enabled.newValue !== false;
@@ -2499,6 +2533,23 @@
     }
   }
 
+  // Every image-AI entry point asks this, so "off for this site" and
+  // "snoozed for an hour" can never be half-applied.
+  function imageAiActive() {
+    if (!imageAiEnabled || privacyMode) return false;
+    if (imgSnoozeUntil && Date.now() < imgSnoozeUntil) return false;
+    try {
+      if (imgDisabledSites.includes(location.hostname)) return false;
+    } catch {}
+    return true;
+  }
+
+  function closeImageUI() {
+    removeImgBadge();
+    removeImgCard();
+    closeImgMenu();
+  }
+
   function elImageSrc(el) {
     if (!el || !el.tagName) return "";
     const tag = el.tagName.toUpperCase();
@@ -2580,7 +2631,9 @@
     imgBadge = document.createElement("div");
     imgBadge.className = "af-img-badge";
     imgBadge.title = "Read this image with AgentFury — extract text, explain, or ask";
-    imgBadge.innerHTML = `<span class="af-ib-logo af-logo"></span><span>AI</span>`;
+    imgBadge.innerHTML =
+      `<span class="af-ib-main"><span class="af-ib-logo af-logo"></span><span>AI</span></span>` +
+      `<button type="button" class="af-ib-more" title="Options — turn this off">⋯</button>`;
     getAfRoot().appendChild(imgBadge);
     positionImgBadge();
     requestAnimationFrame(() => imgBadge && imgBadge.classList.add("af-in"));
@@ -2589,10 +2642,82 @@
       e.stopPropagation();
     });
     imgBadge.addEventListener("mouseenter", () => clearTimeout(imgHideTimer));
+    // One handler on the whole badge: a click anywhere on it opens the card,
+    // except on the ⋯, which opens the off-switch menu. Listening only on the
+    // inner label would make the badge's own padding dead to clicks.
     imgBadge.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      openImageCard(imgBadgeTarget);
+      if (e.target.closest && e.target.closest(".af-ib-more")) openImgMenu();
+      else openImageCard(imgBadgeTarget);
+    });
+  }
+
+  let imgMenu = null;
+
+  function closeImgMenu() {
+    if (imgMenu) {
+      imgMenu.remove();
+      imgMenu = null;
+    }
+  }
+
+  function setImgPref(patch, message) {
+    try {
+      chrome.storage.local.set(patch, () => {
+        // storage.onChanged applies it here too, but do it immediately so the
+        // badge disappears on the same click that asked for it.
+        if (patch.af_img_disabled_sites) imgDisabledSites = patch.af_img_disabled_sites;
+        if (patch.af_img_snooze_until != null) imgSnoozeUntil = patch.af_img_snooze_until;
+        if (patch.af_image_ai_enabled != null) imageAiEnabled = patch.af_image_ai_enabled;
+        closeImageUI();
+        toast(message);
+      });
+    } catch {
+      closeImageUI();
+    }
+  }
+
+  function openImgMenu() {
+    if (!imgBadge) return;
+    closeImgMenu();
+    const host = (() => {
+      try {
+        return location.hostname || "this site";
+      } catch {
+        return "this site";
+      }
+    })();
+    imgMenu = document.createElement("div");
+    imgMenu.className = panelClass("af-img-menu");
+    imgMenu.innerHTML = `
+      <div class="af-menu-title">Image AI</div>
+      <button type="button" class="af-menu-item" data-off="site">Turn off on ${escapeHtml(host)}</button>
+      <button type="button" class="af-menu-item" data-off="hour">Snooze for 1 hour</button>
+      <button type="button" class="af-menu-item" data-off="global">Turn off everywhere</button>
+      <div class="af-menu-note">Re-enable any of these in the AgentFury popup → Settings.</div>
+    `;
+    getAfRoot().appendChild(imgMenu);
+    const r = imgBadge.getBoundingClientRect();
+    placePanel(imgMenu, r);
+    requestAnimationFrame(() => imgMenu && imgMenu.classList.add("af-in"));
+    imgMenu.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    imgMenu.querySelectorAll("[data-off]").forEach((b) => {
+      b.onclick = (e) => {
+        e.stopPropagation();
+        const what = b.dataset.off;
+        if (what === "site") {
+          const next = Array.from(new Set([...imgDisabledSites, host])).slice(-200);
+          setImgPref({ af_img_disabled_sites: next }, `Image AI off on ${host}`);
+        } else if (what === "hour") {
+          setImgPref({ af_img_snooze_until: Date.now() + 3600000 }, "Image AI snoozed for 1 hour");
+        } else {
+          setImgPref({ af_image_ai_enabled: false }, "Image AI turned off everywhere");
+        }
+      };
     });
   }
 
@@ -2862,7 +2987,7 @@
   // { dataUrl | url, label, rect } — a screen snip, or the image behind a
   // right-click.
   function openImageCard(source) {
-    if (!source || privacyMode || !imageAiEnabled) return;
+    if (!source || !imageAiActive()) return;
     const el = source.nodeType === 1 ? source : null;
     const data = el ? null : source;
     removeImgBadge();
@@ -2998,7 +3123,7 @@
   }
 
   function runImageHitTest(path) {
-    if (!imageAiEnabled || privacyMode || isTinyFrame() || imgCard || snipLayer) return;
+    if (!imageAiActive() || isTinyFrame() || imgCard || snipLayer || imgMenu) return;
     const el = imageAt(imgPointer.x, imgPointer.y, path);
     if (el) {
       showImgBadge(el);
@@ -3734,7 +3859,7 @@
   }
 
   function startSnip(shot) {
-    if (privacyMode || !imageAiEnabled || !IS_TOP) return;
+    if (!imageAiActive() || !IS_TOP) return;
     closeSnip();
     removeImgBadge();
     removeImgCard();
@@ -3821,6 +3946,41 @@
     return (text.match(Q_OPTION) || []).length;
   }
 
+  const OPTION_CONTROLS =
+    'input[type="radio"], input[type="checkbox"], [role="radio"], [role="option"], [role="checkbox"]';
+  const OPTION_HINT = /(option|choice|answer|mcq|alternativ)/i;
+
+  // How many answer options does this container hold? Four ways to be one,
+  // because quiz platforms disagree on all of them:
+  //   1. real form controls (the Quilgo case: radios with plain text)
+  //   2. lettered/numbered prefixes in the text
+  //   3. a list, or a run of short sibling blocks - the shape of a choice list
+  //      even when nothing is marked up as one
+  //   4. class names that say so outright
+  function optionCount(node, questionEl) {
+    let best = 0;
+    try {
+      best = node.querySelectorAll(OPTION_CONTROLS).length;
+    } catch {}
+    best = Math.max(best, countOptions((node.innerText || node.textContent || "").trim()));
+    try {
+      const labelled = Array.from(node.querySelectorAll('[class*="option"], [class*="choice"], [class*="answer"]'))
+        .filter((n) => OPTION_HINT.test(n.className || ""));
+      best = Math.max(best, labelled.length);
+      const items = node.querySelectorAll("li");
+      if (items.length >= 2) best = Math.max(best, items.length);
+      // A run of short sibling blocks directly under this container, ignoring
+      // the question itself: the commonest hand-rolled option list there is.
+      const shortSiblings = Array.from(node.children).filter((c) => {
+        if (c === questionEl || (questionEl && c.contains(questionEl))) return false;
+        const t = (c.innerText || c.textContent || "").trim();
+        return t.length > 0 && t.length <= 140;
+      });
+      if (shortSiblings.length >= 3) best = Math.max(best, shortSiblings.length);
+    } catch {}
+    return best;
+  }
+
   function looksLikeQuestion(text) {
     const t = (text || "").trim();
     if (t.length < Q_MIN || t.length > Q_MAX) return false;
@@ -3845,19 +4005,28 @@
   // always right even if it is sometimes less complete.
   function questionScope(el) {
     const own = (el.innerText || el.textContent || "").trim();
-    const ceiling = Math.min(1600, own.length * 6 + 500);
+    // Generous enough for a question plus four options and a hint line, tight
+    // enough that a whole page section can't ride along - which is the bug
+    // this cap exists to prevent.
+    const ceiling = Math.min(2200, own.length * 8 + 900);
     let node = el;
-    for (let i = 0; i < 4 && node && node.parentElement; i++) {
+    let widest = null;
+    let bestCount = 1; // one "option" is not a choice list
+    for (let i = 0; i < 5 && node && node.parentElement; i++) {
       node = node.parentElement;
       const text = (node.innerText || node.textContent || "").trim();
       if (!text || text.length > ceiling) break; // too much has come along with it
       if (!text.includes(own.slice(0, Math.min(40, own.length)))) break; // not our question any more
-      const hasOptions =
-        countOptions(text) >= 2 ||
-        (node.querySelectorAll && node.querySelectorAll('input[type="radio"], [role="radio"]').length >= 2);
-      if (hasOptions) return { el: node, text };
+      const count = optionCount(node, el);
+      // Climb only while each level adds MORE options than the last. Once the
+      // count stops growing, everything further up is packaging - the sibling
+      // paragraph, the page section, the whole app shell - and taking it would
+      // be the bug where an unrelated dialog got answered instead.
+      if (count <= bestCount) break;
+      bestCount = count;
+      widest = { el: node, text };
     }
-    return { el, text: own };
+    return widest || { el, text: own };
   }
 
   function visibleEnough(el) {
@@ -3951,6 +4120,18 @@
     qBadge.addEventListener("mousedown", (e) => {
       e.preventDefault();
       e.stopPropagation();
+    });
+    // Show what is actually being read, before it is read.
+    qBadge.addEventListener("mouseenter", () => {
+      if (bar) return;
+      try {
+        const r = document.createRange();
+        r.selectNodeContents(scope.el);
+        drawHighlightOverlay(r);
+      } catch {}
+    });
+    qBadge.addEventListener("mouseleave", () => {
+      if (!bar) clearHighlightOverlay();
     });
     qBadge.addEventListener("click", (e) => {
       e.preventDefault();
@@ -4049,7 +4230,7 @@
         // composedPath()[0] is the real element, even inside an open shadow
         // root, where e.target is only ever the host.
         const target = (e.composedPath && e.composedPath()[0]) || e.target;
-        if (imageAiEnabled) {
+        if (imageAiActive()) {
           const img = imageCandidate(target) || imageAt(e.clientX, e.clientY, e.composedPath && e.composedPath());
           if (img) {
             e.preventDefault();
@@ -4086,6 +4267,7 @@
 
   function teardownExtras() {
     closeSnip();
+    closeImgMenu();
     removeQBadge();
     removeImgBadge();
     removeImgCard();
@@ -4121,6 +4303,7 @@
         "keydown",
         (e) => {
           if (e.key === "Escape") {
+            closeImgMenu();
             closeSnip();
             removeImgCard();
             closeEditMenu();
@@ -4133,6 +4316,7 @@
       window.addEventListener(
         "mousedown",
         (e) => {
+          if (imgMenu && e.target !== afHost) closeImgMenu();
           if (imgCard && e.target !== afHost) removeImgCard();
           if (editMenu && e.target !== afHost && e.target !== editField) closeEditMenu();
         },

@@ -143,6 +143,9 @@ export const api = {
   adminSetAdmin: (id, is_admin) => ahttp("PATCH", `/admin/users/${id}`, { is_admin }),
   adminDeleteUser: (id) => ahttp("DELETE", `/admin/users/${id}`),
   adminFlaggedUsers: () => ahttp("GET", "/admin/flagged-users"),
+  // Live model performance + the suggestions derived from it.
+  adminMetrics: (window = 60) => ahttp("GET", `/admin/metrics?window=${window}`),
+  adminResetMetrics: () => ahttp("POST", "/admin/metrics/reset", {}),
   adminSuspendUser: (id, suspended, reason = "") =>
     ahttp("PATCH", `/admin/users/${id}/suspend`, { suspended, reason }),
   adminSendNotice: (id, message) =>

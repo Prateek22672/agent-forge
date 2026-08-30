@@ -1,10 +1,10 @@
 # Chrome Web Store submission — copy-paste package
 
 Everything you need to fill in the Developer Dashboard form. Submission
-package: `dist-extension/agentfury-extension-v1.33.0.zip` (already built and
+package: `dist-extension/agentfury-extension-v1.34.0.zip` (already built and
 verified — manifest at the zip root as required).
 
-> If you already have an item uploaded, this is now **v1.33.0** — upload the
+> If you already have an item uploaded, this is now **v1.34.0** — upload the
 > new zip as a new package version on the SAME item (Package tab → Upload new
 > package), you don't need to re-register.
 
@@ -20,20 +20,23 @@ verified — manifest at the zip root as required).
 
 ## 2. Upload
 
-- Click **New Item** → upload `dist-extension/agentfury-extension-v1.33.0.zip`
+- Click **New Item** → upload `dist-extension/agentfury-extension-v1.34.0.zip`
 - It parses the manifest automatically (name: AgentFury, version 1.0.0)
 
 ## 3. Store listing tab — copy-paste these
 
 **Product name:**
 ```
-AgentFury — AI Email Assistant
+Agent Fury: Select to Search, Select to Answer
 ```
+(The old "AI Email Assistant" name undersold it — email is now one feature of
+many, and "select to search / select to answer" is the thing people actually
+do with it in the first ten seconds.)
 
 **Summary** (max 132 chars — the manifest description; includes the spaced
 "Agent Fury" form so both "agent fury" and "agentfury" store searches match):
 ```
-Agent Fury: AI agent & assistant — ask about any text even where copying is blocked, read the text inside images, fix any text box.
+Select to search, select to answer. Read the text in any image, fix any text box, copy anywhere - even where sites block it.
 ```
 
 **Description** (keyword-woven for search: "Agent Fury", "AI agent",
