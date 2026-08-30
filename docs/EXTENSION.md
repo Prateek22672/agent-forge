@@ -30,6 +30,19 @@ app. Signing in once shares your account across all three.
 - **Auto-edit** — focus any text field for an AI badge in its corner: fix,
   shorten, formalize, or answer what's in it, applied straight into the field
   with Undo. Works on the whole field, so nothing has to be highlighted
+- **Suggestions while you type** — the badge turns into a live count of
+  spelling/grammar issues. Two passes: a local rule + misspelling table that
+  runs on every keystroke with no network at all, and `/write/proof` on a
+  ~900ms pause, which returns exact `before → after` fragments (never a
+  rewrite) so accepting one leaves the rest of the sentence alone
+- **Snip & read** — Alt+Shift+S (or right-click → "read text on screen")
+  captures the visible tab, you drag a box, and the crop goes through OCR.
+  This is the answer for text that is in no DOM at all: painted on a canvas,
+  inside a video frame, or in a plugin's own viewport
+- **Copy anywhere** — "Copy page text" on the bar, "Copy image" on the image
+  card, a "Copy with AgentFury" right-click item, and a bindable `force-copy`
+  shortcut that copies the selection or, failing that, whatever block is under
+  the pointer. Paste-blocking is undone the same way copy-blocking is
 - **Document assistant** — a PDF/doc opened in the tab gets a card that can
   parse, search, summarize or explain it
 
@@ -89,11 +102,28 @@ ID (shown on the Developer Dashboard) — add that one too, so both the dev
   JS can't reach it. Per-frame gating keeps it sane: the corner bubble and the
   document card are top-frame only, UI is skipped in frames too small to hold
   it, and tiny ad/tracking frames get the copy-restore layer only.
+- `app/util/answer_pipeline.py` — the three cheap stages wrapped around every
+  fast answer, which is where most of the quality and nearly all of the cost
+  saving lives:
+  - **pre**: `clean_input` (strip cookie/nav furniture and duplicated lines,
+    normalize, and trim keeping the HEAD **and TAIL** — a multiple-choice
+    question's options are at the end), `detect_kind` (mcq / question / code /
+    term / passage, by regex) so the prompt is specific rather than generic.
+  - **RAG**: `pack_context` ranks, de-duplicates (by URL and by title, so one
+    syndicated story doesn't eat the budget), trims each snippet at a word
+    boundary and numbers them inside a character budget. Lexical scoring only:
+    no embeddings, no vector store, no added latency.
+  - **post**: `clean_output` (drop `<think>` monologues, "Sure! Here's...",
+    and the LaTeX markers vision models sprinkle into a diagram description),
+    `fix_citations` (delete `[7]` when only 4 sources exist).
+  - plus `answer_cache` (in-process TTL+LRU — an identical repeat costs
+    nothing) and `pick_model` (the strong model only for code or long input).
 - Backend, all single fast LLM calls (no tools/memory — text in, text out, so
   they're instant from any page):
   - `POST /api/write/polish` — fix / shorten / formal / friendly / write
   - `POST /api/write/answer` — answer or explain a selection
-  - `GET  /api/write/search-answer` — free web search + a synthesized verdict
+  - `POST /api/write/proof` — exact, applyable corrections for live typing
+  - `GET  /api/write/search-answer` — hedged web search + a cited answer
   - `POST /api/write/image` — read an image: OCR, explain, translate, solve,
     or answer a question about it. Needs a MULTIMODAL model, which the
     text-only GPT-OSS default is not: `app/llm/router.py::get_vision_llm`

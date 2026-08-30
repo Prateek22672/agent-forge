@@ -15,34 +15,76 @@ from bs4 import BeautifulSoup
 from langchain_core.tools import tool
 
 
-def web_search_results(query: str, max_results: int = 6, region: str = "in-en") -> list[dict]:
-    """Structured web results (title/url/snippet) for the extension's inline
-    'search appears below the bar' feature — same multi-backend logic as the
-    web_search tool, but returns data instead of an LLM-formatted string."""
+def _ddg_once(query: str, region: str, max_results: int, backend: str) -> list[dict]:
+    """One search against one backend. Raises on failure - the caller decides."""
     from ddgs import DDGS
 
-    backends = ["auto", "google", "bing", "brave", "duckduckgo"]
-    for backend in backends:
+    with DDGS() as ddgs:
+        results = list(
+            ddgs.text(
+                query,
+                region=region,
+                safesearch="off",
+                max_results=max_results,
+                backend=backend,
+            )
+        )
+    return [
+        {
+            "title": r.get("title", ""),
+            "url": r.get("href", "") or r.get("url", ""),
+            "snippet": r.get("body", ""),
+        }
+        for r in results
+    ]
+
+
+def web_search_results(
+    query: str, max_results: int = 6, region: str = "in-en", deadline: float = 6.0
+) -> list[dict]:
+    """Structured web results (title/url/snippet) for the extension's inline
+    "search appears below the bar" feature.
+
+    The backends are HEDGED, not tried in turn. Sequentially, one slow or
+    failing provider added its whole timeout to every search before the next
+    was even attempted - which is where a 12-second "instant" answer came
+    from, with the model itself accounting for well under a second of it.
+    Firing three at once and taking whoever answers first makes the search as
+    fast as the fastest provider on the day, and a stuck one costs nothing but
+    a thread. `deadline` caps the whole thing so the endpoint can never hang.
+
+    They are free endpoints and the extra requests are cheap; latency here is
+    what the user actually feels.
+    """
+    import concurrent.futures as futures
+
+    backends = ["auto", "google", "bing"]
+    fallback = ["brave", "duckduckgo"]
+
+    def _race(names: list[str], budget: float) -> list[dict]:
+        pool = futures.ThreadPoolExecutor(max_workers=len(names))
         try:
-            with DDGS() as ddgs:
-                results = list(
-                    ddgs.text(
-                        query, region=region, safesearch="off",
-                        max_results=max_results, backend=backend,
-                    )
-                )
-        except Exception:
-            continue
-        if results:
-            out = []
-            for r in results:
-                out.append({
-                    "title": r.get("title", ""),
-                    "url": r.get("href", "") or r.get("url", ""),
-                    "snippet": r.get("body", ""),
-                })
-            return out
-    return []
+            pending = {pool.submit(_ddg_once, query, region, max_results, b): b for b in names}
+            try:
+                for fut in futures.as_completed(pending, timeout=budget):
+                    try:
+                        out = fut.result()
+                    except Exception:
+                        continue
+                    if out:
+                        return out
+            except futures.TimeoutError:
+                pass
+            return []
+        finally:
+            # Don't wait on the losers: whoever is still blocked on a slow
+            # provider can finish into the void.
+            pool.shutdown(wait=False, cancel_futures=True)
+
+    hit = _race(backends, deadline)
+    if hit:
+        return hit
+    return _race(fallback, max(2.0, deadline / 2))
 
 
 @tool

@@ -266,15 +266,54 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 // replace) the PWA web push the main app already sends.
 const POLL_ALARM = "af-poll";
 
+// Screenshot the visible tab and hand it to the content script, which lets
+// the user drag a box over anything on screen and OCRs that region ("snip &
+// read"). This is the escape hatch for text that isn't in the DOM at all —
+// painted on a canvas, inside a video frame, or in a plugin's own viewport.
+//
+// captureVisibleTab needs activeTab, which Chrome grants for one tab when the
+// user runs a keyboard shortcut or clicks a context-menu item — both of the
+// entry points below. That's the whole point: no page can be captured unless
+// the user just asked for it, and nothing is captured in the background.
+async function runSnip(tabArg) {
+  let tab = tabArg;
+  if (!tab) {
+    const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
+    tab = active;
+  }
+  if (!tab || tab.id == null) return;
+  try {
+    const shot = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+    // frameId 0: the screenshot is of the whole viewport, so only the top
+    // frame can map a drag back onto it.
+    chrome.tabs.sendMessage(tab.id, { type: "AF_SNIP", shot }, { frameId: 0 }).catch(() => {});
+  } catch (e) {
+    /* restricted page (chrome://, the Web Store) or activeTab not granted */
+  }
+}
+
 function setupContextMenu() {
   // removeAll first — re-creating with the same id on an extension reload
   // during development otherwise throws "duplicate id".
   chrome.contextMenus.removeAll(() => {
     void chrome.runtime.lastError; // clear any pending error, nothing to act on
-    chrome.contextMenus.create(
-      { id: "af-ask-selection", title: 'Ask AgentFury about "%s"', contexts: ["selection"] },
-      () => void chrome.runtime.lastError // e.g. duplicate id on a fast reload — non-fatal, avoids console spam
-    );
+    const add = (opts) =>
+      chrome.contextMenus.create(
+        opts,
+        () => void chrome.runtime.lastError // e.g. duplicate id on a fast reload — non-fatal, avoids console spam
+      );
+    add({ id: "af-ask-selection", title: 'Ask AgentFury about "%s"', contexts: ["selection"] });
+    // The dependable route to image OCR when the hover badge is awkward to
+    // reach — a tiny grid cell, an overlay that eats the pointer, a carousel
+    // that moves under the cursor.
+    add({ id: "af-image-ocr", title: "Read text in this image (AgentFury)", contexts: ["image"] });
+    add({ id: "af-snip", title: "AgentFury: read text on screen…", contexts: ["page", "frame"] });
+    // The copy entries are the product's whole promise in a menu item: even
+    // where a site has stripped the page's own copy path, the BROWSER's menu
+    // is ours to add to, and the clipboard write happens outside the page's
+    // reach.
+    add({ id: "af-copy", title: "Copy with AgentFury", contexts: ["selection"] });
+    add({ id: "af-copy-page", title: "AgentFury: copy all text on this page", contexts: ["page", "frame"] });
   });
 }
 
@@ -388,6 +427,25 @@ chrome.commands.onCommand.addListener(async (command) => {
   // Alt+Shift+F — make the AgentFury bar appear on the current page, asking
   // about whatever is selected (empty & focused if nothing is). Reuses the
   // same content-script entry point as the right-click "Ask AgentFury" menu.
+  // "force-copy" ships without a suggested key (Chrome allows only four) —
+  // bind it at chrome://extensions/shortcuts. It copies the selection, or the
+  // block under the pointer when the page won't allow a selection at all.
+  if (command === "force-copy") {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab && tab.id != null) {
+        chrome.tabs.sendMessage(tab.id, { type: "AF_FORCE_COPY", text: "" }).catch(() => {});
+      }
+    } catch (e) {
+      /* no content script on this page — nothing to copy from */
+    }
+    return;
+  }
+  // Alt+Shift+S — snip any region of the screen and read the text in it.
+  if (command === "snip-ocr") {
+    await runSnip();
+    return;
+  }
   if (command === "trigger-ask") {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -435,6 +493,25 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     chrome.tabs
       .sendMessage(tab.id, { type: "AF_OPEN_SELECTION", text: info.selectionText || "" })
       .catch(() => {});
+  }
+  if (info.menuItemId === "af-image-ocr" && tab?.id) {
+    // Deliver to the frame the image actually lives in, so a picture inside
+    // an iframe opens the card in that same frame.
+    const opts = info.frameId != null ? { frameId: info.frameId } : undefined;
+    chrome.tabs
+      .sendMessage(tab.id, { type: "AF_IMAGE_OCR", src: info.srcUrl || "" }, opts)
+      .catch(() => {});
+  }
+  if (info.menuItemId === "af-snip" && tab?.id) runSnip(tab);
+  if (info.menuItemId === "af-copy" && tab?.id) {
+    const opts = info.frameId != null ? { frameId: info.frameId } : undefined;
+    chrome.tabs
+      .sendMessage(tab.id, { type: "AF_FORCE_COPY", text: info.selectionText || "" }, opts)
+      .catch(() => {});
+  }
+  if (info.menuItemId === "af-copy-page" && tab?.id) {
+    const opts = info.frameId != null ? { frameId: info.frameId } : undefined;
+    chrome.tabs.sendMessage(tab.id, { type: "AF_COPY_PAGE" }, opts).catch(() => {});
   }
 });
 

@@ -1,10 +1,10 @@
 # Chrome Web Store submission — copy-paste package
 
 Everything you need to fill in the Developer Dashboard form. Submission
-package: `dist-extension/agentfury-extension-v1.30.0.zip` (already built and
+package: `dist-extension/agentfury-extension-v1.32.0.zip` (already built and
 verified — manifest at the zip root as required).
 
-> If you already have an item uploaded, this is now **v1.30.0** — upload the
+> If you already have an item uploaded, this is now **v1.32.0** — upload the
 > new zip as a new package version on the SAME item (Package tab → Upload new
 > package), you don't need to re-register.
 
@@ -20,7 +20,7 @@ verified — manifest at the zip root as required).
 
 ## 2. Upload
 
-- Click **New Item** → upload `dist-extension/agentfury-extension-v1.30.0.zip`
+- Click **New Item** → upload `dist-extension/agentfury-extension-v1.32.0.zip`
 - It parses the manifest automatically (name: AgentFury, version 1.0.0)
 
 ## 3. Store listing tab — copy-paste these
@@ -94,6 +94,7 @@ browser side panel.
 
 | Permission | Justification |
 |---|---|
+| `activeTab` | Powers "snip & read": when the user runs the snip shortcut or picks the right-click item, Chrome grants a one-off screenshot of that one visible tab, which the user then drags a box over to have unreadable text (a canvas, a video frame, a scanned page) read aloud as text. No capture ever happens without that gesture, nothing is captured in the background, and the screenshot leaves the tab only as the cropped region the user selected. |
 | `storage` | Stores the user's AgentFury login session token locally so they stay signed in between browser sessions, plus their on/off preferences (select-to-ask, bubble, theme, privacy mode). |
 | `identity` | Used only for the "Continue with Google" sign-in button (`chrome.identity.launchWebAuthFlow`) — lets the user sign in without typing a password. |
 | `alarms` | Schedules a once-per-minute background check for new priority emails and AI-drafted replies, so the user is notified without having to open the extension. |
@@ -113,6 +114,10 @@ browser side panel.
     they asked to fix/rewrite
   - a single image the user clicked the AI badge on, sent to be read (OCR)
     or described
+  - the region of the screen the user snipped, sent to be read (OCR)
+  - the text in a field the user is typing in, sent on a typing pause to
+    return spelling/grammar suggestions (only with "Suggestions while you
+    type" on, which the user can switch off in Settings)
 
 **Certify:**
 - ☑ "I do not sell or transfer user data to third parties, outside of the

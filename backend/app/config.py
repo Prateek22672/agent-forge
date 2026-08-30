@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     # e.g. GROQ_API_KEYS=gsk_aaa,gsk_bbb,gsk_ccc
     groq_api_keys: str = ""
     default_model: str = "openai/gpt-oss-20b"
+    # The model behind every "instant" path (selection-bar answer, proofread,
+    # polish, brain extraction). Benchmarked on the real prompts against every
+    # model on the account, twice each, best-of: qwen3.8 0.51s, gpt-oss-120b
+    # 0.69s, gpt-oss-20b 0.73s, compound-mini 0.96s, gemini-flash-lite 1.02s,
+    # gemini-3.6-flash 6.2s - all of them correct on the test question, so the
+    # fastest cheap one wins. Runtime-overridable if Groq retires it.
+    fast_model: str = "qwen/qwen3.8-27b"
 
     # --- Email tool (optional IMAP fallback) ---
     email_imap_host: str = "imap.gmail.com"
@@ -75,6 +82,10 @@ class Settings(BaseSettings):
     # qwen3.8 is multimodal and answers cleanly (qwen3.6 also reads images but
     # emits <think> traces).
     vision_model: str = "qwen/qwen3.8-27b"
+    # Gemini's role in vision is now FALLBACK, not first choice: on the same
+    # OCR, Groq qwen3.8 took 0.75s and gemini-3.6-flash 2.5-6.9s. Flash-lite
+    # (1.1s) is the Gemini one worth failing over to.
+    gemini_vision_model: str = "gemini-flash-lite-latest"
 
     # --- Paths ---
     workspace_dir: str = "./data/workspace"

@@ -22,6 +22,7 @@ _DEFAULTS = {
     "ollama_model": settings.ollama_model,
     "default_model": settings.default_model,
     "vision_model": settings.vision_model,   # multimodal model for image OCR / explain
+    "fast_model": settings.fast_model,       # the instant path: answers, proofread, polish
 }
 
 

@@ -962,6 +962,13 @@ async function renderExtSettings() {
       </div>
     </div>
     <div class="item">
+      <div class="title">Suggestions while you type</div>
+      <div class="sub">Spelling and grammar fixes appear on the AI badge as you write, like a built-in proofreader — common typos are caught instantly offline, the rest on a short pause. Nothing changes until you click a suggestion.</div>
+      <div class="row">
+        <button id="proofToggle" class="secondary">…</button>
+      </div>
+    </div>
+    <div class="item">
       <div class="title">Auto-edit text boxes</div>
       <div class="sub">Focus any text field for an AI badge in its corner — fix, shorten, or rewrite what's in it, or answer it, without highlighting anything. Comes with Undo.</div>
       <div class="row">
@@ -1075,6 +1082,18 @@ async function renderExtSettings() {
     chrome.storage.local.get("af_autoedit_enabled", (r) => {
       const next = !(r.af_autoedit_enabled !== false);
       chrome.storage.local.set({ af_autoedit_enabled: next }, () => paintEdit(next));
+    });
+  };
+
+  const prBtn = document.getElementById("proofToggle");
+  const paintProof = (enabled) => {
+    prBtn.textContent = enabled ? "On — tap to turn off" : "Off — tap to turn on";
+  };
+  chrome.storage.local.get("af_proof_enabled", (r) => paintProof(r.af_proof_enabled !== false));
+  prBtn.onclick = () => {
+    chrome.storage.local.get("af_proof_enabled", (r) => {
+      const next = !(r.af_proof_enabled !== false);
+      chrome.storage.local.set({ af_proof_enabled: next }, () => paintProof(next));
     });
   };
 

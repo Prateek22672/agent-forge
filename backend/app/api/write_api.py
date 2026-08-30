@@ -134,51 +134,56 @@ def quick_answer(
     user: User = Depends(get_current_user),
     _: None = Depends(rate_limit(40, 60)),
 ):
-    """Fast selection-bar answer: ONE direct model call — no agent graph, no
-    tools, no memory lookup — so it returns as fast as Groq can go. Handles
-    questions/MCQs, term explanations, and code. Separate from the full agent
-    chat (which is richer but slower); this path exists purely for speed."""
-    from app.llm.router import get_fast_groq
+    """Fast selection-bar answer: ONE direct model call - no agent graph, no
+    tools, no memory lookup - so it returns as fast as the model can go.
 
-    text = (payload.text or "").strip()[:6000]
-    question = (payload.question or "").strip()[:1000]
+    The quality (and most of the cost saving) is in the three stages around
+    that call rather than in the call itself: clean_input strips page junk and
+    keeps the tail of the selection so a multiple-choice question's options
+    survive; detect_kind picks a prompt written for exactly what was selected
+    instead of one catch-all; clean_output removes the tics. An identical
+    repeat is served from memory."""
+    from app.llm.router import get_fast_groq, get_groq
+    from app.util.answer_pipeline import (
+        answer_cache,
+        build_answer_prompt,
+        clean_input,
+        clean_output,
+        detect_kind,
+        pick_model,
+    )
+
+    text = clean_input(payload.text, 6000)
+    question = clean_input(payload.question, 1000)
     if not text and not question:
         raise HTTPException(400, "Nothing to answer.")
 
-    if question:
-        prompt = (
-            f"Selected text:\n{text}\n\nUser's question: {question}\n\n"
-            "Answer directly and concisely. If code is the best answer, return it "
-            "in a fenced ```code block``` with the right language. No preamble."
-        )
-    else:
-        prompt = (
-            f"Selected text:\n{text}\n\n"
-            "Respond based on what it is:\n"
-            "- A question (incl. multiple choice): give the correct answer first "
-            "(name the option, e.g. 'C'), then a one-line reason.\n"
-            "- A term/concept: explain clearly in 1–3 sentences.\n"
-            "- A statement: say whether it's correct and why, briefly.\n"
-            "- If code is asked for or is the best answer, return it in a fenced "
-            "```code block``` with the right language.\n"
-            "Be accurate and concise. No preamble."
-        )
+    kind = detect_kind(text)
+    cache_key = answer_cache.key("answer", text, question, kind)
+    cached = answer_cache.get(cache_key)
+    if cached:
+        return {"answer": cached, "kind": kind, "cached": True}
 
-    llm = None
+    prompt = build_answer_prompt(text, question, kind)
+    model = pick_model(text, kind, question)
+
     last_exc: Exception | None = None
     for _attempt in range(3):
         try:
-            llm = llm or get_fast_groq(0.4)
+            llm = get_groq(model, 0.3) or get_fast_groq(0.3)
             if llm is None:
                 break
             out = llm.invoke(prompt)
-            answer = out.content if isinstance(out.content, str) else str(out.content)
-            return {"answer": answer.strip()}
+            raw = out.content if isinstance(out.content, str) else str(out.content)
+            answer = clean_output(raw)
+            if not answer:
+                raise ValueError("empty answer")
+            answer_cache.set(cache_key, answer)
+            return {"answer": answer, "kind": kind, "cached": False}
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
-            llm = None
             continue
-    raise HTTPException(503, f"AI is busy — try again in a moment. ({last_exc})")
+    raise HTTPException(503, f"AI is busy - try again in a moment. ({last_exc})")
 
 
 @router.get("/search-answer")
@@ -187,34 +192,52 @@ def web_search_answer(
     user: User = Depends(get_current_user),
     _: None = Depends(rate_limit(20, 60)),
 ):
-    """Search + verdict ("Google AI mode", but cheap): run the free web search,
-    hand the snippets to a fast model, and return a synthesized ANSWER plus the
-    sources it drew from — instead of dumping raw links the user has to sift.
-    Cost stays low: ddgs is free and get_fast_groq is the cheapest model."""
+    """Search + verdict ("Google AI mode", but cheap): retrieve, RANK and pack
+    the results, then have a fast model answer from that context with inline
+    citations - instead of dumping raw links the user has to sift.
+
+    The packing is the RAG part and it is deliberately lexical: query-term
+    overlap, de-duplicated by URL and title, each snippet trimmed at a word
+    boundary, the whole context capped. No embeddings, so no vector store, no
+    extra API call, no added latency - at six snippets the ranking is
+    indistinguishable and the budget matters far more, because a model handed
+    six full snippets averages across them instead of answering.
+
+    Only the sources that were actually packed come back, in the same order
+    they are numbered in, so [1] in the answer really is results[0]."""
     from app.llm.router import get_fast_groq
     from app.tools.web import web_search_results
+    from app.util.answer_pipeline import (
+        answer_cache,
+        clean_output,
+        fix_citations,
+        pack_context,
+    )
 
     query = (q or "").strip()[:400]
     if not query:
         return {"answer": "", "results": []}
+
+    cache_key = answer_cache.key("search", query)
+    cached = answer_cache.get(cache_key)
+    if cached:
+        return {**cached, "cached": True}
 
     try:
         results = web_search_results(query, max_results=6)
     except Exception:
         results = []
 
-    context = "\n\n".join(
-        f"[{i}] {r.get('title','')}\n{r.get('snippet','')}\n{r.get('url','')}"
-        for i, r in enumerate(results, 1)
-    )
+    context, used = pack_context(results, query)
     prompt = (
-        f"Question or topic: {query}\n\n"
-        f"Web results:\n{context or '(no results returned)'}\n\n"
-        "Give a direct, correct answer in 1–4 sentences. If it's a question "
-        "(including multiple choice), state the answer first (name the correct "
-        "option). Prefer the web results; cite them inline like [1] when you use "
-        "one. If the results don't actually address it, answer from your own "
-        "knowledge and say the web didn't have a direct source. No preamble."
+        f"QUESTION: {query}\n\n"
+        f"SOURCES:\n{context or '(the search returned nothing usable)'}\n\n"
+        "Answer the question in 1-4 sentences, leading with the answer itself. "
+        "If it is a multiple-choice question, name the correct option first. "
+        "Cite the sources you actually used inline as [1], [2] - never cite a "
+        "number that is not listed above. If the sources do not address the "
+        "question, answer from your own knowledge and say the search had no "
+        "direct source. No preamble."
     )
 
     llm = None
@@ -225,14 +248,19 @@ def web_search_answer(
             if llm is None:
                 break
             out = llm.invoke(prompt)
-            answer = out.content if isinstance(out.content, str) else str(out.content)
-            return {"answer": answer.strip(), "results": results}
+            raw = out.content if isinstance(out.content, str) else str(out.content)
+            answer = fix_citations(clean_output(raw, 2000), len(used))
+            payload = {"answer": answer, "results": used}
+            if answer:
+                answer_cache.set(cache_key, payload)
+            return {**payload, "cached": False}
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
             llm = None
             continue
-    # Model unavailable — still return the raw results so the user gets something.
-    return {"answer": "", "results": results, "error": str(last_exc) if last_exc else ""}
+    # Model unavailable - still return the ranked results so the user gets
+    # something more useful than an error.
+    return {"answer": "", "results": used, "error": str(last_exc) if last_exc else ""}
 
 
 class PolishRequest(BaseModel):
@@ -497,10 +525,14 @@ def image_understand(
             out = llm.invoke(
                 [HumanMessage(content=[{"type": "text", "text": prompt}, image_block])]
             )
-            text = out.content if isinstance(out.content, str) else str(out.content)
-            # Some multimodal models narrate their reasoning in <think> tags
-            # before answering; the user wants the answer, not the monologue.
-            text = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
+            raw = out.content if isinstance(out.content, str) else str(out.content)
+            # Same post-processing as every other answer: drops <think>
+            # monologues, "Sure! Here's...", and the LaTeX markers vision
+            # models sprinkle through a diagram description ("the focal points
+            # ($f$)"), which a plain-text bubble would render literally.
+            from app.util.answer_pipeline import clean_output
+
+            text = clean_output(raw)
             if not text:
                 raise ValueError("empty response")
             return {"text": text, "mode": mode, "provider": provider}
@@ -508,3 +540,124 @@ def image_understand(
             last_exc = exc
             continue
     raise HTTPException(503, f"Couldn't read that image - try again. ({last_exc})")
+
+
+# ---------------------------------------------------------------------------
+# Live proofreading - the "Grammarly feel" behind the badge in every text box.
+#
+# Shape matters here: this does NOT return a rewritten paragraph. It returns a
+# list of tiny, exact replacements, because that is what lets the UI show
+# "3 suggestions", let the user accept one, and leave the rest of their
+# sentence untouched. A rewrite would silently launder their voice, and every
+# accept-one interaction would be impossible.
+#
+# It is called on a typing debounce, so cost control is not optional:
+#   * the extension runs its own free rule pass first and only calls this when
+#     there is enough new text to be worth a model,
+#   * identical text is served from the shared cache (retyping a sentence, or
+#     two people writing the same thing, costs nothing),
+#   * the fast model at temperature 0, with a short bounded output.
+# ---------------------------------------------------------------------------
+
+
+class ProofRequest(BaseModel):
+    text: str = ""
+    tone: str = ""  # optional: "formal" | "friendly" - style nits, not just errors
+
+
+@router.post("/proof")
+def proofread(
+    payload: ProofRequest,
+    user: User = Depends(get_current_user),
+    _: None = Depends(rate_limit(60, 60)),
+):
+    """Return exact, applyable corrections for what the user is typing."""
+    import json
+
+    from app.llm.router import get_fast_groq
+    from app.util.answer_pipeline import answer_cache, clean_input
+
+    text = clean_input(payload.text, 3000)
+    if len(text.strip()) < 12:
+        return {"issues": [], "count": 0}
+
+    tone = (payload.tone or "").strip().lower()
+    cache_key = answer_cache.key("proof", text, tone)
+    cached = answer_cache.get(cache_key)
+    if cached is not None:
+        return {**cached, "cached": True}
+
+    tone_line = (
+        f"Also suggest changes that make the tone more {tone}.\n"
+        if tone in ("formal", "friendly", "concise")
+        else ""
+    )
+    prompt = (
+        "You are a proofreader. Find the mistakes in the TEXT below and return "
+        "STRICT JSON only - no prose, no markdown fences:\n"
+        '{"issues": [{"before": "...", "after": "...", "type": "spelling|grammar|punctuation|clarity", '
+        '"note": "under 8 words"}]}\n'
+        "Rules:\n"
+        "- `before` MUST be copied character-for-character from the text, and "
+        "must be short: the wrong word plus at most a few words around it.\n"
+        "- `after` is the corrected version of exactly that fragment.\n"
+        "- Only real problems. Do not rewrite style you merely dislike, do not "
+        "touch names, code, URLs, or deliberate capitalisation.\n"
+        "- At most 8 issues, most important first. If the text is already "
+        'correct, return {"issues": []}.\n'
+        f"{tone_line}"
+        f"\nTEXT:\n{text}"
+    )
+
+    def _parse(raw: str) -> list[dict]:
+        body = re.sub(r"^```(?:json)?|```$", "", raw.strip(), flags=re.MULTILINE).strip()
+        start, end = body.find("{"), body.rfind("}")
+        if start != -1 and end != -1:
+            body = body[start : end + 1]
+        return (json.loads(body) or {}).get("issues") or []
+
+    last_exc: Exception | None = None
+    for _attempt in range(2):
+        try:
+            llm = get_fast_groq(0.0)
+            if llm is None:
+                break
+            out = llm.invoke(prompt)
+            raw = out.content if isinstance(out.content, str) else str(out.content)
+
+            issues: list[dict] = []
+            seen: set[str] = set()
+            for item in _parse(raw):
+                before = str(item.get("before", ""))
+                after = str(item.get("after", ""))
+                # The single most important check in this file: a suggestion
+                # whose `before` is not literally in the text cannot be applied
+                # without corrupting what the user wrote. Models paraphrase the
+                # fragment surprisingly often, so drop those outright rather
+                # than fuzzy-matching them into place.
+                if not before or before == after or before not in payload.text:
+                    continue
+                if len(before) > 80 or before in seen:
+                    continue
+                seen.add(before)
+                kind = str(item.get("type", "grammar")).lower()
+                issues.append(
+                    {
+                        "before": before,
+                        "after": after,
+                        "type": kind if kind in ("spelling", "grammar", "punctuation", "clarity") else "grammar",
+                        "note": str(item.get("note", ""))[:60],
+                    }
+                )
+                if len(issues) >= 8:
+                    break
+
+            result = {"issues": issues, "count": len(issues)}
+            answer_cache.set(cache_key, result)
+            return {**result, "cached": False}
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            continue
+    # Never surface a typing-time failure as an error: the extension's own
+    # free rule pass has already shown whatever it found.
+    return {"issues": [], "count": 0, "error": str(last_exc) if last_exc else ""}
