@@ -1,10 +1,10 @@
 # Chrome Web Store submission — copy-paste package
 
 Everything you need to fill in the Developer Dashboard form. Submission
-package: `dist-extension/agentfury-extension-v1.32.0.zip` (already built and
+package: `dist-extension/agentfury-extension-v1.33.0.zip` (already built and
 verified — manifest at the zip root as required).
 
-> If you already have an item uploaded, this is now **v1.32.0** — upload the
+> If you already have an item uploaded, this is now **v1.33.0** — upload the
 > new zip as a new package version on the SAME item (Package tab → Upload new
 > package), you don't need to re-register.
 
@@ -20,7 +20,7 @@ verified — manifest at the zip root as required).
 
 ## 2. Upload
 
-- Click **New Item** → upload `dist-extension/agentfury-extension-v1.32.0.zip`
+- Click **New Item** → upload `dist-extension/agentfury-extension-v1.33.0.zip`
 - It parses the manifest automatically (name: AgentFury, version 1.0.0)
 
 ## 3. Store listing tab — copy-paste these
@@ -44,6 +44,15 @@ Agent Fury is your personal AI agent and assistant, right inside your browser. H
 
 ASK ABOUT ANYTHING YOU SELECT
 Highlight text on any webpage — like you would to "Search Google for…" — and a small bar appears. Explain it, summarize it, ask your own question, or send it straight to Google or Gemini. One-click actions let you save the highlight as a reminder, a note, or to your AI's memory — great for students capturing study material as they read. It even works on pages that block copying.
+
+ANSWERS WITHOUT HIGHLIGHTING ANYTHING
+When a page shows a question — a quiz, a worksheet, a practice paper, a form — a small Answer badge appears beside it. One click reads the question and its options and answers it, with nothing to select. Alt+click any paragraph does the same for anything else on the page.
+
+SUGGESTIONS WHILE YOU TYPE
+Click into any text box and the AI badge becomes a live count of spelling and grammar issues, like a built-in proofreader. Common typos are caught instantly with no network at all; the rest arrive on a short pause. Each one is an exact fix you can accept on its own — your sentence is never silently rewritten — and everything is undoable.
+
+READ TEXT ON SCREEN, EVEN WHERE THERE IS NO TEXT
+Alt+Shift+S (or right-click → "read text on screen") lets you drag a box over anything at all — text painted on a canvas, a frame of a video, a scanned page, a viewer that blocks everything else — and pulls the words out of it.
 
 READ THE TEXT INSIDE ANY IMAGE
 Hover any image on any page and a small AI badge appears in its corner. One click extracts every word in it (OCR), explains what it shows, translates it, or solves the question in it — screenshots, scanned pages, slides, charts, handwritten notes, a photo of a textbook. The extracted text can then be copied, saved as a note, or handed to the assistant for follow-up questions, and one more click reverse-searches the picture. Alt+click an image does the same thing.
