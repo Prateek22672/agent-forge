@@ -168,6 +168,42 @@ def get_fast_groq(temperature: float = 0.4):
     return _cached_groq("openai/gpt-oss-20b", temperature, _next_groq_key())
 
 
+def get_vision_llms(temperature: float = 0.2) -> list[tuple[object, str]]:
+    """Every chat model available here that can actually LOOK at an image,
+    best first, each paired with its provider name — `[(llm, "gemini"), ...]`.
+
+    The provider matters to the caller: LangChain normalizes text, but the
+    image block in a message is still provider-shaped (Gemini wants
+    `image_url` as a plain data-URI string, Groq/OpenAI want
+    `{"url": ...}`), so the API layer needs to know which one it is holding.
+
+    A LIST rather than one model, because these are the two most breakage-prone
+    ids in the app — providers retire multimodal models faster than anything
+    else (both defaults here had to be replaced once already). If Gemini 404s
+    on a stale id, Groq should still answer instead of the feature going dark.
+
+    Order is deliberate: Gemini first (it reads dense screenshots and small UI
+    text noticeably better), then Groq's multimodal model, which keeps the
+    feature alive on a Groq-only install. The rest of the app runs on GPT-OSS,
+    which is text-only — hence this separate seam rather than get_fast_groq().
+    """
+    out: list[tuple[object, str]] = []
+    gk = _gemini_key()
+    if gk:
+        try:
+            usage.record("gemini", gk[-4:])
+            out.append((_cached_gemini(settings.gemini_model, temperature, gk), "gemini"))
+        except Exception:
+            pass
+    if key_manager.groq_keys():
+        try:
+            model = runtime_settings.get("vision_model") or settings.vision_model
+            out.append((_cached_groq(model, temperature, _next_groq_key()), "groq"))
+        except Exception:
+            pass
+    return out
+
+
 def get_failover_llms(temperature: float = 0.7) -> list:
     """Ordered list of ALTERNATE models to retry with when the primary fails.
 

@@ -8,6 +8,8 @@ page the extension is injected into.
 """
 from __future__ import annotations
 
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -306,3 +308,203 @@ def polish(payload: PolishRequest, user: User = Depends(get_current_user)):
             llm = None  # force a fresh (likely different-key) client next loop
             continue
     raise HTTPException(503, f"AI is temporarily busy — try again in a moment. ({last_exc})")
+
+
+# ---------------------------------------------------------------------------
+# Image understanding (OCR + "explain this image") — powers the AI badge the
+# extension puts on every image on the page.
+#
+# Why it lives here and not in files_api: files_api is the pure-python
+# document extractor (pypdf/docx/xlsx) and deliberately has no OCR — it tells
+# the user so when a scanned PDF comes in. This endpoint is that missing
+# piece, done with a multimodal MODEL instead of a native OCR engine: no
+# tesseract binary to install on the host, no paid OCR API, and it reads
+# handwriting, screenshots, charts and diagrams that classic OCR mangles.
+#
+# The image reaches us one of two ways, and both matter:
+#   * image_b64 — the extension read the pixels itself (canvas/fetch). This is
+#     the only path that works for images behind a login, blob:/data: URLs, or
+#     a <canvas> element, since the server can't see any of those.
+#   * image_url — the extension couldn't read them (a cross-origin image with
+#     no CORS header taints a canvas), so we fetch the URL server-side.
+# ---------------------------------------------------------------------------
+
+MAX_IMAGE_BYTES = 4 * 1024 * 1024  # Groq's inline-image ceiling; Gemini allows more
+
+
+class ImageRequest(BaseModel):
+    image_b64: str = ""   # raw base64 or a full data: URI
+    image_url: str = ""   # fallback: we fetch it server-side
+    mode: str = "ocr"     # ocr | explain | translate | solve | ask
+    question: str = ""    # only for mode="ask"
+
+
+def _safe_image_url(url: str) -> str:
+    """Reject anything that isn't a plain public http(s) image URL.
+
+    This endpoint fetches a URL supplied by the page the user happens to be
+    on, so without this check any site could point us at 169.254.169.254
+    (cloud metadata), 127.0.0.1, or an internal 10.x service and read the
+    response back through the model's description. Resolve the hostname first
+    and refuse every private/loopback/link-local address it maps to.
+    """
+    import ipaddress
+    import socket
+    from urllib.parse import urlparse
+
+    parsed = urlparse((url or "").strip())
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise HTTPException(400, "Only http(s) image URLs can be fetched.")
+    try:
+        infos = socket.getaddrinfo(parsed.hostname, None)
+    except Exception:
+        raise HTTPException(400, "Couldn't resolve that image host.")
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            raise HTTPException(400, "That image URL points at a private address.")
+    return parsed.geturl()
+
+
+def _fetch_image(url: str) -> tuple[str, str]:
+    """Download an image URL -> (base64, mime). Size- and type-checked."""
+    import base64
+
+    import httpx
+
+    safe = _safe_image_url(url)
+    try:
+        resp = httpx.get(
+            safe,
+            timeout=20,
+            follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; AgentFury/1.0)"},
+        )
+        resp.raise_for_status()
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(400, "Couldn't download that image.")
+
+    mime = (resp.headers.get("content-type") or "").split(";")[0].strip().lower()
+    if not mime.startswith("image/"):
+        raise HTTPException(400, "That URL isn't an image.")
+    if len(resp.content) > MAX_IMAGE_BYTES:
+        raise HTTPException(413, "That image is too large (over 4 MB).")
+    return base64.b64encode(resp.content).decode("ascii"), mime
+
+
+def _split_data_uri(raw: str) -> tuple[str, str]:
+    """Accept either a bare base64 blob or a full `data:image/png;base64,...`
+    URI (what a canvas readback in the extension produces) -> (b64, mime)."""
+    raw = (raw or "").strip()
+    if raw.startswith("data:"):
+        head, _, payload = raw.partition(",")
+        mime = head[5:].split(";")[0] or "image/png"
+        return payload.strip(), mime
+    return raw, "image/png"
+
+
+_IMAGE_PROMPTS = {
+    "ocr": (
+        "Extract ALL text visible in this image, exactly as written - same "
+        "wording, same order, same line breaks. Keep tables readable as rows. "
+        "Do not translate, summarize, correct, or comment on it. Output only "
+        "the extracted text. If there is no text in the image, reply exactly: "
+        "No text found in this image."
+    ),
+    "explain": (
+        "Explain this image clearly and specifically in 2-5 sentences: what it "
+        "shows and what it means. If it is a chart or diagram, state what it "
+        "measures and the main takeaway. If it is a screenshot of text, "
+        "summarize what the text says. No preamble."
+    ),
+    "translate": (
+        "Read all the text in this image and translate it into English. Give "
+        "only the translation, keeping the original line structure. If it is "
+        "already English, return it as-is."
+    ),
+    "solve": (
+        "This image contains a question, problem, or exercise. Read it, then "
+        "give the correct answer first (for multiple choice, name the option, "
+        "e.g. 'C', and its text), followed by a short explanation of how you "
+        "got it. Show the working for maths. Be accurate and concise."
+    ),
+}
+
+
+@router.post("/image")
+def image_understand(
+    payload: ImageRequest,
+    user: User = Depends(get_current_user),
+    _: None = Depends(rate_limit(20, 60)),
+):
+    """Read an image with a vision model: OCR it, explain it, translate it, or
+    answer a question about it. One call, no agent graph - same speed contract
+    as /write/answer."""
+    from app.llm.router import get_vision_llms
+
+    mode = (payload.mode or "ocr").strip().lower()
+    if mode not in _IMAGE_PROMPTS and mode != "ask":
+        mode = "ocr"
+
+    if payload.image_b64:
+        b64, mime = _split_data_uri(payload.image_b64)
+        # base64 inflates bytes by ~4/3 - check the decoded size, not the string.
+        if len(b64) * 3 // 4 > MAX_IMAGE_BYTES:
+            raise HTTPException(413, "That image is too large (over 4 MB).")
+    elif payload.image_url:
+        b64, mime = _fetch_image(payload.image_url)
+    else:
+        raise HTTPException(400, "No image given.")
+    if not b64:
+        raise HTTPException(400, "That image came through empty.")
+
+    if mode == "ask":
+        question = (payload.question or "").strip()[:1000]
+        if not question:
+            raise HTTPException(400, "Ask a question about the image.")
+        prompt = (
+            f"Look at this image and answer the user's question about it: {question}\n"
+            "Answer directly and concisely, based on what is actually visible. "
+            "If the image does not show enough to answer, say so. No preamble."
+        )
+    else:
+        prompt = _IMAGE_PROMPTS[mode]
+
+    data_uri = f"data:{mime};base64,{b64}"
+
+    candidates = get_vision_llms(0.2)
+    if not candidates:
+        raise HTTPException(
+            503,
+            "No vision model is configured - add a Gemini key (or a Groq key "
+            "with a vision model) in the admin panel.",
+        )
+
+    last_exc: Exception | None = None
+    for llm, provider in candidates:
+        # The image block is provider-shaped: Gemini takes the data URI as a
+        # plain string, Groq follows the OpenAI {"url": ...} shape.
+        image_block = (
+            {"type": "image_url", "image_url": data_uri}
+            if provider == "gemini"
+            else {"type": "image_url", "image_url": {"url": data_uri}}
+        )
+        try:
+            from langchain_core.messages import HumanMessage
+
+            out = llm.invoke(
+                [HumanMessage(content=[{"type": "text", "text": prompt}, image_block])]
+            )
+            text = out.content if isinstance(out.content, str) else str(out.content)
+            # Some multimodal models narrate their reasoning in <think> tags
+            # before answering; the user wants the answer, not the monologue.
+            text = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
+            if not text:
+                raise ValueError("empty response")
+            return {"text": text, "mode": mode, "provider": provider}
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            continue
+    raise HTTPException(503, f"Couldn't read that image - try again. ({last_exc})")

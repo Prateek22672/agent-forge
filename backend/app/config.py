@@ -60,7 +60,21 @@ class Settings(BaseSettings):
 
     # --- Gemini (Google AI Studio) — used as cloud overflow/failover ---
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
+    # Verified live (Aug 2026): gemini-2.0-flash now 404s with "no longer
+    # available. Please update to models/gemini-3.6-flash", which took every
+    # Gemini path down with it — failover, the gemini provider toggle, and
+    # image reading.
+    gemini_model: str = "gemini-3.6-flash"
+
+    # --- Vision (image OCR / "explain this image") ---
+    # Only a MULTIMODAL model can read an image, and the text-only GPT-OSS
+    # models the rest of the app runs on can't. Gemini is preferred when a key
+    # exists (it reads dense screenshots and small UI text noticeably better);
+    # this is the Groq fallback for a Groq-only install. Verified live against
+    # Groq's model list: the Llama-4 vision models are gone from the catalogue,
+    # qwen3.8 is multimodal and answers cleanly (qwen3.6 also reads images but
+    # emits <think> traces).
+    vision_model: str = "qwen/qwen3.8-27b"
 
     # --- Paths ---
     workspace_dir: str = "./data/workspace"

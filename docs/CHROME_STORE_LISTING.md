@@ -1,10 +1,10 @@
 # Chrome Web Store submission — copy-paste package
 
 Everything you need to fill in the Developer Dashboard form. Submission
-package: `dist-extension/agentfury-extension-v1.28.1.zip` (already built and
+package: `dist-extension/agentfury-extension-v1.30.0.zip` (already built and
 verified — manifest at the zip root as required).
 
-> If you already have an item uploaded, this is now **v1.28.1** — upload the
+> If you already have an item uploaded, this is now **v1.30.0** — upload the
 > new zip as a new package version on the SAME item (Package tab → Upload new
 > package), you don't need to re-register.
 
@@ -20,7 +20,7 @@ verified — manifest at the zip root as required).
 
 ## 2. Upload
 
-- Click **New Item** → upload `dist-extension/agentfury-extension-v1.28.1.zip`
+- Click **New Item** → upload `dist-extension/agentfury-extension-v1.30.0.zip`
 - It parses the manifest automatically (name: AgentFury, version 1.0.0)
 
 ## 3. Store listing tab — copy-paste these
@@ -33,7 +33,7 @@ AgentFury — AI Email Assistant
 **Summary** (max 132 chars — the manifest description; includes the spaced
 "Agent Fury" form so both "agent fury" and "agentfury" store searches match):
 ```
-Agent Fury: AI agent & assistant in your browser — ask about any text you select, write & fix email in Gmail, plus reminders.
+Agent Fury: AI agent & assistant — ask about any text even where copying is blocked, read the text inside images, fix any text box.
 ```
 
 **Description** (keyword-woven for search: "Agent Fury", "AI agent",
@@ -44,6 +44,15 @@ Agent Fury is your personal AI agent and assistant, right inside your browser. H
 
 ASK ABOUT ANYTHING YOU SELECT
 Highlight text on any webpage — like you would to "Search Google for…" — and a small bar appears. Explain it, summarize it, ask your own question, or send it straight to Google or Gemini. One-click actions let you save the highlight as a reminder, a note, or to your AI's memory — great for students capturing study material as they read. It even works on pages that block copying.
+
+READ THE TEXT INSIDE ANY IMAGE
+Hover any image on any page and a small AI badge appears in its corner. One click extracts every word in it (OCR), explains what it shows, translates it, or solves the question in it — screenshots, scanned pages, slides, charts, handwritten notes, a photo of a textbook. The extracted text can then be copied, saved as a note, or handed to the assistant for follow-up questions, and one more click reverse-searches the picture. Alt+click an image does the same thing.
+
+FIX ANY TEXT BOX, WITHOUT HIGHLIGHTING
+Click into any text field — a comment box, a form, a support reply, an answer box — and an AI badge appears in its corner. Fix the spelling and grammar, shorten it, make it formal or friendly, answer what's in it, or type your own instruction. The result is written straight back into the field, with Undo. If you have highlighted part of it, only that part is rewritten; if you haven't, the whole box is — no highlighting needed either way.
+
+WORKS WHERE COPYING IS BLOCKED
+Sites that switch off selecting, copying, and right-click get those back: selection is re-enabled, the page's copy/keystroke blockers are neutralized, and the highlight is made visible again. Where a page still refuses, Alt+click any paragraph reads it straight off the page so you can copy it or ask about it anyway.
 
 GMAIL AI WRITER
 Open Compose in Gmail and an AI toolbar appears above the message:
@@ -74,10 +83,11 @@ Free to use. Create a free account at agentfury.foliofyx.in.
 
 **Single purpose description** (required — one sentence, exact purpose):
 ```
-AgentFury lets users ask their AI assistant about text they select on any
-webpage, correct/rewrite/generate email text inside Gmail compose, and view
-their AI assistant's chat, priority inbox, and reminders from a browser
-popup.
+AgentFury lets users ask their AI assistant about content on the page they
+are on — text they select, text inside an image they click the AI badge on,
+or text in a field they are writing in — correct/rewrite/generate that text,
+and view their AI assistant's chat, priority inbox, and reminders from a
+browser side panel.
 ```
 
 **Permission justifications** (paste per permission when asked):
@@ -90,14 +100,19 @@ popup.
 | `notifications` | Shows a native OS notification when new priority mail or an AI draft is found, and displays a badge count on the toolbar icon. |
 | `contextMenus` | Adds a right-click "Ask AgentFury about…" entry when text is selected, as an alternative to the select-to-ask bar. |
 | `sidePanel` | Opens AgentFury as a native browser side panel when the toolbar icon is clicked (Ask/Priority/Drafts/Reminders/Notes), instead of a small dropdown popup. |
-| Host/content script: `<all_urls>` | Lets the user select text on ANY page and ask their AI assistant about it (the core "select-to-ask" feature) — the same way a browser's built-in "Search Google for…" works on any selection. The content script only activates on an active text selection; it does not read page content otherwise. |
+| Host/content script: `<all_urls>` (all frames) | Lets the user ask their AI assistant about content on ANY page — the core "select-to-ask" feature, the same way a browser's built-in "Search Google for…" works on any selection, plus the AI badge on images and text fields. The content script acts only on an explicit user action: an active text selection, a click on the AI badge over an image or text box, or an Alt+click; it does not read or send page content otherwise. It runs in all frames because the pages users most need it on (course players, document viewers, embedded readers) put their content inside an iframe. |
 | Host: `https://mail.google.com/*` | Required to detect Gmail's compose box and inject the AI toolbar button directly above it, and to insert AI-rewritten text back into the compose box the user is actively editing. |
 | Host: `https://agentfury.foliofyx.in/*` | The extension's own backend API — used to authenticate the user and process their AI requests (chat, email rewriting, priority inbox, reminders). |
 
 **Data usage disclosure** (checkboxes — check these):
 - ☑ Personally identifiable information (email address, for login)
-- ☑ Website content (the text the user is actively composing in Gmail, sent
-  to our API only to rewrite/generate it at the user's request)
+- ☑ Website content, in three narrow cases, each sent to our API only on an
+  explicit user action and never stored beyond producing the answer:
+  - the text the user selected (or Alt+clicked) and asked about
+  - the text the user is actively composing in Gmail or in a page text field
+    they asked to fix/rewrite
+  - a single image the user clicked the AI badge on, sent to be read (OCR)
+    or described
 
 **Certify:**
 - ☑ "I do not sell or transfer user data to third parties, outside of the

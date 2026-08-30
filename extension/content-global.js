@@ -44,8 +44,33 @@
     if (r.contextInvalid) return "AgentFury was updated — refresh this page.";
     if (r.timedOut) return "Still waking up — try again, it'll be quick now.";
     if (r.status === 401) return "Sign in via the AgentFury extension icon first.";
+    // Every path we call exists in the current backend, so a 404 never means
+    // "wrong URL" — it means this extension is newer than the server it's
+    // talking to (a feature shipped in the extension before the backend was
+    // deployed). Say that, instead of the raw "Not Found".
+    if (r.status === 404) return "This feature isn't on the AgentFury server yet — it needs the latest backend deployed.";
     return "Failed: " + (r.error || "unknown error") + " — try again.";
   }
+
+  // AgentFury now runs in EVERY frame, not just the top document (see
+  // "all_frames" in manifest.json). That is what makes copy-restore, the image
+  // AI badge and select-to-ask work on the sites people most need them on:
+  // course players, "protected" readers and document viewers put their content
+  // inside an iframe, and a top-frame-only content script never sees a word of
+  // it. The trade-off is that a page can carry dozens of tiny ad/tracking
+  // frames, so anything with UI is gated:
+  //   - top frame only: the corner bubble and the PDF/doc card (one per tab).
+  //   - frames big enough to hold it: the selection bar, image and edit UI.
+  //   - every frame: copy/selection restore, which is cheap and is the whole
+  //     reason for running in frames at all.
+  const IS_TOP = (() => {
+    try {
+      return window.top === window.self;
+    } catch {
+      return false; // cross-origin parent — treat as a sub-frame
+    }
+  })();
+  const isTinyFrame = () => !IS_TOP && (window.innerWidth < 320 || window.innerHeight < 220);
 
   send({ type: "WARM_UP" });
 
@@ -240,6 +265,102 @@
 .af-doc-spin { display: inline-block; width: 11px; height: 11px; border: 2px solid rgba(255,255,255,.2); border-top-color: #fff; border-radius: 50%; margin-right: 7px; vertical-align: -1px; animation: af-spin .7s linear infinite; }
 `;
 
+
+  // Styles for the three newer surfaces — the image-AI badge/card, the
+  // auto-edit badge/menu that appears in text fields, and the shared panel
+  // tokens both use. Kept in its own literal rather than bolted onto
+  // AF_CSS_TEXT so the older selection-bar CSS stays readable; both strings
+  // are concatenated into the same <style> inside the shadow root.
+  const AF_CSS_EXTRA = `
+/* Shared tokens for the newer cards, mirroring the bar's light/dark switch. */
+.af-panel { --bg: rgba(18,18,22,.95); --fg:#f4f4f6; --muted:rgba(255,255,255,.52); --border:rgba(255,255,255,.1);
+  --chip:rgba(255,255,255,.06); --chip-brd:rgba(255,255,255,.1); --chip-hover:rgba(255,255,255,.13); --accent:#5b6cf0;
+  position: fixed; z-index: 2147483002; background: var(--bg); color: var(--fg);
+  -webkit-backdrop-filter: blur(22px) saturate(180%); backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 16px 48px rgba(0,0,0,.45);
+  font-family: -apple-system, "Segoe UI", "Inter", ui-sans-serif, system-ui, sans-serif;
+  box-sizing: border-box; opacity: 0; transform: translateY(6px) scale(.985);
+  transition: opacity .15s ease, transform .15s cubic-bezier(.2,.8,.3,1); }
+.af-panel { max-height: calc(100vh - 20px); overflow-y: auto; overscroll-behavior: contain; }
+.af-panel * { box-sizing: border-box; }
+.af-panel.af-in { opacity: 1; transform: translateY(0) scale(1); }
+.af-panel.af-light { --bg: rgba(255,255,255,.96); --fg:#1b1b1f; --muted:rgba(0,0,0,.5); --border:rgba(0,0,0,.09);
+  --chip:rgba(0,0,0,.04); --chip-brd:rgba(0,0,0,.08); --chip-hover:rgba(0,0,0,.08);
+  box-shadow: 0 16px 48px rgba(0,0,0,.16); }
+.af-chip { background: var(--chip); color: var(--fg); border: 1px solid var(--chip-brd); border-radius: 10px;
+  padding: 5px 11px; font-size: 12px; font-weight: 450; cursor: pointer; white-space: nowrap;
+  font-family: inherit; transition: background .12s ease; }
+.af-chip:hover { background: var(--chip-hover); }
+.af-chip.primary { background: linear-gradient(180deg, #6d7bff, #4f5cd8); color: #fff; border-color: transparent; box-shadow: 0 2px 9px rgba(79,92,216,.35); }
+.af-chip.primary:hover { filter: brightness(1.08); }
+.af-chip[disabled] { opacity: .4; cursor: not-allowed; }
+.af-x { flex: none; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+  background: transparent; border: none; color: var(--muted); font-size: 15px; cursor: pointer; border-radius: 7px; padding: 0; }
+.af-x:hover { background: var(--chip); color: var(--fg); }
+.af-status { font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+.af-status:empty { display: none; }
+.af-status.err { color: #ff8a8a; }
+.af-body { margin-top: 9px; max-height: 300px; overflow-y: auto; font-size: 12.5px; line-height: 1.55; color: var(--fg); }
+.af-body:empty { display: none; }
+.af-body .af-sel-answer-text { margin-bottom: 8px; }
+.af-body .af-out { white-space: pre-wrap; word-break: break-word; }
+
+/* ---------- Image AI: the badge that sits on every image ---------- */
+.af-img-badge { position: fixed; z-index: 2147483001; display: inline-flex; align-items: center; gap: 5px;
+  height: 26px; padding: 0 9px 0 5px; background: rgba(18,18,22,.86); color: #fff;
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,255,255,.16); border-radius: 999px; cursor: pointer;
+  font: 500 11.5px -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif; letter-spacing: .01em;
+  box-shadow: 0 4px 14px rgba(0,0,0,.36); opacity: 0; transform: scale(.88);
+  transition: opacity .12s ease, transform .12s cubic-bezier(.2,.8,.3,1), background .12s ease; }
+.af-img-badge.af-in { opacity: 1; transform: scale(1); }
+.af-img-badge:hover { background: rgba(30,30,38,.96); transform: scale(1.05); }
+.af-img-badge .af-ib-logo { width: 18px; height: 18px; border-radius: 50%; flex: none; }
+
+/* The image card itself — actions + result, anchored next to the image. */
+.af-img-card { width: 330px; max-width: calc(100vw - 24px); padding: 13px; }
+.af-card-head { display: flex; align-items: center; gap: 9px; }
+.af-card-ic { width: 22px; height: 22px; border-radius: 50%; flex: none; }
+.af-card-titles { flex: 1; min-width: 0; }
+.af-card-title { font-size: 13px; font-weight: 600; }
+.af-card-sub { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.af-img-thumb { display: block; width: 100%; max-height: 110px; object-fit: contain; margin-top: 10px;
+  border-radius: 10px; background: rgba(127,127,127,.14); border: 1px solid var(--border); }
+.af-row-wrap { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.af-ask-row { display: flex; align-items: center; gap: 6px; margin-top: 9px; }
+.af-ask-input { flex: 1; min-width: 0; background: var(--chip); border: 1px solid var(--chip-brd); border-radius: 9px;
+  color: var(--fg); font-size: 12px; font-family: inherit; padding: 6px 9px; outline: none; }
+.af-ask-input:focus { border-color: var(--muted); }
+.af-ask-input::placeholder { color: var(--muted); }
+.af-ask-go { flex: none; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  background: var(--fg); color: var(--bg); border: none; border-radius: 9px; cursor: pointer; padding: 0; }
+.af-ask-go:hover { opacity: .88; }
+.af-tools { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
+.af-tool { background: transparent; color: var(--muted); border: 1px solid var(--chip-brd); border-radius: 7px;
+  padding: 4px 10px; font-size: 11px; cursor: pointer; font-family: inherit; }
+.af-tool:hover { color: var(--fg); }
+
+/* ---------- Auto-edit: the badge inside any text field + its menu ---------- */
+.af-edit-badge { position: fixed; z-index: 2147483001; display: inline-flex; align-items: center; gap: 4px;
+  height: 22px; padding: 0 7px 0 4px; background: rgba(18,18,22,.82); color: #fff;
+  border: 1px solid rgba(255,255,255,.16); border-radius: 999px; cursor: pointer;
+  font: 600 10px -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif; letter-spacing: .02em;
+  box-shadow: 0 3px 10px rgba(0,0,0,.28); opacity: 0; transform: scale(.9);
+  transition: opacity .12s ease, transform .12s ease; }
+.af-edit-badge.af-in { opacity: .72; transform: scale(1); }
+.af-edit-badge:hover { opacity: 1; transform: scale(1.06); }
+.af-edit-badge .af-ib-logo { width: 15px; height: 15px; border-radius: 50%; flex: none; }
+.af-edit-menu { width: 288px; max-width: calc(100vw - 24px); padding: 12px; }
+/* Inline code from renderRich's light markdown pass. */
+.af-sel-answer code, .af-body code { background: rgba(127,127,127,.18); padding: 1px 4px;
+  border-radius: 4px; font-family: ui-monospace, "Cascadia Code", "Consolas", monospace; font-size: .94em; }
+/* Same spinner as the doc card, but themed off the panel tokens so it stays
+   visible on a light page too (@keyframes af-spin lives in AF_CSS_TEXT). */
+.af-spin { display: inline-block; width: 11px; height: 11px; border: 2px solid var(--chip-brd);
+  border-top-color: var(--fg); border-radius: 50%; margin-right: 7px; vertical-align: -1px;
+  animation: af-spin .7s linear infinite; }
+`;
+
   let afHost = null;
   let afRoot = null;
   function getAfRoot() {
@@ -254,7 +375,7 @@
     (document.body || document.documentElement).appendChild(afHost);
     afRoot = afHost.attachShadow({ mode: "closed" });
     const style = document.createElement("style");
-    style.textContent = AF_CSS_TEXT;
+    style.textContent = AF_CSS_TEXT + AF_CSS_EXTRA;
     afRoot.appendChild(style);
     return afRoot;
   }
@@ -283,6 +404,7 @@
     closeCapture();
     unmountBubble();
     removeDocCard();
+    teardownExtras();
     // Drop the shadow host itself so nothing of ours remains in the page.
     if (afHost) {
       afHost.remove();
@@ -294,36 +416,77 @@
   function exitPrivacyMode() {
     privacyMode = false;
     if (bubbleEnabled) mountBubble();
-    // A page loaded while privacy mode was on skipped this during init, so
-    // apply it now — otherwise copy-restore stays dead on that tab until it
-    // is reloaded. It self-guards against running twice.
+    // A page loaded while privacy mode was on skipped these during init, so
+    // apply them now — otherwise copy-restore stays dead on that tab until it
+    // is reloaded. Both self-guard against running twice.
     restoreCopyPaste();
+    initExtras();
   }
 
-  // Some sites block text SELECTION itself (not just the clipboard) — either
-  // via CSS (user-select: none) or by cancelling selectstart/copy/contextmenu
-  // in JS. If nothing can be selected, our bar never gets a chance to appear
-  // and the Copy chip has nothing to copy. Undo both, site-wide:
-  //  1. CSS override forces selection back on everywhere.
-  //  2. A capture-phase listener on `window` — the outermost point an event
-  //     passes through — runs before any listener the page attached on
-  //     document/body, in capture OR bubble phase, regardless of when the
-  //     page's script ran. stopImmediatePropagation() there stops the page's
-  //     own blocking handler from ever firing, without needing to know
-  //     anything about how the site implemented the block.
-  // Best-effort signal for admin review (see docs on BypassEvent in the
-  // backend): does this page look like it's DELIBERATELY blocking copying,
-  // as opposed to an ordinary page a user happened to copy something on?
-  // Sites almost never set user-select: none on their whole body/root
-  // unless copy-blocking is intentional — cheap, one-time-per-page check,
-  // computed before we apply our own override so it reflects the page's
-  // original intent. This is a reporting signal only, never an automatic
-  // judgment — see app/models.py BypassEvent for the full rationale.
+  // ---------- Copy / selection restore ----------
+  // Some sites block text SELECTION itself (not just the clipboard) — via CSS
+  // (user-select: none), by cancelling selectstart/copy/contextmenu in JS, by
+  // trapping the Ctrl+C keystroke, or by wiping the selection from a
+  // selectionchange handler the moment it appears. If nothing can be selected,
+  // the bar never gets a chance to appear, the Copy chip has nothing to copy,
+  // and — the reason this matters most — the assistant has no way to read the
+  // text you want it to answer about. Undone in three layers:
+  //  1. a CSS override that forces selection (and a VISIBLE highlight) back on;
+  //  2. capture-phase listeners on `window` — the outermost point an event
+  //     passes through — so they run before any handler the page attached on
+  //     document/body, in capture OR bubble phase, whenever its script ran;
+  //  3. only on pages that look deliberately hostile, a harder layer that
+  //     strips inline blockers and silences selectionchange (see below).
+  // Whatever still resists all three, Alt+click reads straight out of the DOM
+  // (see "Ask without highlighting" further down) — that path needs no
+  // selection at all.
+  // Does this page look like it is DELIBERATELY blocking copying, as opposed
+  // to an ordinary page a user happened to copy something on? Computed once,
+  // BEFORE we apply any override, so it reflects the page's original intent.
+  // It drives two separate things:
+  //  1. the (reporting-only) telemetry event below — see app/models.py
+  //     BypassEvent for the full rationale; it is never an automatic judgment.
+  //  2. whether to switch on the SECOND, more aggressive layer of unblocking
+  //     (applyHardUnblock). That layer is deliberately off by default: it
+  //     suppresses events ordinary pages use legitimately — selectionchange in
+  //     particular is how rich text editors track the caret — so it is only
+  //     worth its cost on a page that is actually fighting the user.
+  let blockedGuess = null;
+  const BLOCK_ATTRS = [
+    "oncopy",
+    "oncut",
+    "onselectstart",
+    "oncontextmenu",
+    "ondragstart",
+    "onbeforecopy",
+  ];
+
+  function looksCopyBlocked() {
+    if (blockedGuess !== null) return blockedGuess;
+    let hit = false;
+    try {
+      const body = document.body || document.documentElement;
+      const cs = getComputedStyle(body);
+      // Sites almost never set user-select: none on their whole body/root
+      // unless copy-blocking is intentional.
+      hit = cs.userSelect === "none" || cs.webkitUserSelect === "none";
+      if (!hit) {
+        // The other half of how this is done in the wild, and just as
+        // deliberate: <body oncopy="return false" onselectstart="return false">.
+        const roots = [document.documentElement, document.body].filter(Boolean);
+        hit = roots.some((el) => BLOCK_ATTRS.some((a) => el.hasAttribute(a)));
+      }
+      if (!hit) hit = !!document.querySelector('[unselectable="on"]');
+    } catch {
+      /* best effort — a failed guess just means the gentle layer only */
+    }
+    blockedGuess = hit;
+    return hit;
+  }
+
   function reportIfLooksBlocked() {
     try {
-      const cs = getComputedStyle(document.body || document.documentElement);
-      const blocked = cs.userSelect === "none" || cs.webkitUserSelect === "none";
-      if (!blocked) return;
+      if (!looksCopyBlocked()) return;
       send({
         type: "API_CALL",
         path: "/telemetry/bypass-event",
@@ -335,43 +498,137 @@
     }
   }
 
+  // Remove the inline handlers a page uses to cancel copy/selection outright.
+  // Scoped to <html> and <body> on purpose: those are where blanket blockers
+  // are installed, and touching every element in the tree would be both slow
+  // and far more likely to break a legitimate widget.
+  function stripBlockingAttrs() {
+    [document.documentElement, document.body].forEach((el) => {
+      if (!el) return;
+      BLOCK_ATTRS.forEach((a) => {
+        if (el.hasAttribute(a)) el.removeAttribute(a);
+        try {
+          el[a] = null; // also clear the property form (el.oncopy = ...)
+        } catch {}
+      });
+    });
+    // The legacy IE-era attribute, still shipped by a surprising number of
+    // "protected" reader templates. Bounded so a huge page can't stall.
+    try {
+      const marked = document.querySelectorAll('[unselectable="on"]');
+      for (let i = 0; i < Math.min(marked.length, 400); i++) marked[i].removeAttribute("unselectable");
+    } catch {}
+  }
+
+  // A stylesheet rule with !important beats an inline `style="user-select:none"`
+  // — but NOT an inline `!important`, which is the one case our CSS override
+  // loses. Strip it off the element the user actually clicked and its nearest
+  // ancestors, which is where such a rule is ever set.
+  function stripInlineUserSelect(node) {
+    let el = node && node.nodeType === 3 ? node.parentElement : node;
+    for (let i = 0; i < 8 && el && el.style; i++) {
+      const v = el.style.userSelect || el.style.webkitUserSelect;
+      if (v && v.toLowerCase() === "none") {
+        el.style.removeProperty("user-select");
+        el.style.removeProperty("-webkit-user-select");
+      }
+      if (el.hasAttribute && el.hasAttribute("unselectable")) el.removeAttribute("unselectable");
+      el = el.parentElement;
+    }
+  }
+
   let copyPasteRestored = false;
+  let restoreStyle = null;
   function restoreCopyPaste() {
     if (!selectEnabled || copyPasteRestored) return;
     copyPasteRestored = true;
+    const blocked = looksCopyBlocked(); // read the page's intent first
     reportIfLooksBlocked();
 
-    const style = document.createElement("style");
-    style.id = "af-restore-select";
-    style.textContent = `
-      * { -webkit-user-select: text !important; user-select: text !important; }
+    restoreStyle = document.createElement("style");
+    restoreStyle.id = "af-restore-select";
+    restoreStyle.textContent = `
+      * { -webkit-user-select: text !important; -moz-user-select: text !important;
+          -ms-user-select: text !important; user-select: text !important; }
       * { -webkit-touch-callout: default !important; }
+      /* Some sites leave selection working but paint the highlight invisible,
+         so you can't see what you grabbed. Force a visible one back. */
+      ::selection { background: rgba(91,108,240,.32) !important; }
+      ::-moz-selection { background: rgba(91,108,240,.32) !important; }
     `;
-    (document.head || document.documentElement).appendChild(style);
+    (document.head || document.documentElement).appendChild(restoreStyle);
 
-    ["selectstart", "copy", "cut", "contextmenu"].forEach((type) => {
+    // Anti-copy scripts routinely delete injected stylesheets they don't
+    // recognize. Watch the two places ours can live and put it straight back —
+    // childList only (no subtree), so this costs nothing on a busy page.
+    try {
+      const keepAlive = new MutationObserver(() => {
+        if (restoreStyle && !restoreStyle.isConnected) {
+          (document.head || document.documentElement).appendChild(restoreStyle);
+        }
+      });
+      keepAlive.observe(document.documentElement, { childList: true });
+      if (document.head) keepAlive.observe(document.head, { childList: true });
+    } catch {}
+
+    // A capture-phase listener on `window` — the outermost point an event
+    // passes through — runs before any listener the page attached on
+    // document/body, in capture OR bubble phase, regardless of when the page's
+    // script ran. stopImmediatePropagation() there stops the page's own
+    // blocking handler from ever firing, without needing to know anything
+    // about how the site implemented the block. Note we never preventDefault:
+    // the browser's own copy still happens, we only silence the page's
+    // reaction to it.
+    ["selectstart", "copy", "cut", "beforecopy", "beforecut", "contextmenu"].forEach((type) => {
       window.addEventListener(type, (e) => e.stopImmediatePropagation(), true);
     });
 
-    // Some anti-copy scripts don't hook the copy/selectstart events at all —
-    // they listen for the Ctrl/Cmd+C keystroke directly (keydown) and react
-    // to that instead (block it, show a warning, snapshot their own DOM to
-    // "catch" the attempt, etc.). Neutralize that the same way: intercept it
-    // at the window in the capture phase, before the page's own keydown
-    // handler ever runs, so whatever it does on Ctrl+C simply doesn't fire.
-    // This does NOT call preventDefault, so the browser's normal copy still
-    // happens afterward — we're only silencing the page's own reaction to it.
+    // Some anti-copy scripts don't hook those events at all — they listen for
+    // the Ctrl/Cmd+C keystroke directly and react to that instead (block it,
+    // flash a warning, swap the DOM to "catch" the attempt). Neutralize it the
+    // same way. Ctrl+A is in the same family of blocks, but only silenced on a
+    // page we already judged hostile: plenty of legitimate apps (editors,
+    // canvases, mail clients) bind Ctrl+A to their own select-all, and taking
+    // that away everywhere would break them for no gain.
     window.addEventListener(
       "keydown",
       (e) => {
         const key = (e.key || "").toLowerCase();
-        if ((e.ctrlKey || e.metaKey) && (key === "c" || key === "x")) {
+        if (!(e.ctrlKey || e.metaKey)) return;
+        if (key === "c" || key === "x" || (key === "a" && hardUnblocked)) {
           e.stopImmediatePropagation();
         }
       },
       true
     );
+
+    if (blocked) applyHardUnblock();
   }
+
+  // The second layer, only for pages that are actually fighting the user.
+  let hardUnblocked = false;
+  function applyHardUnblock() {
+    if (hardUnblocked) return;
+    hardUnblocked = true;
+    stripBlockingAttrs();
+
+    // The nastiest variant: a script that lets you select, then wipes the
+    // selection from a selectionchange handler so the highlight dies the
+    // instant it appears. selectionchange is fired at `document`, so a capture
+    // listener on window sees it first and can stop it reaching the page.
+    window.addEventListener("selectionchange", (e) => e.stopImmediatePropagation(), true);
+
+    // Undo inline `user-select: none !important` (the one form our stylesheet
+    // can't outrank) on whatever the user is reaching for, as they reach for it.
+    window.addEventListener("mousedown", (e) => stripInlineUserSelect(e.target), true);
+
+    // Blocked pages are also the ones that cancel dragstart to stop images and
+    // text being dragged out. Safe to neutralize HERE, where we already know
+    // the site is hostile — doing it everywhere would break legitimate
+    // drag-and-drop UIs (Trello-style boards, file drop zones).
+    window.addEventListener("dragstart", (e) => e.stopImmediatePropagation(), true);
+  }
+
   // Some sites disable copy/paste (block the native "copy"/"paste" events,
   // or preventDefault on Ctrl+C/Ctrl+V) to stop people lifting content off
   // the page. That blocking targets the page's own DOM events — it can't
@@ -517,16 +774,31 @@
   // action and just added clutter to every page. Off unless a user opts in.
   let selectEnabled = true;
   let bubbleEnabled = false;
+  // Image AI and auto-edit are ON by default: both only ever show up in
+  // response to something the user is already doing (hovering an image,
+  // focusing a text box), and hiding them behind an opt-in is how a feature
+  // never gets found. Same live-toggle wiring as the other two.
+  let imageAiEnabled = true;
+  let autoEditEnabled = true;
   try {
     chrome.storage.local.get(
-      ["af_select_enabled", "af_bubble_enabled", "af_privacy_mode"],
+      [
+        "af_select_enabled",
+        "af_bubble_enabled",
+        "af_privacy_mode",
+        "af_image_ai_enabled",
+        "af_autoedit_enabled",
+      ],
       (r) => {
         if (typeof r.af_select_enabled === "boolean") selectEnabled = r.af_select_enabled;
         if (typeof r.af_bubble_enabled === "boolean") bubbleEnabled = r.af_bubble_enabled;
+        if (typeof r.af_image_ai_enabled === "boolean") imageAiEnabled = r.af_image_ai_enabled;
+        if (typeof r.af_autoedit_enabled === "boolean") autoEditEnabled = r.af_autoedit_enabled;
         privacyMode = r.af_privacy_mode === true;
         if (privacyMode) return; // stay fully off — don't mount anything
         if (bubbleEnabled) mountBubble();
         restoreCopyPaste();
+        initExtras();
         initDocAssistant();
       }
     );
@@ -546,10 +818,25 @@
         if (bubbleEnabled) mountBubble();
         else unmountBubble();
       }
+      if ("af_image_ai_enabled" in changes) {
+        imageAiEnabled = changes.af_image_ai_enabled.newValue !== false;
+        if (!imageAiEnabled) {
+          removeImgBadge();
+          removeImgCard();
+        }
+      }
+      if ("af_autoedit_enabled" in changes) {
+        autoEditEnabled = changes.af_autoedit_enabled.newValue !== false;
+        if (!autoEditEnabled) {
+          closeEditMenu();
+          removeEditBadge();
+        }
+      }
     });
   } catch {
     /* extension context not ready yet — defaults to enabled */
     restoreCopyPaste();
+    initExtras();
     initDocAssistant();
   }
 
@@ -633,7 +920,7 @@
   }
 
   function showPill(rect) {
-    if (!selectEnabled || privacyMode) return;
+    if (!selectEnabled || privacyMode || isTinyFrame()) return;
     removePill();
     if (bar) {
       bar.remove();
@@ -872,7 +1159,17 @@
       } else if (part) {
         const d = document.createElement("div");
         d.className = "af-sel-answer-text";
-        d.innerHTML = escapeHtml(part).replace(/\n/g, "<br>");
+        // Models answer in light markdown whether you asked for it or not (the
+        // image "solve" mode is the worst offender: a bold answer, then a
+        // heading, then bullets). Rendering the handful of marks they actually
+        // use beats showing raw ** and ### to the user. Everything is escaped
+        // FIRST, so only these fixed tags can ever reach the DOM.
+        d.innerHTML = escapeHtml(part)
+          .replace(/^\s{0,3}#{1,6}\s*(.+)$/gm, "<strong>$1</strong>")
+          .replace(/^\s*[-*•]\s+(.+)$/gm, "• $1")
+          .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+          .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+          .replace(/\n/g, "<br>");
         container.appendChild(d);
       }
     });
@@ -1192,6 +1489,7 @@
 
   function mountBubble() {
     if (bubble || !bubbleEnabled || privacyMode) return;
+    if (!IS_TOP) return; // one bubble per tab, not one per iframe
     bubble = document.createElement("button");
     bubble.type = "button";
     bubble.className = "af-bubble";
@@ -1263,7 +1561,7 @@
   }
 
   function showBar(rect, prefill, autoFocus) {
-    if (!selectEnabled || privacyMode) return; // single choke point for both switches
+    if (!selectEnabled || privacyMode || isTinyFrame()) return; // one choke point for every switch
     removePill();
     removeBar(); // clears the highlight — redraw it below from anchorRange
     if (anchorRange) drawHighlightOverlay(anchorRange);
@@ -1444,6 +1742,7 @@
           drawHighlightOverlay(anchorRange); // survives page clearing its selection
           showPill(anchorRange.getBoundingClientRect()); // tiny trigger, not the full bar
         } else if (!text) {
+          if (Date.now() - lastAltGrabAt < 600) return; // Alt+click just opened the bar
           closeSelUI();
         }
       }, 0);
@@ -1771,7 +2070,7 @@
   }
 
   function initDocAssistant() {
-    if (privacyMode || docCard) return;
+    if (privacyMode || docCard || !IS_TOP) return;
     const meta = detectDoc();
     if (!meta) return;
     try {
@@ -1782,4 +2081,991 @@
       if (!docCard && !privacyMode) showDocCard(meta);
     }, 900);
   }
+
+  // ======================================================================
+  //  Shared bits for the panels below (image card, edit menu)
+  // ======================================================================
+
+  function panelClass(extra) {
+    return "af-panel " + extra + (pageIsLight() ? " af-light" : "");
+  }
+
+  function setPanelStatus(el, text, isErr, busy) {
+    if (!el) return;
+    el.className = "af-status" + (isErr ? " err" : "");
+    el.innerHTML = busy
+      ? `<span class="af-spin"></span>${escapeHtml(text)}`
+      : escapeHtml(text || "");
+  }
+
+  // Place a fixed-position panel next to something on the page: below it when
+  // there's room, flipped above when there isn't, always clamped inside the
+  // viewport. Same rules as positionBar(), minus the drag state.
+  function placePanel(panel, rect) {
+    if (!panel) return;
+    const m = 10;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const w = panel.offsetWidth || 320;
+    const h = panel.offsetHeight || 200;
+    const left = Math.max(m, Math.min(rect.left, vw - w - m));
+    let top = rect.bottom + m;
+    if (top + h > vh - m) {
+      const above = rect.top - h - m;
+      // Below doesn't fit: flip above if there's room, else pin it to the
+      // bottom edge — and if it is taller than the whole viewport (a long
+      // OCR result), pin it to the TOP instead, so the head and the action
+      // chips stay reachable and the panel scrolls internally (max-height in
+      // CSS). Pinning a too-tall panel to the bottom is what pushed the
+      // buttons off the screen.
+      top = above >= m ? above : h > vh - 2 * m ? m : Math.max(m, vh - h - m);
+    }
+    panel.style.left = `${left}px`;
+    panel.style.top = `${Math.max(m, top)}px`;
+  }
+
+  // Panels are placed the instant they're created, but they keep GROWING
+  // afterwards: the thumbnail finishes loading, an answer arrives, an error
+  // line appears. Each of those can push the bottom of the panel past the
+  // viewport it was measured against. Re-place it whenever its own box
+  // changes size — placePanel only moves it, so this can't loop.
+  function keepOnScreen(panel, anchorEl) {
+    try {
+      const ro = new ResizeObserver(() => {
+        if (!panel.isConnected) {
+          ro.disconnect();
+          return;
+        }
+        const rect =
+          anchorEl && anchorEl.isConnected
+            ? anchorEl.getBoundingClientRect()
+            : panel.getBoundingClientRect();
+        placePanel(panel, rect);
+      });
+      ro.observe(panel);
+    } catch {
+      /* no ResizeObserver — the explicit placePanel calls still run */
+    }
+  }
+
+  function mkTool(label, onClick) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "af-tool";
+    b.textContent = label;
+    b.onclick = () => onClick(b);
+    return b;
+  }
+
+  // ======================================================================
+  //  Image AI — OCR, explain, translate, solve, ask (the badge on images)
+  // ======================================================================
+  // Text ON a page can be selected (and where a site blocks that, un-blocked
+  // above). Text baked INTO an image can't be, by anyone: a screenshot of a
+  // slide, a scanned page, a chart, a photo of a homework question, a diagram.
+  // Hover any image big enough to be content and a small AF badge appears on
+  // its top-left corner; clicking it opens a card that reads the image with a
+  // vision model — pull the text out (OCR), explain what it shows, translate
+  // it, solve the question in it, or answer anything you type about it. The
+  // extracted text then flows into everything else: copy it, save it as a
+  // note, or hand it to the selection bar to ask follow-ups.
+  //
+  // Getting the PIXELS is the hard part, and it needs three paths because no
+  // single one works everywhere:
+  //   1. canvas readback — instant, and the only way to read a <canvas> or a
+  //      blob: URL. A cross-origin image without CORS headers "taints" the
+  //      canvas, so toDataURL throws; that's what the next path is for.
+  //   2. fetch the bytes in the page's own context — works whenever the host
+  //      sends Access-Control-Allow-Origin (most CDNs do) and carries the
+  //      page's cookies, so login-gated images still work. What comes back is
+  //      a same-origin blob, so it can then go through a canvas to be
+  //      downscaled without tainting anything.
+  //   3. hand the URL to the backend and let it fetch server-side — the last
+  //      resort for a public image the page itself won't release.
+
+  const MIN_IMG_SIZE = 110; // below this it's an icon/avatar/spacer, not content
+  const MAX_IMG_EDGE = 1280; // downscale before upload: readable, but a small payload
+
+  let imageAiInit = false;
+  let imgBadge = null;
+  let imgBadgeTarget = null;
+  let imgCard = null;
+  let imgCardTarget = null;
+  let imgHideTimer = 0;
+  let imgHoverThrottle = 0;
+
+  function elImageSrc(el) {
+    if (!el || !el.tagName) return "";
+    const tag = el.tagName.toUpperCase();
+    if (tag === "IMG") return el.currentSrc || el.src || "";
+    if (tag === "CANVAS") return "canvas:"; // pixels come from the element itself
+    try {
+      const bg = getComputedStyle(el).backgroundImage || "";
+      const m = bg.match(/url\((?:"|')?([^"')]+)(?:"|')?\)/);
+      return m ? m[1] : "";
+    } catch {
+      return "";
+    }
+  }
+
+  // Is this element an image worth offering AI on?
+  function imageCandidate(el) {
+    if (!el || el === afHost || !el.getBoundingClientRect) return null;
+    const tag = (el.tagName || "").toUpperCase();
+    let r;
+    try {
+      r = el.getBoundingClientRect();
+    } catch {
+      return null;
+    }
+    if (r.width < MIN_IMG_SIZE || r.height < MIN_IMG_SIZE) return null;
+    if (tag === "IMG" || tag === "CANVAS") return el;
+    // A CSS background-image — how a lot of sites ship "protected" pictures,
+    // precisely so there's no <img> to right-click. Held to a larger minimum
+    // so decorative hero/pattern backgrounds don't sprout badges.
+    if (elImageSrc(el) && r.width >= 160 && r.height >= 160) return el;
+    return null;
+  }
+
+  function removeImgBadge() {
+    clearTimeout(imgHideTimer);
+    if (imgBadge) {
+      imgBadge.remove();
+      imgBadge = null;
+    }
+    imgBadgeTarget = null;
+  }
+
+  function scheduleBadgeHide() {
+    if (!imgBadge) return;
+    clearTimeout(imgHideTimer);
+    imgHideTimer = setTimeout(removeImgBadge, 320);
+  }
+
+  function positionImgBadge() {
+    if (!imgBadge || !imgBadgeTarget) return;
+    if (!imgBadgeTarget.isConnected) {
+      removeImgBadge();
+      return;
+    }
+    const r = imgBadgeTarget.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    if (r.bottom < 8 || r.top > vh - 8 || r.right < 8 || r.left > vw - 8 || r.width < MIN_IMG_SIZE) {
+      removeImgBadge();
+      return;
+    }
+    const w = imgBadge.offsetWidth || 58;
+    const h = imgBadge.offsetHeight || 26;
+    const left = Math.max(6, Math.min(r.left + 8, vw - w - 6));
+    // Keep it inside the image even when only its bottom half is on screen.
+    let top = Math.max(6, Math.min(r.top + 8, vh - h - 6));
+    top = Math.min(top, Math.max(6, r.bottom - h - 4));
+    imgBadge.style.left = `${left}px`;
+    imgBadge.style.top = `${top}px`;
+  }
+
+  function showImgBadge(el) {
+    if (imgBadge && imgBadgeTarget === el) {
+      clearTimeout(imgHideTimer); // same image — just keep it alive
+      return;
+    }
+    removeImgBadge();
+    imgBadgeTarget = el;
+    imgBadge = document.createElement("div");
+    imgBadge.className = "af-img-badge";
+    imgBadge.title = "Read this image with AgentFury — extract text, explain, or ask";
+    imgBadge.innerHTML = `<span class="af-ib-logo af-logo"></span><span>AI</span>`;
+    getAfRoot().appendChild(imgBadge);
+    positionImgBadge();
+    requestAnimationFrame(() => imgBadge && imgBadge.classList.add("af-in"));
+    imgBadge.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    imgBadge.addEventListener("mouseenter", () => clearTimeout(imgHideTimer));
+    imgBadge.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openImageCard(imgBadgeTarget);
+    });
+  }
+
+  // Draw whatever we can already read into a canvas, scaled down, and hand
+  // back a JPEG data URL.
+  function downscaleToDataUrl(source, natW, natH) {
+    const scale = Math.min(1, MAX_IMG_EDGE / Math.max(natW, natH));
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(natW * scale));
+    c.height = Math.max(1, Math.round(natH * scale));
+    const ctx = c.getContext("2d");
+    // JPEG has no alpha channel, so paint white first — otherwise a
+    // transparent PNG (very common for screenshots of text) comes out as
+    // black-on-black and the model reads nothing.
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(source, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", 0.85);
+  }
+
+  function readPixels(el) {
+    try {
+      const tag = (el.tagName || "").toUpperCase();
+      if (tag === "CANVAS") return downscaleToDataUrl(el, el.width, el.height);
+      if (tag === "IMG" && el.complete && el.naturalWidth) {
+        return downscaleToDataUrl(el, el.naturalWidth, el.naturalHeight);
+      }
+    } catch {
+      /* tainted canvas (cross-origin, no CORS) — the fetch path handles it */
+    }
+    return "";
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise((resolve) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(String(fr.result || ""));
+      fr.onerror = () => resolve("");
+      fr.readAsDataURL(blob);
+    });
+  }
+
+  function loadImage(src) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  }
+
+  async function imagePayload(el) {
+    const src = elImageSrc(el);
+    // 1. Straight from pixels the browser has already decoded.
+    const direct = readPixels(el);
+    if (direct) return { image_b64: direct };
+    if (!src || src === "canvas:") return null;
+    if (src.startsWith("data:")) return { image_b64: src };
+    // 2. Fetch the bytes ourselves, cookies included.
+    try {
+      const res = await fetch(src, { credentials: "include" });
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob.size && blob.size < 20 * 1024 * 1024) {
+          const raw = await blobToDataUrl(blob);
+          const img = raw ? await loadImage(raw) : null;
+          if (img && img.naturalWidth) {
+            const shrunk = downscaleToDataUrl(img, img.naturalWidth, img.naturalHeight);
+            if (shrunk) return { image_b64: shrunk };
+          }
+          // Couldn't decode it (an SVG or an odd format) — send it as-is if
+          // it fits under the backend's 4 MB ceiling.
+          if (raw && raw.length < 5_200_000) return { image_b64: raw };
+        }
+      }
+    } catch {
+      /* cross-origin with no CORS header — fall through to the server */
+    }
+    // 3. Let the backend fetch it (public http(s) URLs only).
+    if (/^https?:/i.test(src)) return { image_url: src.slice(0, 2000) };
+    return null;
+  }
+
+  function imgLabel(el, src) {
+    const tag = (el.tagName || "").toUpperCase();
+    if (tag === "CANVAS") return "Canvas element";
+    const alt = (el.getAttribute && el.getAttribute("alt")) || "";
+    if (alt.trim()) return alt.trim().slice(0, 80);
+    try {
+      const u = new URL(src, location.href);
+      const name = decodeURIComponent(u.pathname.split("/").pop() || "");
+      return name || u.hostname;
+    } catch {
+      return "Image on this page";
+    }
+  }
+
+  function removeImgCard() {
+    if (imgCard) {
+      imgCard.remove();
+      imgCard = null;
+    }
+    imgCardTarget = null;
+  }
+
+  function ensureImgTools(text) {
+    if (!imgCard) return;
+    const old = imgCard.querySelector(".af-tools");
+    if (old) old.remove();
+    const tools = document.createElement("div");
+    tools.className = "af-tools";
+
+    tools.appendChild(
+      mkTool("Copy text", async (b) => {
+        const ok = await forceCopy(text);
+        b.textContent = ok ? "Copied" : "Copy failed";
+        setTimeout(() => (b.textContent = "Copy text"), 1400);
+      })
+    );
+    tools.appendChild(
+      mkTool("Save note", async (b) => {
+        b.textContent = "Saving…";
+        const r = await send({
+          type: "API_CALL",
+          path: "/notes",
+          method: "POST",
+          body: { title: (document.title || "Image").slice(0, 200), content: text.slice(0, 4000) },
+        });
+        b.textContent = r && r.ok ? "Saved ✓" : "Failed";
+        setTimeout(() => (b.textContent = "Save note"), 1600);
+      })
+    );
+    // The bridge back to the text tools: whatever the image said becomes the
+    // selection, so Answer / Google / Summarize all work on it.
+    tools.appendChild(
+      mkTool("Ask AI about this ↗", () => {
+        const el = imgCardTarget;
+        const rect = el ? el.getBoundingClientRect() : { top: 80, bottom: 80, left: 40 };
+        lastSelectionText = text.slice(0, 6000);
+        // Anchor the bar to the IMAGE, so it follows it on scroll and the
+        // highlight shows which picture the answer is about.
+        anchorRange = null;
+        try {
+          if (el) {
+            const r = document.createRange();
+            r.selectNode(el);
+            anchorRange = r;
+          }
+        } catch {}
+        removeImgCard();
+        showBar(rect, "", true);
+      })
+    );
+    imgCard.appendChild(tools);
+  }
+
+  async function imgAction(mode, question) {
+    if (!imgCard || !imgCardTarget) return;
+    const status = imgCard.querySelector(".af-status");
+    const body = imgCard.querySelector(".af-body");
+    const oldTools = imgCard.querySelector(".af-tools");
+    if (oldTools) oldTools.remove();
+    body.innerHTML = "";
+    setPanelStatus(status, mode === "ocr" ? "Reading the text…" : "Looking at the image…", false, true);
+
+    const payload = await imagePayload(imgCardTarget);
+    if (!payload) {
+      setPanelStatus(status, "Couldn't read this image — the page won't release it.", true);
+      return;
+    }
+    const r = await send(
+      {
+        type: "API_CALL",
+        path: "/write/image",
+        method: "POST",
+        body: { ...payload, mode, question: question || "" },
+      },
+      60000
+    );
+    if (!r || !r.ok) {
+      setPanelStatus(status, friendlyError(r || {}), true);
+      return;
+    }
+    const text = ((r.data && r.data.text) || "").trim() || "No result.";
+    setPanelStatus(status, "", false);
+    if (!imgCard) return; // closed while we were waiting
+    renderRich(body, text);
+    ensureImgTools(text);
+    if (imgCardTarget) placePanel(imgCard, imgCardTarget.getBoundingClientRect()); // it grew — keep it on screen
+  }
+
+  function openImageCard(el) {
+    if (!el || privacyMode || !imageAiEnabled) return;
+    removeImgBadge();
+    removeImgCard();
+    imgCardTarget = el;
+    const src = elImageSrc(el);
+    const httpSrc = /^https?:/i.test(src) ? src : "";
+
+    imgCard = document.createElement("div");
+    imgCard.className = panelClass("af-img-card");
+    imgCard.innerHTML = `
+      <div class="af-card-head">
+        <span class="af-card-ic af-logo"></span>
+        <div class="af-card-titles">
+          <div class="af-card-title">Image AI</div>
+          <div class="af-card-sub">${escapeHtml(imgLabel(el, src))}</div>
+        </div>
+        <button type="button" class="af-x" title="Close">✕</button>
+      </div>
+      <img class="af-img-thumb" alt="" hidden />
+      <div class="af-row-wrap">
+        <button type="button" class="af-chip primary" data-img="ocr" title="Pull every word out of the image">Extract text</button>
+        <button type="button" class="af-chip" data-img="explain" title="What does this image show?">Explain</button>
+        <button type="button" class="af-chip" data-img="solve" title="Answer the question in the image">Solve</button>
+        <button type="button" class="af-chip" data-img="translate">Translate</button>
+        <button type="button" class="af-chip" data-lens="1" title="Reverse image search on Google Lens"${httpSrc ? "" : " disabled"}>Search image ↗</button>
+      </div>
+      <div class="af-ask-row">
+        <input type="text" class="af-ask-input" placeholder="Ask about this image…" />
+        <button type="button" class="af-ask-go" title="Ask (Enter)">${SVG_SEND}</button>
+      </div>
+      <div class="af-status"></div>
+      <div class="af-body"></div>
+    `;
+    getAfRoot().appendChild(imgCard);
+    placePanel(imgCard, el.getBoundingClientRect());
+    keepOnScreen(imgCard, el);
+    requestAnimationFrame(() => imgCard && imgCard.classList.add("af-in"));
+
+    // A preview, so it's obvious WHICH image is being read on a busy page.
+    const thumb = imgCard.querySelector(".af-img-thumb");
+    const thumbSrc = src === "canvas:" ? readPixels(el) : src;
+    if (thumbSrc) {
+      thumb.src = thumbSrc;
+      thumb.hidden = false;
+      // The card was measured before the picture had loaded — once it has,
+      // the card is ~110px taller, so place it again.
+      thumb.onload = () => {
+        if (imgCard && imgCardTarget) placePanel(imgCard, imgCardTarget.getBoundingClientRect());
+      };
+      thumb.onerror = () => {
+        thumb.hidden = true;
+      };
+    }
+
+    imgCard.addEventListener("mousedown", (e) => e.stopPropagation());
+    imgCard.querySelector(".af-x").onclick = () => removeImgCard();
+    imgCard.querySelectorAll("[data-img]").forEach((b) => {
+      b.onclick = () => imgAction(b.dataset.img, "");
+    });
+
+    const lens = imgCard.querySelector("[data-lens]");
+    if (lens && httpSrc) {
+      lens.onclick = () => {
+        // Google Lens by URL — the same "search this image" the browser's own
+        // context menu offers, which is exactly what a blocked right-click
+        // takes away.
+        const abs = new URL(httpSrc, location.href).href;
+        window.open(`https://lens.google.com/uploadbyurl?url=${encodeURIComponent(abs)}`, "_blank", "noopener");
+      };
+    }
+
+    const ask = imgCard.querySelector(".af-ask-input");
+    const go = imgCard.querySelector(".af-ask-go");
+    enablePasteBypass(ask);
+    const runAsk = () => {
+      const q = ask.value.trim();
+      if (q) imgAction("ask", q);
+    };
+    go.onclick = runAsk;
+    ask.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        runAsk();
+      }
+    });
+  }
+
+  function initImageAI() {
+    if (imageAiInit) return;
+    imageAiInit = true;
+    window.addEventListener(
+      "mouseover",
+      (e) => {
+        if (!imageAiEnabled || privacyMode || isTinyFrame() || imgCard) return;
+        const now = Date.now();
+        if (now - imgHoverThrottle < 90) return;
+        imgHoverThrottle = now;
+        let el = imageCandidate(e.target);
+        if (!el) {
+          // Galleries and "protected" viewers cover the picture with a
+          // transparent overlay, so the pointer never touches the <img>
+          // itself. Look through the stack under the cursor instead of
+          // trusting the event target — that also keeps the badge alive while
+          // the pointer is on the badge (our own host is skipped).
+          try {
+            const stack = document.elementsFromPoint(e.clientX, e.clientY);
+            for (let i = 0; i < Math.min(stack.length, 6); i++) {
+              el = imageCandidate(stack[i]);
+              if (el) break;
+            }
+          } catch {}
+        }
+        if (el) showImgBadge(el);
+        else scheduleBadgeHide();
+      },
+      true
+    );
+    window.addEventListener(
+      "mouseout",
+      () => {
+        if (!imgCard) scheduleBadgeHide();
+      },
+      true
+    );
+  }
+
+  // ======================================================================
+  //  Auto-edit — AI inside any text box, no highlighting needed
+  // ======================================================================
+  // Fixing or rewriting what you already typed shouldn't require selecting it
+  // first, and on most sites you can't invoke an assistant on a field at all.
+  // Focus any text box — a comment field, a form, a support reply, a quiz
+  // answer box, a rich-text editor — and a small AF badge appears in its
+  // corner. One click gives Fix / Improve / Shorten / Formal / Friendly /
+  // Answer plus a free-form "tell AI what to change", applied straight INTO
+  // the field, with Undo. If there IS a selection inside the field only that
+  // part is rewritten; otherwise the whole field is — which is the point: no
+  // highlighting needed either way.
+
+  // Only the input types people actually write prose in. email/url/tel/number
+  // are deliberately absent: rewriting an address or a phone number is never
+  // what anyone wants, and a badge on every login form is just noise.
+  const EDIT_INPUT_TYPES = new Set(["text", "search", ""]);
+  // Same idea, one level finer: a field that autofills a name, an address or a
+  // one-time code is an identity field however it's typed.
+  const NOT_PROSE = /user(name)?|email|phone|mobile|tel|otp|one-?time|code|zip|postal|address|card|cvv|search-?box/i;
+  let autoEditInit = false;
+  let editBadge = null;
+  let editField = null;
+  let editMenu = null;
+  let editUndoText = null;
+
+  function editableTarget(node) {
+    let el = node;
+    if (!el || el === afHost || !el.tagName) return null;
+    const tag = el.tagName.toUpperCase();
+    if (tag === "TEXTAREA") {
+      if (el.readOnly || el.disabled) return null;
+    } else if (tag === "INPUT") {
+      const type = (el.getAttribute("type") || "text").toLowerCase();
+      if (!EDIT_INPUT_TYPES.has(type) || el.readOnly || el.disabled) return null;
+    } else if (el.isContentEditable) {
+      // Focus can land on an inner node; normalize to the editable root.
+      el = el.closest('[contenteditable=""],[contenteditable="true"]') || el;
+    } else {
+      return null;
+    }
+    if (tag === "INPUT" || tag === "TEXTAREA") {
+      const hint = `${el.name || ""} ${el.id || ""} ${el.getAttribute("autocomplete") || ""}`;
+      if (NOT_PROSE.test(hint)) return null;
+    }
+    let r;
+    try {
+      r = el.getBoundingClientRect();
+    } catch {
+      return null;
+    }
+    // Too small to be a place people write prose — a search box in a nav bar,
+    // a spinner, a one-character cell.
+    if (r.width < 140 || r.height < 22) return null;
+    return el;
+  }
+
+  function fieldValue(el) {
+    return (el.isContentEditable ? el.innerText : el.value) || "";
+  }
+
+  // The current selection INSIDE the field, if any — so "Fix" can touch just
+  // the sentence you meant rather than the whole draft.
+  function fieldSelection(el) {
+    try {
+      if (el.isContentEditable) {
+        const sel = window.getSelection();
+        if (!sel || !sel.rangeCount) return null;
+        // Only count it if the selection is actually INSIDE this field — the
+        // user may have left something highlighted elsewhere on the page.
+        const node = sel.anchorNode;
+        const host = node && node.nodeType === 3 ? node.parentNode : node;
+        if (!host || !el.contains(host)) return null;
+        const t = sel.toString();
+        return t.trim() ? { text: t } : null;
+      }
+      const s = el.selectionStart;
+      const e = el.selectionEnd;
+      if (s != null && e != null && e > s) return { text: el.value.slice(s, e), start: s, end: e };
+    } catch {}
+    return null;
+  }
+
+  function setFieldValue(el, text, range) {
+    el.focus();
+    if (el.isContentEditable) {
+      if (!range) {
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+      }
+      // insertText goes through the browser's editing pipeline, so the page's
+      // own editor (React, Quill, ProseMirror, Gmail) sees a normal edit and
+      // keeps it. Writing innerHTML/textContent directly is what makes those
+      // editors silently revert the change on the next keystroke.
+      if (!document.execCommand("insertText", false, text)) {
+        el.textContent = text;
+        el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
+      }
+      return;
+    }
+    try {
+      if (range) el.setSelectionRange(range.start, range.end);
+      else el.setSelectionRange(0, el.value.length);
+    } catch {}
+    if (!document.execCommand("insertText", false, text)) {
+      // Fallback: assigning el.value directly is invisible to React (it caches
+      // the last value on the node), so go through the native setter and fire
+      // the input event ourselves.
+      const proto = el.tagName.toUpperCase() === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
+      const next = range ? el.value.slice(0, range.start) + text + el.value.slice(range.end) : text;
+      setter.call(el, next);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  }
+
+  function removeEditBadge() {
+    if (editBadge) {
+      editBadge.remove();
+      editBadge = null;
+    }
+    if (!editMenu) editField = null;
+  }
+
+  function closeEditMenu() {
+    if (editMenu) {
+      editMenu.remove();
+      editMenu = null;
+    }
+    editUndoText = null;
+  }
+
+  function positionEditBadge() {
+    if (!editBadge || !editField) return;
+    if (!editField.isConnected) {
+      removeEditBadge();
+      return;
+    }
+    const r = editField.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    if (r.bottom < 6 || r.top > vh - 6 || r.width < 100) {
+      editBadge.style.opacity = "0";
+      return;
+    }
+    editBadge.style.opacity = "";
+    const w = editBadge.offsetWidth || 46;
+    const h = editBadge.offsetHeight || 22;
+    const left = Math.max(6, Math.min(r.right - w - 8, vw - w - 6));
+    // In a tall box it sits in the bottom-right corner, out of the way of the
+    // text; in a single-line input there is no "below", so centre it instead.
+    const top = r.height < 46
+      ? Math.max(6, Math.min(r.top + (r.height - h) / 2, vh - h - 6))
+      : Math.max(6, Math.min(r.bottom - h - 7, vh - h - 6));
+    editBadge.style.left = `${left}px`;
+    editBadge.style.top = `${top}px`;
+  }
+
+  function showEditBadge(el) {
+    if (editBadge && editField === el) {
+      positionEditBadge();
+      return;
+    }
+    closeEditMenu();
+    removeEditBadge();
+    editField = el;
+    editBadge = document.createElement("div");
+    editBadge.className = "af-edit-badge";
+    editBadge.title = "Edit this text with AgentFury — fix, rewrite, or answer";
+    editBadge.innerHTML = `<span class="af-ib-logo af-logo"></span><span>AI</span>`;
+    getAfRoot().appendChild(editBadge);
+    positionEditBadge();
+    requestAnimationFrame(() => editBadge && editBadge.classList.add("af-in"));
+    // Never let the click steal focus from the field — losing the caret would
+    // lose the selection we're about to rewrite.
+    editBadge.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    editBadge.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openEditMenu();
+    });
+  }
+
+  async function runEdit(kind, instruction) {
+    if (!editMenu || !editField || !editField.isConnected) return;
+    const status = editMenu.querySelector(".af-status");
+    const tools = editMenu.querySelector(".af-tools");
+    const el = editField;
+    const range = fieldSelection(el);
+    const whole = fieldValue(el);
+    const target = (range ? range.text : whole).trim();
+
+    if (!target && !instruction) {
+      setPanelStatus(status, "Type something first, or tell AI what to write.", true);
+      return;
+    }
+
+    setPanelStatus(status, kind === "answer" ? "Answering…" : "Rewriting…", false, true);
+
+    let r;
+    if (kind === "answer") {
+      // The field holds a question (a quiz box, a form, a reply you're stuck
+      // on) — answer it and put the answer where the caret is.
+      r = await send(
+        { type: "API_CALL", path: "/write/answer", method: "POST", body: { text: target.slice(0, 6000), question: instruction || "" } },
+        45000
+      );
+    } else {
+      // "fix" and a free-form instruction both ride /write/polish's improve
+      // mode; an empty field plus an instruction means "write this for me".
+      const MODES = { fix: "improve", instruct: "improve", improve: "improve", shorten: "shorten", formal: "formal", friendly: "friendly" };
+      const mode = !target && instruction ? "write" : MODES[kind] || "improve";
+      r = await send(
+        {
+          type: "API_CALL",
+          path: "/write/polish",
+          method: "POST",
+          body: { text: target.slice(0, 6000), instruction: instruction || "", mode },
+        },
+        45000
+      );
+    }
+    if (!r || !r.ok) {
+      setPanelStatus(status, friendlyError(r || {}), true);
+      return;
+    }
+    const out = ((r.data && (r.data.text || r.data.answer)) || "").trim();
+    if (!out) {
+      setPanelStatus(status, "The model returned nothing — try again.", true);
+      return;
+    }
+
+    editUndoText = whole; // whole-field snapshot, so Undo is always exact
+    setFieldValue(el, out, range || null);
+    setPanelStatus(status, range ? "✓ Rewrote the selected text." : "✓ Applied to the field.", false);
+    if (tools) tools.hidden = false;
+    positionEditBadge();
+  }
+
+  function openEditMenu() {
+    if (!editField || privacyMode) return;
+    closeEditMenu();
+    const hasSel = !!fieldSelection(editField);
+    editMenu = document.createElement("div");
+    editMenu.className = panelClass("af-edit-menu");
+    editMenu.innerHTML = `
+      <div class="af-card-head">
+        <span class="af-card-ic af-logo"></span>
+        <div class="af-card-titles">
+          <div class="af-card-title">Edit with AI</div>
+          <div class="af-card-sub">${hasSel ? "Selected text only" : "Whole field — no highlighting needed"}</div>
+        </div>
+        <button type="button" class="af-x" title="Close">✕</button>
+      </div>
+      <div class="af-row-wrap">
+        <button type="button" class="af-chip primary" data-edit="fix" title="Fix spelling, grammar and wording">Fix</button>
+        <button type="button" class="af-chip" data-edit="shorten">Shorten</button>
+        <button type="button" class="af-chip" data-edit="formal">Formal</button>
+        <button type="button" class="af-chip" data-edit="friendly">Friendly</button>
+        <button type="button" class="af-chip" data-edit="answer" title="Treat what's in the box as a question and answer it">Answer</button>
+      </div>
+      <div class="af-ask-row">
+        <input type="text" class="af-ask-input" placeholder="Tell AI what to change…" />
+        <button type="button" class="af-ask-go" title="Apply (Enter)">${SVG_SEND}</button>
+      </div>
+      <div class="af-status"></div>
+      <div class="af-tools" hidden></div>
+    `;
+    getAfRoot().appendChild(editMenu);
+    placePanel(editMenu, editField.getBoundingClientRect());
+    keepOnScreen(editMenu, editField);
+    requestAnimationFrame(() => editMenu && editMenu.classList.add("af-in"));
+
+    const tools = editMenu.querySelector(".af-tools");
+    tools.appendChild(
+      mkTool("Undo", () => {
+        if (editUndoText == null || !editField) return;
+        setFieldValue(editField, editUndoText, null);
+        editUndoText = null;
+        tools.hidden = true;
+        setPanelStatus(editMenu.querySelector(".af-status"), "Reverted.", false);
+      })
+    );
+
+    editMenu.addEventListener("mousedown", (e) => {
+      // Same reason as the badge: keep the page field focused and selected.
+      if (!e.target.classList.contains("af-ask-input")) e.preventDefault();
+      e.stopPropagation();
+    });
+    editMenu.querySelector(".af-x").onclick = () => closeEditMenu();
+    editMenu.querySelectorAll("[data-edit]").forEach((b) => {
+      b.onclick = () => runEdit(b.dataset.edit, "");
+    });
+    const ask = editMenu.querySelector(".af-ask-input");
+    const go = editMenu.querySelector(".af-ask-go");
+    enablePasteBypass(ask);
+    const apply = () => {
+      const v = ask.value.trim();
+      if (v) runEdit("instruct", v);
+    };
+    go.onclick = apply;
+    ask.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        apply();
+      }
+    });
+  }
+
+  function initAutoEdit() {
+    if (autoEditInit) return;
+    autoEditInit = true;
+    window.addEventListener(
+      "focusin",
+      (e) => {
+        if (!autoEditEnabled || privacyMode || isTinyFrame()) return;
+        const el = editableTarget(e.target);
+        if (el) showEditBadge(el);
+      },
+      true
+    );
+    window.addEventListener(
+      "focusout",
+      () => {
+        // Clicking our own badge/menu blurs the page field (the shadow host
+        // takes focus), so only drop the badge once focus has really left and
+        // our menu isn't open.
+        setTimeout(() => {
+          if (editMenu) return;
+          if (editField && document.activeElement === editField) return;
+          removeEditBadge();
+        }, 200);
+      },
+      true
+    );
+  }
+
+  // ======================================================================
+  //  Ask without highlighting — Alt+click any block or image
+  // ======================================================================
+  // The last-resort path for text that simply cannot be selected: a canvas- or
+  // overlay-based reader, a site whose blocker survives everything above, or
+  // just a long paragraph you don't want to drag across. Alt+click reads the
+  // text straight out of the DOM and opens the bar with it, no selection
+  // involved. Alt+click an image and you get the image card instead.
+
+  function blockTextFrom(el) {
+    let node = el && el.nodeType === 3 ? el.parentElement : el;
+    for (let i = 0; i < 10 && node && node !== document.body; i++) {
+      const t = ((node.innerText || node.textContent) || "").trim();
+      if (t.length >= 40) return { el: node, text: t.slice(0, 6000) };
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  // Set by the Alt+click grab below and read by the mouseup handler further
+  // up: that handler closes the selection UI when the page has no selection,
+  // and its deferred tick lands AFTER this click — which would shut the bar we
+  // just opened. There is no selection to find, by design.
+  let lastAltGrabAt = 0;
+  let altClickInit = false;
+  function initAltClick() {
+    if (altClickInit) return;
+    altClickInit = true;
+    window.addEventListener(
+      "click",
+      (e) => {
+        if (!e.altKey || privacyMode || isTinyFrame()) return;
+        if (e.target === afHost) return;
+        if (imageAiEnabled) {
+          const img = imageCandidate(e.target);
+          if (img) {
+            e.preventDefault();
+            e.stopPropagation();
+            openImageCard(img);
+            return;
+          }
+        }
+        if (!selectEnabled) return;
+        const grab = blockTextFrom(e.target);
+        if (!grab) return;
+        e.preventDefault();
+        e.stopPropagation();
+        lastAltGrabAt = Date.now();
+        lastSelectionText = grab.text;
+        try {
+          // A range over the block gives the bar the same anchor a real
+          // selection would: the highlight overlay draws on it, and it follows
+          // the text on scroll instead of dying at the first wheel tick.
+          const r = document.createRange();
+          r.selectNodeContents(grab.el);
+          anchorRange = r;
+        } catch {
+          anchorRange = null;
+        }
+        showBar(grab.el.getBoundingClientRect(), "", true);
+      },
+      true
+    );
+  }
+
+  // ---------- Shared lifecycle for the three surfaces above ----------
+
+  function teardownExtras() {
+    removeImgBadge();
+    removeImgCard();
+    closeEditMenu();
+    removeEditBadge();
+  }
+
+  let extrasWired = false;
+  function initExtras() {
+    if (isTinyFrame()) return; // ad/tracking frames get copy-restore only
+    initImageAI();
+    initAutoEdit();
+    initAltClick();
+    if (!extrasWired) {
+      extrasWired = true;
+      const follow = () => {
+        positionImgBadge();
+        positionEditBadge();
+      };
+      let raf = 0;
+      const onMove = () => {
+        if (raf) return;
+        raf = requestAnimationFrame(() => {
+          raf = 0;
+          follow();
+        });
+      };
+      window.addEventListener("scroll", onMove, true);
+      window.addEventListener("resize", onMove, true);
+      window.addEventListener(
+        "keydown",
+        (e) => {
+          if (e.key === "Escape") {
+            removeImgCard();
+            closeEditMenu();
+          }
+        },
+        true
+      );
+      // A click anywhere on the page dismisses the image card (the edit menu
+      // stays — it belongs to the field you're still typing in).
+      window.addEventListener(
+        "mousedown",
+        (e) => {
+          if (imgCard && e.target !== afHost) removeImgCard();
+          if (editMenu && e.target !== afHost && e.target !== editField) closeEditMenu();
+        },
+        true
+      );
+    }
+  }
+
 })();
