@@ -3,7 +3,7 @@
   "name": "AgentFury",
   "short_name": "AgentFury",
   "description": "Agent Fury: AI agent & assistant — ask about any text even where copying is blocked, read the text inside images, fix any text box.",
-  "version": "1.32.0",
+  "version": "1.33.0",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
