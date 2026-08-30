@@ -31,6 +31,7 @@ AVAILABLE_MODELS: dict[str, str] = {
 }
 
 
+import contextvars
 import threading
 import time
 
@@ -45,13 +46,32 @@ _gemini_key_lock = threading.Lock()
 _gemini_key_idx = 0
 
 
+# Which key served the call currently being handled. A ContextVar rather than
+# a global: several requests share the process, and blaming a failure on
+# whichever key happened to be taken last would be worse than not recording it.
+_current_key: contextvars.ContextVar[str] = contextvars.ContextVar("af_current_key", default="")
+
+
+def last_key_suffix() -> str:
+    """The masked suffix of the key that served this request, for metrics."""
+    try:
+        return _current_key.get()
+    except Exception:
+        return ""
+
+
 def _next_groq_key() -> str:
     global _key_idx
     pool = key_manager.groq_keys() or [settings.groq_api_key]
     with _key_lock:
         key = pool[_key_idx % len(pool)]
         _key_idx += 1
-    usage.record("groq", key[-4:] if key else "")
+    suffix = key[-4:] if key else ""
+    usage.record("groq", suffix)
+    try:
+        _current_key.set(suffix)
+    except Exception:
+        pass
     return key
 
 
@@ -101,6 +121,10 @@ def _gemini_key() -> str | None:
     with _gemini_key_lock:
         key = pool[_gemini_key_idx % len(pool)]
         _gemini_key_idx += 1
+    try:
+        _current_key.set(key[-4:] if key else "")
+    except Exception:
+        pass
     return key
 
 
