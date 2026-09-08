@@ -1,6 +1,6 @@
 {
   "name": "agentforge-desktop",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "AgentFury desktop app",
   "main": "main.js",
   "author": "AgentFury",
@@ -32,7 +32,9 @@
     "protocols": [
       {
         "name": "AgentFury",
-        "schemes": ["agentforge"]
+        "schemes": [
+          "agentforge"
+        ]
       }
     ],
     "publish": [
@@ -44,7 +46,9 @@
       }
     ],
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "icon": "build/icon.ico"
     },
     "nsis": {
@@ -58,7 +62,9 @@
       "artifactName": "AgentFury-Setup.${ext}"
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "icon": "build/icon.png",
       "category": "public.app-category.productivity",
       "identity": null
@@ -67,7 +73,9 @@
       "artifactName": "AgentFury.dmg"
     },
     "linux": {
-      "target": ["AppImage"],
+      "target": [
+        "AppImage"
+      ],
       "icon": "build/icon.png",
       "category": "Utility"
     }
