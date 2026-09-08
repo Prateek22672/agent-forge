@@ -1,6 +1,7 @@
 import React from "react";
 import ConnectionStatus from "./ConnectionStatus";
 import CrocsMark from "./CrocsMark";
+import ThemeToggle from "./ThemeToggle";
 
 // Top status strip. Responsive: condenses on mobile, with a hamburger to open
 // the sidebar drawer.
@@ -68,6 +69,8 @@ export default function TopBar({
             Admin
           </button>
         )}
+
+        <ThemeToggle compact />
 
         <button
           onClick={onOpenSettings}

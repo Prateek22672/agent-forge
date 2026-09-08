@@ -3,7 +3,12 @@ import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
 import AdminApp from "./AdminApp.jsx";
 import { Privacy, Terms } from "./components/Legal.jsx";
+import { initTheme } from "./theme";
 import "./index.css";
+
+// Stamp the theme before React renders, so the first paint is already correct —
+// mounting first would flash the dark app at anyone on a light desktop.
+initTheme();
 
 // Fire-and-forget wake-up ping, as early as this file can run — before React
 // even mounts. Render's free tier sleeps after inactivity and takes ~50s to

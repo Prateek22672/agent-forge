@@ -2,7 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Rounded black & white theme: pure black bg, white text, soft corners. */
+/* ---------------------------------------------------------------------------
+   THEME
+   Every colour in the app is "white" (foreground) or "black" (ground). Those two
+   names are mapped to these variables in tailwind.config.js, so changing them
+   here re-themes all ~600 utility classes at once — opacity variants included.
+
+   Channels are space-separated RGB triples, not hex, because Tailwind composes
+   them as rgb(var(--c-fg) / <alpha>) to keep text-white/40 working.
+
+   Dark is the default and stays the brand look. Light is a genuine design, not
+   an inversion: a slightly warm off-white ground so large surfaces don't glare,
+   and a near-black ink that stays soft rather than pure #000.
+   --------------------------------------------------------------------------- */
+:root,
+:root[data-theme="dark"] {
+  --c-fg: 255 255 255;
+  --c-bg: 0 0 0;
+  --c-panel: 17 21 31;
+  --c-edge: 30 37 51;
+  --c-accent: 129 140 248;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --c-fg: 14 17 24;      /* ink — soft near-black, never pure */
+  --c-bg: 250 250 252;   /* ground — off-white, easier on large surfaces */
+  --c-panel: 255 255 255;
+  --c-edge: 220 223 231;
+  --c-accent: 79 70 229;
+  color-scheme: light;
+}
+
 html,
 body,
 #root {
@@ -11,9 +42,16 @@ body,
 
 body {
   margin: 0;
-  background: #000000;
-  color: #ffffff;
+  background: rgb(var(--c-bg));
+  color: rgb(var(--c-fg));
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+/* The animated backdrops are built for a dark ground — they'd wash out and
+   fight the text on a light one, so they step back in light mode. */
+:root[data-theme="light"] .theme-dark-only {
+  opacity: 0.06;
 }
 
 /* Base radius for every interactive control — the single biggest lever for a
@@ -49,7 +87,7 @@ button:active {
   height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2a2a2a;
+  background: rgb(var(--c-fg) / 0.17);
 }
 
 /* Minimal markdown styling for polished replies */
@@ -71,18 +109,18 @@ button:active {
   margin: 0.6em 0 0.3em;
 }
 .md a {
-  color: #ffffff;
+  color: rgb(var(--c-fg));
   text-decoration: underline;
 }
 .md code {
-  background: #1a1a1a;
+  background: rgb(var(--c-fg) / 0.09);
   padding: 1px 5px;
   font-family: ui-monospace, monospace;
   font-size: 0.9em;
 }
 .md pre {
-  background: #111111;
-  border: 1px solid #2a2a2a;
+  background: rgb(var(--c-fg) / 0.06);
+  border: 1px solid rgb(var(--c-fg) / 0.14);
   padding: 10px;
   overflow-x: auto;
   white-space: pre;
@@ -106,14 +144,14 @@ button:active {
 }
 .md th,
 .md td {
-  border: 1px solid #2a2a2a;
+  border: 1px solid rgb(var(--c-fg) / 0.14);
   padding: 6px 10px;
   text-align: left;
   vertical-align: top;
   min-width: 90px;
 }
 .md th {
-  background: #141414;
+  background: rgb(var(--c-fg) / 0.07);
   font-weight: 600;
 }
 .md ul,

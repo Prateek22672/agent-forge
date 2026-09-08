@@ -1,6 +1,7 @@
 import React from "react";
 import Strands from "./Strands";
 import CrocsMark from "./CrocsMark";
+import ThemeToggle from "./ThemeToggle";
 
 // Official home page — monochrome, SaaS-grade. The only brand mark allowed
 // beyond the wordmark is "Crocs" (our security layer). No colour, no emoji.
@@ -27,6 +28,7 @@ function Nav({ onGetStarted, onSignIn }) {
           </span>
         </div>
         <nav className="flex items-center gap-2 text-sm">
+          <ThemeToggle compact />
           <button onClick={onSignIn} className="px-3 py-1.5 text-white/70 hover:text-white">
             Sign in
           </button>

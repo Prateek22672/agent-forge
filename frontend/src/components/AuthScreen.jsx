@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { api, auth } from "../api";
 import Strands from "./Strands";
 import CrocsMark from "./CrocsMark";
+import ThemeToggle from "./ThemeToggle";
 import { TrustChips } from "./TrustBadges";
 
 // Login / signup. On success, stores the token and calls onAuthed(user).
@@ -191,11 +192,14 @@ export default function AuthScreen({ initialMode = "signup", onAuthed, onBack })
           >
             {mode === "signup" ? "Have an account? Sign in" : "New here? Sign up"}
           </button>
-          {onBack && (
-            <button onClick={onBack} className="hover:text-white">
-              ← Home
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            <ThemeToggle compact />
+            {onBack && (
+              <button onClick={onBack} className="hover:text-white">
+                ← Home
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
