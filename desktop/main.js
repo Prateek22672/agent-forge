@@ -11,8 +11,10 @@
 //
 // Set APP_URL to your Vercel URL (or pass AGENTFURY_URL at runtime).
 
-const { app, BrowserWindow, Tray, Menu, shell, nativeImage, ipcMain, globalShortcut } = require("electron");
+const { app, BrowserWindow, Tray, Menu, shell, nativeImage, ipcMain, globalShortcut, screen } = require("electron");
 const path = require("path");
+const { startLocalBackend, stopLocalBackend } = require("./local-backend");
+const fileSearch = require("./file-search");
 
 // Custom protocol used to bring the Google sign-in back from the system browser
 // into this app (see handleDeepLink). Registering early is important on Windows.
@@ -29,6 +31,7 @@ if (process.defaultApp) {
 const APP_URL = process.env.AGENTFURY_URL || "https://agentfury.foliofyx.in";
 
 let mainWindow = null;
+let spotWindow = null;
 let tray = null;
 let quitting = false;
 
@@ -45,6 +48,13 @@ function createWindow() {
     title: "AgentFury",
     autoHideMenuBar: true,
     webPreferences: {
+      // WITHOUT THIS the web app cannot tell it is running in the desktop shell:
+      // window.agentforge is undefined, so it asks the backend for a *browser*
+      // sign-in URL (desktop=false). Google's consent then completes in the
+      // browser and logs the WEBSITE in, while this window sits on the login
+      // screen forever — the deep link back to the app is never requested.
+      // It also powers ringAlarm(), so reminders can raise the window.
+      preload: path.join(__dirname, "preload.js"),
       // Keep timers (the reminder poller) running when the window is hidden in
       // the tray — this is what lets reminders fire in the background.
       backgroundThrottling: false,
@@ -140,6 +150,8 @@ function createTray() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "Open AgentFury", click: () => showWindow() },
+      { label: "Quick Find…", accelerator: "CommandOrControl+Shift+A", click: () => showSpotlight() },
+      { label: "Rebuild file index", click: () => { try { indexRoots(); } catch {} } },
       { type: "separator" },
       {
         label: "Quit",
@@ -163,10 +175,7 @@ function showWindow() {
 
 // Quick-open toggle, like ChatGPT desktop's Ctrl+Space: a global hotkey that
 // summons the assistant from anywhere, and hides it again if it's already the
-// focused window — so the same key both opens and dismisses. Registered from
-// whenReady() below; the accelerator is Ctrl+Space on Windows/Linux and
-// Cmd+Space isn't used (macOS reserves it for Spotlight), so mac gets
-// Cmd+Shift+Space instead.
+// focused window — so the same key both opens and dismisses.
 function toggleQuickOpen() {
   if (!mainWindow) {
     createWindow();
@@ -180,25 +189,130 @@ function toggleQuickOpen() {
   }
 }
 
-function registerQuickOpen() {
-  // Try the primary accelerator, then fall back if the OS/another app already
-  // owns it (registration returns false rather than throwing).
-  const candidates =
-    process.platform === "darwin"
-      ? ["CommandOrControl+Shift+Space", "CommandOrControl+Shift+A"]
-      : ["CommandOrControl+Space", "CommandOrControl+Shift+Space", "CommandOrControl+Shift+A"];
-  for (const accel of candidates) {
-    try {
-      if (globalShortcut.register(accel, toggleQuickOpen)) {
-        console.log("Quick-open hotkey registered:", accel);
-        return accel;
-      }
-    } catch (e) {
-      /* try the next candidate */
+// ---------------------------------------------------------------------------
+// Quick Find — the spotlight popup (Ctrl+Shift+A).
+//
+// This is the one thing the desktop app can do that the website never will:
+// answer about the user's OWN machine. It's a separate, frameless window over
+// LOCAL html — not the cloud app — so it opens instantly, works with no network,
+// and never waits on a backend cold start. Search runs in this process against
+// an in-memory index (see file-search.js); no file contents are read and nothing
+// is sent anywhere.
+// ---------------------------------------------------------------------------
+const SPOT_W = 680;
+const SPOT_H = 460;
+
+function createSpotlight() {
+  spotWindow = new BrowserWindow({
+    width: SPOT_W,
+    height: SPOT_H,
+    show: false,
+    frame: false,
+    resizable: false,
+    movable: true,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,      // a launcher shouldn't sit in the taskbar
+    alwaysOnTop: true,
+    transparent: true,
+    backgroundColor: "#00000000",
+    title: "AgentFury Quick Find",
+    webPreferences: {
+      preload: path.join(__dirname, "spotlight-preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  spotWindow.loadFile(path.join(__dirname, "spotlight.html"));
+
+  // Clicking away dismisses it, the way every launcher behaves.
+  spotWindow.on("blur", () => {
+    if (spotWindow && spotWindow.isVisible()) spotWindow.hide();
+  });
+  // Hide instead of destroy, so reopening is instant and the index stays warm.
+  spotWindow.on("close", (e) => {
+    if (!quitting) {
+      e.preventDefault();
+      spotWindow.hide();
     }
+  });
+}
+
+function showSpotlight() {
+  if (!spotWindow) createSpotlight();
+  // Open on whichever screen the mouse is on, sitting slightly above centre —
+  // that's where the eye already is, and it clears the taskbar.
+  try {
+    const pt = screen.getCursorScreenPoint();
+    const area = screen.getDisplayNearestPoint(pt).workArea;
+    spotWindow.setBounds({
+      x: Math.round(area.x + (area.width - SPOT_W) / 2),
+      y: Math.round(area.y + Math.max(60, area.height * 0.22)),
+      width: SPOT_W,
+      height: SPOT_H,
+    });
+  } catch {
+    spotWindow.center();
   }
-  console.warn("Could not register any quick-open hotkey (all taken).");
-  return null;
+  spotWindow.show();
+  spotWindow.focus();
+  spotWindow.webContents.send("spot:shown");
+}
+
+function toggleSpotlight() {
+  if (spotWindow && spotWindow.isVisible()) spotWindow.hide();
+  else showSpotlight();
+}
+
+// Index the folders people actually keep things in. Deliberately NOT the whole
+// drive: the home folder is where a person's files live, and skipping the rest
+// keeps the walk fast and the results relevant.
+function indexRoots() {
+  const pick = (n) => {
+    try { return app.getPath(n); } catch { return null; }
+  };
+  const downloads = pick("downloads");
+  fileSearch.setRoots(
+    [pick("desktop"), downloads, pick("documents"), pick("pictures"), pick("videos"), pick("music"), pick("home")],
+    downloads
+  );
+  fileSearch.reindex();
+}
+
+function registerHotkeys() {
+  // Each accelerator is tried in turn — register() returns false (rather than
+  // throwing) when the OS or another app already owns the combination.
+  const tryAll = (list, fn, label) => {
+    for (const accel of list) {
+      try {
+        if (globalShortcut.register(accel, fn)) {
+          console.log(label + " hotkey:", accel);
+          return accel;
+        }
+      } catch (e) {
+        /* try the next candidate */
+      }
+    }
+    console.warn("Could not register a " + label + " hotkey (all taken).");
+    return null;
+  };
+
+  // Quick Find is the headline shortcut, so it gets the memorable one.
+  const spot = tryAll(
+    ["CommandOrControl+Shift+A", "CommandOrControl+Alt+A", "CommandOrControl+Shift+F"],
+    toggleSpotlight,
+    "Quick Find"
+  );
+  // The full window keeps the ChatGPT-style summon.
+  const main = tryAll(
+    process.platform === "darwin"
+      ? ["CommandOrControl+Shift+Space", "CommandOrControl+Alt+Space"]
+      : ["CommandOrControl+Space", "CommandOrControl+Shift+Space"],
+    toggleQuickOpen,
+    "Open AgentFury"
+  );
+  return { spot, main };
 }
 
 // Handle agentforge://auth?token=...&google=connected — the OAuth callback
@@ -231,6 +345,53 @@ app.on("open-url", (e, url) => {
 
 // Let the web app ask us to open URLs (the Google consent) in the real browser.
 ipcMain.handle("open-external", (_e, url) => shell.openExternal(url));
+
+// ---- Quick Find IPC -------------------------------------------------------
+// Only the spotlight window may call these. Its renderer is local html we ship,
+// but the check costs nothing and means a compromised main-window page (which
+// loads remote content) can never reach the filesystem through these channels.
+const fromSpotlight = (e) => spotWindow && e.sender === spotWindow.webContents;
+
+ipcMain.handle("spot:search", (e, q) => {
+  if (!fromSpotlight(e)) return [];
+  try {
+    return fileSearch.search(q, 30);
+  } catch (err) {
+    console.warn("Quick Find search failed:", err.message);
+    return [];
+  }
+});
+
+ipcMain.handle("spot:open", async (e, p) => {
+  if (!fromSpotlight(e) || typeof p !== "string") return false;
+  if (spotWindow) spotWindow.hide();
+  // openPath returns an error STRING (empty on success) rather than throwing.
+  const err = await shell.openPath(p);
+  if (err) shell.showItemInFolder(p); // e.g. no handler for the type — show it instead
+  return !err;
+});
+
+ipcMain.handle("spot:reveal", (e, p) => {
+  if (!fromSpotlight(e) || typeof p !== "string") return false;
+  if (spotWindow) spotWindow.hide();
+  shell.showItemInFolder(p);
+  return true;
+});
+
+// "Ask AgentFury" — hand the question to the full assistant window.
+ipcMain.handle("spot:ask", (e, q) => {
+  if (!fromSpotlight(e)) return false;
+  if (spotWindow) spotWindow.hide();
+  showWindow();
+  try {
+    if (mainWindow) mainWindow.loadURL(`${APP_URL}/?q=${encodeURIComponent(String(q || ""))}`);
+  } catch {}
+  return true;
+});
+
+ipcMain.handle("spot:hide", (e) => {
+  if (fromSpotlight(e) && spotWindow) spotWindow.hide();
+});
 
 // A reminder alarm is due — bring the window to the front (even from the tray)
 // and flash the taskbar so it reads like a real alarm. The renderer keeps the
@@ -267,7 +428,16 @@ app.whenReady().then(() => {
     console.warn("Tray unavailable:", e.message);
   }
 
-  registerQuickOpen();
+  // Build the file index and the popup up front, in the background, so the very
+  // first Ctrl+Shift+A is as fast as every one after it.
+  try {
+    indexRoots();
+    createSpotlight();
+  } catch (e) {
+    console.warn("Quick Find unavailable:", e.message);
+  }
+
+  registerHotkeys();
 
   // Silent auto-update from GitHub Releases (no-op in dev / if unpublished).
   try {

@@ -20,7 +20,15 @@
   "build": {
     "appId": "com.agentforge.app",
     "productName": "AgentFury",
-    "files": ["main.js", "preload.js", "build/**/*"],
+    "files": [
+      "main.js",
+      "preload.js",
+      "local-backend.js",
+      "file-search.js",
+      "spotlight.html",
+      "spotlight-preload.js",
+      "build/**/*"
+    ],
     "protocols": [
       {
         "name": "AgentFury",
