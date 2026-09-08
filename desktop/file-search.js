@@ -32,6 +32,48 @@ const MAX_DEPTH = 7;
 const MAX_FILES = 80000;      // hard ceiling so a huge disk can't exhaust memory
 const REINDEX_MS = 5 * 60 * 1000;
 
+// What kind of thing is this? People look for "that PDF" or "the screenshot",
+// not for a MIME type — so the buckets match how someone actually remembers a
+// file, and the popup filters on exactly these.
+const KIND_EXT = {
+  image: ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "heic", "avif", "tif", "tiff", "ico", "psd"],
+  pdf: ["pdf"],
+  doc: ["doc", "docx", "odt", "rtf", "txt", "md", "pages", "epub"],
+  sheet: ["xls", "xlsx", "csv", "ods", "tsv"],
+  slide: ["ppt", "pptx", "odp", "key"],
+  video: ["mp4", "mkv", "mov", "avi", "webm", "m4v", "wmv", "flv"],
+  audio: ["mp3", "wav", "flac", "m4a", "aac", "ogg", "wma"],
+  code: ["js", "ts", "jsx", "tsx", "py", "java", "go", "rs", "rb", "php", "c", "cpp", "h", "hpp",
+         "cs", "sh", "ps1", "sql", "html", "css", "scss", "vue", "svelte", "kt", "swift", "r", "ipynb"],
+  data: ["json", "yaml", "yml", "toml", "ini", "env", "xml", "log", "db", "sqlite"],
+  archive: ["zip", "rar", "7z", "tar", "gz", "xz", "bz2", "iso"],
+  app: ["exe", "msi", "dmg", "appimage", "deb", "rpm", "apk", "bat", "cmd"],
+};
+
+const EXT_KIND = {};
+for (const [kind, exts] of Object.entries(KIND_EXT)) {
+  for (const e of exts) EXT_KIND[e] = kind;
+}
+
+function kindOf(name, isDir) {
+  if (isDir) return "folder";
+  const ext = path.extname(name).slice(1).toLowerCase();
+  return EXT_KIND[ext] || "other";
+}
+
+// Filter chips in the popup. "doc" deliberately spans Word, text and markdown —
+// to a person those are all "documents".
+const GROUPS = {
+  all: null,
+  image: ["image"],
+  pdf: ["pdf"],
+  doc: ["doc", "slide"],
+  sheet: ["sheet"],
+  media: ["video", "audio"],
+  code: ["code", "data"],
+  folder: ["folder"],
+};
+
 let index = [];               // { name, lower, dir, path, mtime, size, isDir }
 let indexing = false;
 let lastIndexed = 0;
@@ -83,7 +125,16 @@ function entryFor(full, name, isDir, st) {
     mtime = s.mtimeMs;
     size = s.size;
   } catch {}
-  return { name, lower: name.toLowerCase(), dir: path.dirname(full), path: full, mtime, size, isDir };
+  return {
+    name,
+    lower: name.toLowerCase(),
+    dir: path.dirname(full),
+    path: full,
+    mtime,
+    size,
+    isDir,
+    kind: kindOf(name, isDir),
+  };
 }
 
 function reindex() {
@@ -190,10 +241,18 @@ function recencyBoost(mtime) {
   return 0;
 }
 
-function search(query, limit = 25) {
+const kindFilter = (group) => {
+  const kinds = GROUPS[group];
+  if (!kinds) return () => true;
+  const set = new Set(kinds);
+  return (it) => set.has(it.kind);
+};
+
+function search(query, limit = 25, group = "all") {
   ensureFresh();
   const q = (query || "").trim().toLowerCase();
-  if (!q) return recent(limit);
+  const keep = kindFilter(group);
+  if (!q) return recent(limit, group);
 
   // Merge a live Downloads read into the index so a just-saved file is findable
   // before the next background pass picks it up.
@@ -203,11 +262,13 @@ function search(query, limit = 25) {
   for (const it of pool) {
     if (seenPath.has(it.path)) continue;
     seenPath.add(it.path);
+    if (!keep(it)) continue;
     let s = fuzzy(it.lower, q);
     if (s < 0) continue;
     s += recencyBoost(it.mtime);
     if (downloadsDir && it.dir === downloadsDir) s += 25;
-    if (it.isDir) s -= 15; // a file is usually what was meant
+    // A file is usually what was meant — unless folders are what was asked for.
+    if (it.isDir && group !== "folder") s -= 15;
     hits.push({ item: it, score: s });
   }
   hits.sort((a, b) => b.score - a.score);
@@ -215,19 +276,29 @@ function search(query, limit = 25) {
 }
 
 // The empty-query view: what changed most recently, Downloads first.
-function recent(limit = 25) {
+function recent(limit = 25, group = "all") {
   ensureFresh();
-  const dl = readDownloads(12);
+  const keep = kindFilter(group);
+  const dl = readDownloads(30).filter(keep);
   const seen = new Set(dl.map((d) => d.path));
   const rest = index
-    .filter((i) => !i.isDir && !seen.has(i.path) && i.mtime)
+    .filter((i) => !seen.has(i.path) && i.mtime && keep(i) && (!i.isDir || group === "folder"))
     .sort((a, b) => b.mtime - a.mtime)
     .slice(0, limit);
-  return dl.concat(rest).slice(0, limit);
+  return dl.slice(0, 12).concat(rest).slice(0, limit);
+}
+
+// Counts per filter chip, so the popup can grey out empty ones instead of
+// offering a tab that leads nowhere.
+function counts(query) {
+  ensureFresh();
+  const out = {};
+  for (const g of Object.keys(GROUPS)) out[g] = search(query, 999, g).length;
+  return out;
 }
 
 function stats() {
   return { files: index.length, indexing, lastIndexed };
 }
 
-module.exports = { setRoots, reindex, search, recent, readDownloads, stats };
+module.exports = { setRoots, reindex, search, recent, counts, readDownloads, stats, kindOf, GROUPS };

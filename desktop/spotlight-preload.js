@@ -1,13 +1,15 @@
 // Bridge for the spotlight window ONLY. Deliberately narrow: the popup can ask
-// for search results and ask the main process to open or reveal a path, but it
-// gets no filesystem handle of its own and no way to read a file's contents.
-// Every path it can act on is one the main process itself just returned.
+// for search results and act on a path the main process itself just returned.
+// It gets no filesystem handle, and cannot read a file's contents.
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("spotlight", {
-  search: (q) => ipcRenderer.invoke("spot:search", q),
+  search: (q, group) => ipcRenderer.invoke("spot:search", q, group),
   open: (p) => ipcRenderer.invoke("spot:open", p),
   reveal: (p) => ipcRenderer.invoke("spot:reveal", p),
+  copy: (p, mode) => ipcRenderer.invoke("spot:copy", p, mode),
+  share: (p) => ipcRenderer.invoke("spot:share", p),
+  trash: (p) => ipcRenderer.invoke("spot:trash", p),
   ask: (q) => ipcRenderer.invoke("spot:ask", q),
   hide: () => ipcRenderer.invoke("spot:hide"),
   onShow: (fn) => ipcRenderer.on("spot:shown", () => fn()),

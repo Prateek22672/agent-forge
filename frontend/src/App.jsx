@@ -23,6 +23,9 @@ export default function App() {
     }
 
     const token = auth.get();
+    // Desktop: let Quick Find answer questions on its own. The token goes to the
+    // Electron main process, not to the popup window.
+    try { window.agentforge?.setToken?.(token || ""); } catch {}
     if (!token) {
       setRoute("landing");
       return;
@@ -47,11 +50,15 @@ export default function App() {
   }, []);
 
   const onAuthed = (u) => {
+    // Keep Quick Find in step with the session — it can answer as soon as we can.
+    try { window.agentforge?.setToken?.(auth.get() || ""); } catch {}
     setUser(u);
     setRoute("app");
   };
   const logout = () => {
     auth.clear();
+    // Signing out here signs Quick Find out too.
+    try { window.agentforge?.setToken?.(""); } catch {}
     setUser(null);
     setRoute("landing");
   };

@@ -11,8 +11,12 @@
 //
 // Set APP_URL to your Vercel URL (or pass AGENTFURY_URL at runtime).
 
-const { app, BrowserWindow, Tray, Menu, shell, nativeImage, ipcMain, globalShortcut, screen } = require("electron");
+const {
+  app, BrowserWindow, Tray, Menu, shell, nativeImage, ipcMain,
+  globalShortcut, screen, clipboard,
+} = require("electron");
 const path = require("path");
+const { execFile } = require("child_process");
 const { startLocalBackend, stopLocalBackend } = require("./local-backend");
 const fileSearch = require("./file-search");
 
@@ -369,13 +373,83 @@ ipcMain.handle("open-external", (_e, url) => shell.openExternal(url));
 // loads remote content) can never reach the filesystem through these channels.
 const fromSpotlight = (e) => spotWindow && e.sender === spotWindow.webContents;
 
-ipcMain.handle("spot:search", (e, q) => {
-  if (!fromSpotlight(e)) return [];
+ipcMain.handle("spot:search", (e, q, group) => {
+  if (!fromSpotlight(e)) return { items: [], counts: {} };
   try {
-    return fileSearch.search(q, 30);
+    return {
+      items: fileSearch.search(q, 40, group || "all"),
+      counts: fileSearch.counts(q),
+    };
   } catch (err) {
     console.warn("Quick Find search failed:", err.message);
-    return [];
+    return { items: [], counts: {} };
+  }
+});
+
+// Copy the path as text, or the FILE itself so it can be pasted into Explorer,
+// an email, or a chat. Electron's clipboard has no native file-list format, so
+// on Windows we go through PowerShell's Set-Clipboard -LiteralPath, and on macOS
+// through AppleScript. Falls back to copying the path if that isn't available.
+ipcMain.handle("spot:copy", (e, p, mode) => {
+  if (!fromSpotlight(e) || typeof p !== "string") return false;
+  if (mode === "path") {
+    clipboard.writeText(p);
+    return "path";
+  }
+  try {
+    if (process.platform === "win32") {
+      execFile("powershell.exe", [
+        "-NoProfile", "-NonInteractive", "-Command",
+        "Set-Clipboard -LiteralPath @('" + p.replace(/'/g, "''") + "')",
+      ]);
+      return "file";
+    }
+    if (process.platform === "darwin") {
+      execFile("osascript", [
+        "-e",
+        'set the clipboard to (POSIX file "' + p.replace(/"/g, '\\"') + '")',
+      ]);
+      return "file";
+    }
+  } catch {
+    /* fall through to the path */
+  }
+  clipboard.writeText(p);
+  return "path";
+});
+
+// Hand the file to the OS share sheet / mail client. Windows has no scriptable
+// share sheet, so the honest fallback is to put the file on the clipboard and
+// say so, rather than pretending to share.
+ipcMain.handle("spot:share", async (e, p) => {
+  if (!fromSpotlight(e) || typeof p !== "string") return false;
+  if (process.platform === "darwin") {
+    try {
+      execFile("osascript", [
+        "-e",
+        'tell application "Finder" to activate',
+        "-e",
+        'tell application "System Events" to keystroke "i" using {command down, control down}',
+      ]);
+      return "sheet";
+    } catch {
+      /* fall back below */
+    }
+  }
+  clipboard.writeText(p);
+  return "copied";
+});
+
+// Move to the recycle bin — recoverable, never a hard delete.
+ipcMain.handle("spot:trash", async (e, p) => {
+  if (!fromSpotlight(e) || typeof p !== "string") return false;
+  try {
+    await shell.trashItem(p);
+    fileSearch.reindex();
+    return true;
+  } catch (err) {
+    console.warn("Trash failed:", err.message);
+    return false;
   }
 });
 
@@ -395,15 +469,83 @@ ipcMain.handle("spot:reveal", (e, p) => {
   return true;
 });
 
-// "Ask AgentFury" — hand the question to the full assistant window.
-ipcMain.handle("spot:ask", (e, q) => {
-  if (!fromSpotlight(e)) return false;
-  if (spotWindow) spotWindow.hide();
-  showWindow();
-  try {
-    if (mainWindow) mainWindow.loadURL(`${APP_URL}/?q=${encodeURIComponent(String(q || ""))}`);
-  } catch {}
+// Questions are answered IN the popup. Bouncing the user to the big window for
+// every question would defeat the point of a launcher — you ask, you read the
+// answer, you carry on. The session token is handed to us by the web app (see
+// preload.js "auth:token"); the popup never sees it.
+let sessionToken = "";
+let cachedAgentId = "";
+
+ipcMain.handle("auth:token", (e, token) => {
+  // Only the app window may set this — never the popup or any other page.
+  if (!mainWindow || e.sender !== mainWindow.webContents) return false;
+  sessionToken = typeof token === "string" ? token : "";
+  cachedAgentId = "";
   return true;
+});
+
+function apiRequest(method, apiPath, body) {
+  return new Promise((resolve, reject) => {
+    let url;
+    try { url = new URL(APP_URL + apiPath); } catch (e) { return reject(e); }
+    const lib = url.protocol === "http:" ? require("http") : require("https");
+    const payload = body ? JSON.stringify(body) : null;
+    const req = lib.request(
+      {
+        method,
+        hostname: url.hostname,
+        port: url.port || undefined,
+        path: url.pathname + url.search,
+        headers: {
+          "Content-Type": "application/json",
+          ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+          ...(payload ? { "Content-Length": Buffer.byteLength(payload) } : {}),
+        },
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (c) => (data += c));
+        res.on("end", () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            try { resolve(JSON.parse(data || "{}")); } catch (err) { reject(err); }
+          } else {
+            reject(new Error(`${res.statusCode} ${data.slice(0, 200)}`));
+          }
+        });
+      }
+    );
+    // The free backend can cold-start, but a launcher must not hang on it.
+    req.setTimeout(45000, () => req.destroy(new Error("timeout")));
+    req.on("error", reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+ipcMain.handle("spot:ask", async (e, q) => {
+  if (!fromSpotlight(e)) return { ok: false, error: "Not allowed." };
+  const question = String(q || "").trim();
+  if (!question) return { ok: false, error: "Ask me something." };
+  if (!sessionToken) {
+    return { ok: false, error: "Sign in to AgentFury first — open it from the tray." };
+  }
+  try {
+    if (!cachedAgentId) {
+      const agents = await apiRequest("GET", "/api/agents");
+      const list = Array.isArray(agents) ? agents : agents.items || [];
+      if (!list.length) return { ok: false, error: "No agent set up yet." };
+      cachedAgentId = list[0].id;
+    }
+    const r = await apiRequest("POST", `/api/agents/${cachedAgentId}/chat`, { message: question });
+    return { ok: true, text: r.reply || "(no answer)" };
+  } catch (err) {
+    const msg = /timeout/i.test(err.message)
+      ? "The server took too long to answer."
+      : /401/.test(err.message)
+        ? "Your session expired — open AgentFury from the tray to sign in again."
+        : "Couldn't reach AgentFury right now.";
+    return { ok: false, error: msg };
+  }
 });
 
 ipcMain.handle("spot:hide", (e) => {
@@ -433,7 +575,16 @@ ipcMain.handle("ring-alarm", () => {
 });
 
 app.whenReady().then(() => {
-  createWindow();
+  // Started by the OS at login (or with --hidden): come up as a background
+  // service — tray + hotkey + file index, no window. The point is that Quick
+  // Find answers instantly later, not that a window appears now.
+  const startedHidden =
+    process.argv.includes("--hidden") ||
+    (() => {
+      try { return app.getLoginItemSettings().wasOpenedAtLogin; } catch { return false; }
+    })();
+
+  if (!startedHidden) createWindow();
 
   // Cold start via the protocol (Windows): the URL is in the launch args.
   const coldDeep = process.argv.find((a) => a.startsWith(PROTOCOL + "://"));
@@ -445,8 +596,26 @@ app.whenReady().then(() => {
     console.warn("Tray unavailable:", e.message);
   }
 
+  // Quick Find has to answer whenever it's called, including when the user
+  // thinks the app is "closed" — closing only hides to the tray, but a fresh
+  // boot would leave nothing listening for the hotkey at all. Starting at login
+  // (hidden, no window) is what makes the shortcut always work.
+  try {
+    if (!app.isPackaged) {
+      // Never register a dev checkout as a login item.
+    } else if (!app.getLoginItemSettings().openAtLogin) {
+      app.setLoginItemSettings({
+        openAtLogin: true,
+        openAsHidden: true,           // macOS: start in the background
+        args: ["--hidden"],           // Windows: our own flag, read below
+      });
+    }
+  } catch (e) {
+    console.warn("Could not set launch-at-login:", e.message);
+  }
+
   // Build the file index and the popup up front, in the background, so the very
-  // first Ctrl+Shift+A is as fast as every one after it.
+  // first Ctrl+Space is as fast as every one after it.
   try {
     indexRoots();
     createSpotlight();

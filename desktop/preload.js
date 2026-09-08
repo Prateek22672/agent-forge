@@ -10,4 +10,8 @@ contextBridge.exposeInMainWorld("agentforge", {
   openExternal: (url) => ipcRenderer.invoke("open-external", url),
   // Bring the window to the front + flash the taskbar when a reminder alarm fires.
   ringAlarm: () => ipcRenderer.invoke("ring-alarm"),
+  // Hand the session token to the main process so Quick Find can answer
+  // questions on its own. It stays in the main process — the popup is never
+  // given the token, only the answer.
+  setToken: (token) => ipcRenderer.invoke("auth:token", token),
 });
