@@ -1,42 +1,22 @@
 import React from "react";
 
-// Left sidebar: section nav (Chats / Reminders / Notes) + chat history.
+// Left sidebar: chats, and only chats.
+//
+// This used to carry a five-button grid — Chats / Autopilot / Priority /
+// Planner / Brain — pinned above the history. It was navigation for its own
+// sake: four of those five almost always opened an empty page, and the grid
+// cost the sidebar its top third permanently. Those features now surface where
+// they're relevant (see WorkspaceBar), so the sidebar does one job well.
 export default function History({
   conversations,
   activeId,
   onPick,
   onNew,
   onDelete,
-  view,
-  setView,
 }) {
-  const NAV = [
-    ["chat", "Chats"],
-    ["autopilot", "Autopilot"],
-    ["priority", "Priority"],
-    ["planner", "Planner"],
-    ["brain", "Brain"],
-  ];
   return (
     <aside className="w-64 h-full min-h-0 border-r border-white/15 flex flex-col shrink-0">
-      {/* Section nav (pinned) */}
-      <div className="grid grid-cols-2 gap-1 p-2 border-b border-white/10 shrink-0">
-        {NAV.map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setView(key)}
-            className={`text-xs py-2 border ${
-              view === key
-                ? "bg-white text-black border-white font-semibold"
-                : "border-white/20 text-white/70 hover:border-white"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {view === "chat" && (
+      {(
         <>
           <button
             onClick={onNew}
@@ -79,13 +59,6 @@ export default function History({
             ))}
           </div>
         </>
-      )}
-
-      {view !== "chat" && (
-        <div className="flex-1 px-3 py-4 text-xs text-white/40">
-          Your personal {view} live here. The Assistant can add items for you from
-          chat.
-        </div>
       )}
     </aside>
   );
