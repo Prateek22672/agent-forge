@@ -13,40 +13,67 @@ honest map and the practical path for a beta.
 | `calendar.events` | **sensitive** | App verification (privacy policy, domain, video) |
 | `gmail.readonly`, `gmail.send` | **restricted** | App verification **+ CASA security assessment** (3rd-party audit, weeks, usually paid) |
 
-Your app uses Gmail (restricted) — the **highest** bar.
+Gmail read is restricted — the **highest** bar, and the only reason this is hard.
 
 ---
 
-## The practical path (recommended for your beta)
+## Two editions, one codebase
 
-### Step 1 — ship sign-in for everyone, no warning
-Set on the backend (Render env):
+Gmail is the entire problem, so it's the entire difference between the builds.
+One env var on the backend switches them; the extension is byte-identical.
+
+| | `GOOGLE_GMAIL_SCOPES` | Scopes requested | Verification |
+| --- | --- | --- | --- |
+| **Personal** (your own use) | `true` | Gmail + Calendar | Stay in Testing, add yourself as a Test user |
+| **Public** (published) | `false` | Calendar only | Free verification, days |
+
+Because the Public edition drops Gmail, it never touches a restricted scope —
+**no CASA assessment, no cost.** That's the whole point of the split.
+
+---
+
+## Publishing the Public edition (the submission path)
+
+### Step 1 — flip the edition
+On the public backend (Render env):
 ```
-GOOGLE_DATA_SCOPES=false
+GOOGLE_GMAIL_SCOPES=false
 ```
-Now "Sign in with Google" requests only login scopes → **no warning, any Google
-user can sign up.** Gmail/Calendar tools are gated until you verify (they return
-a friendly "reconnect to enable" message).
+Verify at `/api/auth/google/client-id` — the `scopes` array must contain no
+`gmail.*` entries and `gmail_enabled` must be `false`.
 
-Then in **Google Cloud Console → OAuth consent screen**: set **Publishing status
-= In production** (with only non-sensitive scopes, this needs no review).
+### Step 2 — prepare what Google asks for
+- **Domain ownership** verified in [Google Search Console](https://search.google.com/search-console)
+  — use the *same* Google account that owns the Cloud project.
+- A public **homepage** and **privacy policy**, both on that domain
+  (`docs/CROCS_SECURITY.md` is most of the policy content already).
+- An **app logo**, 120×120 PNG, no rounded corners.
 
-### Step 2 — Gmail for a few testers (no verification)
-Keep `GOOGLE_DATA_SCOPES=true` **and** stay in **Testing** mode, adding each
-tester under **OAuth consent screen → Test users** (up to 100). Testers will see
-the warning but can click **Advanced → Continue**. Good for a closed beta.
+### Step 3 — fill in the consent screen
+[Cloud Console → OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent):
+app name, support email, logo, app domain, homepage, privacy policy, developer
+contact email. Under **Data access**, remove every `gmail.*` scope so the listed
+scopes match what the Public build actually requests — a mismatch is the most
+common rejection.
 
-> You can run BOTH ideas by environment: data scopes ON for your private/test
-> deployment, OFF for the public-facing one.
+### Step 4 — record the demo video
+Unlisted YouTube link. It must show: the OAuth consent screen with your app name
+visible, the URL bar showing your verified domain, and each requested scope
+actually being used in the product.
 
-### Step 3 — full verification (Gmail for the public, no warning)
-Only when the product is proven. You'll need:
-- A public **homepage** + **privacy policy** URL (your `docs/CROCS_SECURITY.md`
-  is most of the policy content).
-- **Domain ownership verified** in Google Search Console.
-- An **app logo** and a **recorded demo video** of the consent flow.
-- Submit for **OAuth verification**; for Gmail (restricted), complete a **CASA
-  Tier-2 security assessment** (third party, typically a few weeks + annual cost).
+### Step 5 — submit
+**Publishing status → Publish app**, then **Submit for verification** with a
+one-line justification per scope. Sensitive-only review is typically days.
+
+### Keeping Gmail for yourself
+Leave your personal/local deployment on `GOOGLE_GMAIL_SCOPES=true` and stay in
+**Testing** mode with your account under **Test users** (up to 100). You'll see
+the "unverified" screen and click **Advanced → Continue** — fine for one user,
+and it needs no verification at all.
+
+> If you ever want Gmail for the *public*, that's OAuth verification **plus** a
+> CASA Tier-2 assessment: a third-party audit, renewed annually, typically
+> thousands per year. Avoid it unless Gmail becomes the product.
 
 ---
 
@@ -64,7 +91,7 @@ FRONTEND_ORIGIN=https://agentforge.vercel.app
 OAUTH_REDIRECT_URI=https://YOUR-BACKEND.onrender.com/api/connections/google/callback
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
-GOOGLE_DATA_SCOPES=false        # public beta (no warning) — or true for testers
+GOOGLE_GMAIL_SCOPES=false       # Public edition. true = Personal (Gmail on).
 ```
 
 **OAuth consent screen (also helps trust):**
@@ -75,8 +102,9 @@ GOOGLE_DATA_SCOPES=false        # public beta (no warning) — or true for teste
 ---
 
 ## TL;DR
-- **Remove the warning today:** `GOOGLE_DATA_SCOPES=false` + publish in production
-  → login works for everyone, no Gmail.
-- **Gmail now:** keep it on, add testers as Test users (warning, but works).
-- **Gmail for everyone, no warning:** full verification + CASA — a real project,
-  do it later.
+- **Public build:** `GOOGLE_GMAIL_SCOPES=false` → Calendar only → free
+  verification in days, no warning for anyone.
+- **Your build:** `GOOGLE_GMAIL_SCOPES=true`, stay in Testing with yourself as a
+  Test user → full Gmail, no verification needed.
+- **Gmail for the public:** verification + CASA audit. Expensive and annual —
+  only if Gmail becomes the product.

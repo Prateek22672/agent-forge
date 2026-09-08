@@ -143,14 +143,14 @@ async function googleConnect() {
     return { ok: false, error: "Google isn't configured on the server." };
   }
   const redirectUri = chrome.identity.getRedirectURL();
-  const dataScopes = [
-    "openid",
-    "email",
-    "profile",
-    "https://www.googleapis.com/auth/gmail.readonly",
-    "https://www.googleapis.com/auth/gmail.send",
-    "https://www.googleapis.com/auth/calendar.events",
-  ].join(" ");
+  // The server decides which scopes this build asks for (Personal edition =
+  // Gmail + Calendar, Public edition = Calendar only), so the extension is
+  // identical for both. Fall back to login-only if an older server omits them.
+  const dataScopes = (
+    Array.isArray(idRes.data.scopes) && idRes.data.scopes.length
+      ? idRes.data.scopes
+      : ["openid", "email", "profile"]
+  ).join(" ");
   const authUrl =
     "https://accounts.google.com/o/oauth2/v2/auth?" +
     new URLSearchParams({

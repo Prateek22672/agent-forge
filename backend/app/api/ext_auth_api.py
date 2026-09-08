@@ -34,10 +34,16 @@ router = APIRouter(prefix="/api/auth/google", tags=["auth"])
 @router.get("/client-id")
 def client_id():
     """Public: the OAuth client_id (not secret) so the extension can build the
-    Google consent URL itself via chrome.identity.launchWebAuthFlow."""
+    Google consent URL itself via chrome.identity.launchWebAuthFlow.
+
+    Also reports the scopes THIS build asks for, so the extension never hardcodes
+    them — flipping GOOGLE_GMAIL_SCOPES on the server switches the extension
+    between the Personal and Public editions with no extension change."""
     return {
         "client_id": settings.google_client_id,
         "configured": google_oauth.is_configured(),
+        "scopes": google_oauth.get_scopes(include_data=True),
+        "gmail_enabled": google_oauth.gmail_enabled(),
     }
 
 

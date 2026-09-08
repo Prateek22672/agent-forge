@@ -39,13 +39,35 @@ LOGIN_SCOPES = [
     "https://www.googleapis.com/auth/userinfo.profile",
 ]
 
-# RESTRICTED/SENSITIVE scopes — these require Google verification (+ a CASA
-# assessment for Gmail) to use beyond test users without the warning.
-DATA_SCOPES = [
+# RESTRICTED — Gmail read is the one scope Google makes expensive: verifying it
+# requires a paid third-party CASA security assessment, renewed yearly. Only the
+# Personal edition asks for it.
+GMAIL_SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.send",
+]
+
+# SENSITIVE — needs verification, but that's free and takes days, not months.
+CALENDAR_SCOPES = [
     "https://www.googleapis.com/auth/calendar.events",
 ]
+
+
+def data_scopes() -> list[str]:
+    """The sensitive scopes this build asks for — the only difference between
+    the Personal and Public editions of AgentFury.
+
+    Personal (GOOGLE_GMAIL_SCOPES=true):  Gmail + Calendar.
+    Public   (GOOGLE_GMAIL_SCOPES=false): Calendar only, so the app can clear
+    Google verification for free and users never meet the "unverified" screen."""
+    if not settings.google_data_scopes:
+        return []
+    return (GMAIL_SCOPES if settings.google_gmail_scopes else []) + CALENDAR_SCOPES
+
+
+def gmail_enabled() -> bool:
+    """True on the Personal edition. Gmail features gate on this."""
+    return bool(settings.google_data_scopes and settings.google_gmail_scopes)
 
 
 def get_scopes(include_data: bool = False) -> list[str]:
@@ -55,7 +77,11 @@ def get_scopes(include_data: bool = False) -> list[str]:
     login scopes (no 'unverified app' warning — everyone signs in cleanly), and
     the Gmail/Calendar scopes are requested later, ONLY when the user actually
     connects those features (`include_data=True`)."""
-    return LOGIN_SCOPES + (DATA_SCOPES if include_data else [])
+    return LOGIN_SCOPES + (data_scopes() if include_data else [])
+
+
+# Back-compat for anything still importing the old flat list.
+DATA_SCOPES = GMAIL_SCOPES + CALENDAR_SCOPES
 
 
 # Broad set used when EXCHANGING the code — accepts whichever tier Google grants
