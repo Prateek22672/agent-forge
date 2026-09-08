@@ -149,8 +149,8 @@ function createTray() {
   tray.setToolTip("AgentFury");
   tray.setContextMenu(
     Menu.buildFromTemplate([
+      { label: "Quick Find…", accelerator: "CommandOrControl+Space", click: () => showSpotlight() },
       { label: "Open AgentFury", click: () => showWindow() },
-      { label: "Quick Find…", accelerator: "CommandOrControl+Shift+A", click: () => showSpotlight() },
       { label: "Rebuild file index", click: () => { try { indexRoots(); } catch {} } },
       { type: "separator" },
       {
@@ -298,17 +298,34 @@ function registerHotkeys() {
     return null;
   };
 
-  // Quick Find is the headline shortcut, so it gets the memorable one.
-  const spot = tryAll(
-    ["CommandOrControl+Shift+A", "CommandOrControl+Alt+A", "CommandOrControl+Shift+F"],
-    toggleSpotlight,
-    "Quick Find"
-  );
-  // The full window keeps the ChatGPT-style summon.
-  const main = tryAll(
+  // Quick Find owns the summon keys. Reaching for a hotkey means "let me find
+  // something fast" — that's the popup, not a full window that covers the screen
+  // and takes a beat to load. macOS keeps Cmd+Space for Spotlight, so it starts
+  // one step along. The full window is a click away in the tray, and the popup
+  // hands off to it whenever a request needs the whole assistant.
+  const spotKeys =
     process.platform === "darwin"
-      ? ["CommandOrControl+Shift+Space", "CommandOrControl+Alt+Space"]
-      : ["CommandOrControl+Space", "CommandOrControl+Shift+Space"],
+      ? ["CommandOrControl+Shift+Space", "CommandOrControl+Shift+A", "CommandOrControl+Alt+A"]
+      : ["CommandOrControl+Space", "CommandOrControl+Shift+A", "CommandOrControl+Alt+A"];
+
+  let spot = null;
+  // Register every accelerator that's free, not just the first — muscle memory
+  // differs, and a second binding costs nothing.
+  for (const accel of spotKeys) {
+    try {
+      if (globalShortcut.register(accel, toggleSpotlight)) {
+        if (!spot) spot = accel;
+        console.log("Quick Find hotkey:", accel);
+      }
+    } catch (e) {
+      /* try the next candidate */
+    }
+  }
+  if (!spot) console.warn("Could not register a Quick Find hotkey (all taken).");
+
+  // The full window keeps a summon of its own, out of Quick Find's way.
+  const main = tryAll(
+    ["CommandOrControl+Shift+Enter", "CommandOrControl+Alt+Space"],
     toggleQuickOpen,
     "Open AgentFury"
   );
