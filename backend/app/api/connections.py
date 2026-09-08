@@ -115,19 +115,21 @@ def _desktop_bridge(query: str) -> HTMLResponse:
 <body><div class="card">
   <div class="tag">AGENTFURY</div>
   <h1>You're signed in &#10003;</h1>
-  <p>Returning you to the AgentFury app&hellip;</p>
-  <a class="btn" href="{deep}" id="open">Open AgentFury</a>
-  <p style="margin-top:18px">If the app doesn't open, click the button above.<br/>
-     You can close this tab afterwards.</p>
+  <p>AgentFury is logging you in&hellip;<br/>You can close this tab.</p>
+  <p style="margin-top:22px;font-size:12.5px;color:#6a6a6a">
+    Still on the sign-in screen?
+    <a href="{deep}" id="open" style="color:#9aa8ff">Open AgentFury</a>
+  </p>
 </div>
 <script>
-  // Hand control back to the desktop app. A click (button) reliably launches the
-  // custom scheme; we also try automatically right away.
-  var url = {deep_js};
-  function go(){{ window.location.href = url; }}
-  setTimeout(go, 300);
+  // The app is polling for this session and will log itself in within a second
+  // or two, so DON'T auto-launch the custom scheme — that pops the browser's
+  // "Open AgentFury desktop app?" dialog and makes the user click through a
+  // prompt to finish something that already finished. The link stays as a
+  // manual fallback for anyone whose app isn't running.
   document.getElementById('open').addEventListener('click', function(e){{
-    e.preventDefault(); go();
+    e.preventDefault();
+    window.location.href = {deep_js};
   }});
 </script>
 </body></html>"""
@@ -190,6 +192,13 @@ def google_callback(
 
         record_login(db, user, "desktop" if desktop else "web", method="google")
         token = create_token(user.id)
+        # Desktop: park the session against the app's one-time nonce so it can
+        # collect it by polling. That's what makes signing in finish on its own —
+        # the deep link below still works, but nobody has to click it.
+        if desktop and data.get("n"):
+            from app.api.auth_api import park_desktop_session
+
+            park_desktop_session(data["n"], token)
         # Hand the session token back (browser query, or desktop deep link).
         return _back(f"token={token}&google=connected")
 

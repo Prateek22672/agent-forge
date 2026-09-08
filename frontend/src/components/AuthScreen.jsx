@@ -11,6 +11,10 @@ export default function AuthScreen({ initialMode = "signup", onAuthed, onBack })
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [googleOn, setGoogleOn] = useState(false);
+  // Desktop only: true while the consent is open in the user's browser and we're
+  // waiting for that session to come back.
+  const [waiting, setWaiting] = useState(false);
+  const pollRef = React.useRef(null);
 
   React.useEffect(() => {
     api
@@ -19,6 +23,39 @@ export default function AuthScreen({ initialMode = "signup", onAuthed, onBack })
       .catch(() => setGoogleOn(false));
   }, []);
 
+  // Never leave a poll running behind a closed screen.
+  React.useEffect(() => () => clearTimeout(pollRef.current), []);
+
+  // Desktop: after the browser finishes the consent, collect the session by
+  // polling. The deep link back into the app works, but the browser guards
+  // custom schemes with an "Open AgentFury desktop app?" dialog, so relying on
+  // it means the user has to click a prompt to finish signing in. Polling
+  // finishes on its own, usually within a second of granting consent.
+  const waitForDesktopSession = (nonce) => {
+    const started = Date.now();
+    const tick = async () => {
+      if (Date.now() - started > 5 * 60 * 1000) {
+        setWaiting(false);
+        setErr("Sign-in timed out. Please try again.");
+        return;
+      }
+      try {
+        const r = await api.googleDesktopSession(nonce);
+        if (r?.status === "ready" && r.token) {
+          auth.set(r.token);
+          const me = await api.me();
+          setWaiting(false);
+          onAuthed(me);
+          return;
+        }
+      } catch {
+        // Backend waking or a blip — keep waiting rather than failing the login.
+      }
+      pollRef.current = setTimeout(tick, 1500);
+    };
+    pollRef.current = setTimeout(tick, 1200);
+  };
+
   const continueWithGoogle = async () => {
     setErr("");
     try {
@@ -26,15 +63,22 @@ export default function AuthScreen({ initialMode = "signup", onAuthed, onBack })
       // exposes openExternal (newer builds). Older installs fall back to the
       // in-window flow so they keep working.
       const desktop = !!(window.agentforge?.isDesktop && window.agentforge?.openExternal);
-      const { auth_url } = await api.googleAuthStart(desktop);
+      // One-time id tying this app window to the consent about to happen.
+      const nonce = desktop
+        ? (crypto.randomUUID?.() || String(Math.random()).slice(2) + Date.now())
+        : "";
+      const { auth_url } = await api.googleAuthStart(desktop, nonce);
       if (desktop) {
-        // Open consent in the real browser (has your Google session → account
-        // picker); it returns to the app via the agentforge:// deep link.
+        // Open consent in the real browser (it has the user's Google session, so
+        // they get the account picker), then wait for the session to come back.
         window.agentforge.openExternal(auth_url);
+        setWaiting(true);
+        waitForDesktopSession(nonce);
       } else {
         window.location.href = auth_url;
       }
     } catch (e) {
+      setWaiting(false);
       setErr("Google sign-in isn't available right now.");
     }
   };
@@ -81,9 +125,11 @@ export default function AuthScreen({ initialMode = "signup", onAuthed, onBack })
           <>
             <button
               onClick={continueWithGoogle}
-              className="w-full flex items-center justify-center gap-2 bg-white text-black py-2.5 font-semibold hover:bg-white/85"
+              disabled={waiting}
+              className="w-full flex items-center justify-center gap-2 bg-white text-black py-2.5 font-semibold hover:bg-white/85 disabled:opacity-60"
             >
-              <GoogleGlyph /> Continue with Google
+              <GoogleGlyph />
+              {waiting ? "Waiting for your browser…" : "Continue with Google"}
             </button>
             <div className="text-[11px] text-white/40 text-center mt-2">
               Just signs you in — nothing sensitive. Connect Gmail &amp; Calendar

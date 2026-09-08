@@ -1,6 +1,8 @@
 """Auth endpoints: signup, login, and 'who am I'."""
 from __future__ import annotations
 
+import time as _time
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
@@ -32,19 +34,71 @@ _login_limit = rate_limit(10, 60)   # 10 / minute / IP
 _signup_limit = rate_limit(5, 300)  # 5 / 5 min / IP
 
 
+# Desktop sign-in handoff.
+#
+# The consent has to run in the user's real browser (Google blocks embedded
+# webviews), so the finished session has to get back into the app somehow. The
+# agentforge:// deep link does that, but the browser puts a "Open AgentFury
+# desktop app?" prompt in front of it every time — the user has to click through
+# a dialog to finish signing in.
+#
+# So the app also polls. It sends a one-time nonce with the consent, and the
+# callback parks the session token here under that nonce. The app picks it up on
+# its next poll and logs itself in — no dialog, no click. The deep link stays as
+# a belt-and-braces fallback for anyone who clicks it first.
+#
+# Held in memory on purpose: these live for seconds, must not outlive a restart,
+# and the service runs a single uvicorn worker (see render.yaml), so there is no
+# second process to share them with.
+_DESKTOP_TTL = 300  # seconds a finished session waits to be collected
+_desktop_sessions: dict[str, tuple[float, str]] = {}  # nonce -> (expires_at, token)
+
+
+def _desktop_sweep() -> None:
+    now = _time.time()
+    for k in [k for k, (exp, _) in _desktop_sessions.items() if exp < now]:
+        _desktop_sessions.pop(k, None)
+
+
+def park_desktop_session(nonce: str, token: str) -> None:
+    """Called by the OAuth callback once the browser side has finished."""
+    if not nonce:
+        return
+    _desktop_sweep()
+    _desktop_sessions[nonce] = (_time.time() + _DESKTOP_TTL, token)
+
+
 @router.get("/google/start")
-def google_login_start(desktop: bool = False):
+def google_login_start(desktop: bool = False, nonce: str = ""):
     """Public: begin 'Sign in with Google'. Requests Gmail scopes too, so login
     and the Gmail connection happen in a single consent. `desktop=true` makes the
-    callback hand the session back to the desktop app via a deep link."""
+    callback hand the session back to the desktop app; `nonce` (desktop only)
+    lets the app collect that session by polling instead of waiting on the deep
+    link, so signing in needs no dialog and no click."""
     if not google_oauth.is_configured():
         raise HTTPException(
             400,
             "Google login isn't set up yet. Add GOOGLE_CLIENT_ID and "
             "GOOGLE_CLIENT_SECRET to .env (see docs/CONNECT_GOOGLE.md).",
         )
-    state = sign_oauth_state({"login": True, "desktop": desktop})
+    # Cap the nonce so a caller can't park unbounded keys in memory.
+    state = sign_oauth_state({"login": True, "desktop": desktop, "n": (nonce or "")[:64]})
     return {"auth_url": google_oauth.build_auth_url(state)}
+
+
+@router.get("/google/desktop-session")
+def google_desktop_session(nonce: str = ""):
+    """The desktop app polls this while the consent runs in the browser.
+
+    One-shot: a token is handed out once and immediately dropped, so a nonce that
+    leaks cannot be replayed to mint a second session."""
+    _desktop_sweep()
+    if not nonce:
+        return {"status": "pending"}
+    found = _desktop_sessions.pop(nonce, None)
+    if not found:
+        return {"status": "pending"}
+    return {"status": "ready", "token": found[1]}
 
 
 @router.get("/google/configured")

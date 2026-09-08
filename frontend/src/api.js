@@ -69,8 +69,14 @@ export const api = {
   me: () => http("GET", "/auth/me"),
   updateProfile: (data) => http("PATCH", "/auth/me", data),
   googleAuthConfigured: () => http("GET", "/auth/google/configured"),
-  googleAuthStart: (desktop) =>
-    http("GET", `/auth/google/start${desktop ? "?desktop=true" : ""}`),
+  googleAuthStart: (desktop, nonce) =>
+    http(
+      "GET",
+      `/auth/google/start${desktop ? `?desktop=true${nonce ? `&nonce=${encodeURIComponent(nonce)}` : ""}` : ""}`
+    ),
+  // Desktop only: collect the session the browser consent just produced.
+  googleDesktopSession: (nonce) =>
+    http("GET", `/auth/google/desktop-session?nonce=${encodeURIComponent(nonce)}`),
 
   listAgents: () => http("GET", "/agents"),
   createAgent: (data) => http("POST", "/agents", data),
