@@ -1,6 +1,9 @@
 // Cosmetic ad + anti-adblock-nag removal on every page. The DNR rules block ad
-// NETWORK requests; this hides leftover ad containers and removes "disable your
-// ad blocker" nag overlays (restoring any scroll-lock they apply).
+// NETWORK requests; this takes the leftovers out of the page entirely — the ad
+// element, any ad video/audio still playing inside it, AND the empty wrapper it
+// leaves behind, so there is no blank gap where the ad used to be. It also
+// removes "disable your ad blocker" nag overlays (restoring any scroll-lock
+// they apply).
 //
 // LIGHTWEIGHT BY DESIGN — it must never freeze or heat a tab:
 //   * NO whole-page MutationObserver (that fed back on itself and pegged the CPU)
@@ -25,20 +28,41 @@
   } catch {}
 
   // Specific leftover ad containers (already network-blocked; this hides shells).
+  //
+  // NOTE ON MATCHING: [class*="ad-slot"] is a trap — a substring match also hits
+  // "upload-slot", just as "ad-container" hits "head-container" and "ad-wrapper"
+  // hits "download-wrapper". Every ad-* name below is therefore anchored to the
+  // START of a class token (^= for the first class, *=" " for any later one), so
+  // we only ever match a class that really begins "ad-".
+  const adToken = (t) => ['[class^="' + t + '"]', '[class*=" ' + t + '"]'];
   const AD = [
     ".adsbygoogle",
     "ins.adsbygoogle",
     '[id*="google_ads"]',
+    '[id^="google_ads_iframe"]',
+    '[id^="div-gpt-ad"]',
+    "[data-google-query-id]",
     '[id*="-ad-slot"]',
-    '[class*="ad-slot"]',
-    '[class*="ad-banner"]',
-    '[class*="adBanner"]',
+    ...adToken("ad-slot"),
+    ...adToken("ad-banner"),
+    ...adToken("ad-container"),
+    ...adToken("ad-wrapper"),
+    ...adToken("adBanner"),
+    ...adToken("sticky-ad"),
+    ...adToken("ad-sticky"),
+    '[id^="sticky-ad"]',
+    '[class*="sponsored-post"]',
     '[aria-label="Advertisement"]',
-    '[data-ad-slot]',
+    '[aria-label^="Ads by"]',
+    "[data-ad-slot]",
+    "[data-ad-client]",
     'iframe[src*="doubleclick"]',
     'iframe[src*="googlesyndication"]',
+    'iframe[src*="adservice."]',
     "#taboola-below-article",
     '[id^="taboola"]',
+    '[id^="outbrain"]',
+    '[class*="OUTBRAIN"]',
   ];
 
   // Nag overlays are matched by name only — no full-DOM scan.
@@ -52,6 +76,46 @@
     }
   };
 
+  // An ad video that is merely detached can keep playing audio in some engines,
+  // and an ad iframe can keep running timers. Stop them before dropping the node.
+  const silence = (el) => {
+    const stop = (m) => {
+      try { m.pause(); } catch {}
+      try { m.muted = true; } catch {}
+      try { m.removeAttribute("src"); m.load(); } catch {}
+    };
+    try {
+      if (el.tagName === "VIDEO" || el.tagName === "AUDIO") stop(el);
+      el.querySelectorAll("video,audio").forEach(stop);
+      if (el.tagName === "IFRAME") { try { el.src = "about:blank"; } catch {} }
+      el.querySelectorAll("iframe").forEach((f) => { try { f.src = "about:blank"; } catch {} });
+    } catch {}
+  };
+
+  // Removing the ad often leaves its wrapper behind holding reserved height —
+  // a blank gap mid-article. Walk up a few levels and drop wrappers that are now
+  // genuinely empty. Guarded hard: anything with real content, or the page's own
+  // structure, is left alone.
+  const KEEP = /^(BODY|HTML|HEAD|MAIN|ARTICLE|NAV|HEADER|FOOTER|SECTION|FORM|UL|OL|TABLE)$/;
+  const collapse = (start) => {
+    let p = start;
+    for (let hops = 0; p && hops < 3; hops++) {
+      if (KEEP.test(p.tagName) || p.id === "content" || p.childElementCount > 0) break;
+      if ((p.textContent || "").trim()) break;
+      const next = p.parentElement;
+      try { p.remove(); } catch { break; }
+      p = next;
+    }
+  };
+
+  const nuke = (el) => {
+    if (!el || !el.parentElement) return;
+    const parent = el.parentElement;
+    silence(el);
+    try { el.remove(); } catch { return; }
+    collapse(parent);
+  };
+
   const clean = () => {
     if (isPaused()) return;
     try {
@@ -60,7 +124,7 @@
       AD.forEach((s) => {
         let nodes;
         try { nodes = document.querySelectorAll(s); } catch { return; }
-        nodes.forEach((el) => el && el.remove());
+        nodes.forEach(nuke);
       });
 
       // 2. Anti-adblock nag overlays — only elements literally named like a
@@ -72,7 +136,7 @@
         let cs;
         try { cs = getComputedStyle(el); } catch { return; }
         if (cs.position === "fixed" || cs.position === "absolute" || (+cs.zIndex || 0) > 999) {
-          el.remove();
+          nuke(el);
           removedNag++;
         }
       });

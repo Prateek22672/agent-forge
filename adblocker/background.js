@@ -43,6 +43,17 @@ function addTotal(n) {
   });
 }
 
+// Seconds of ad the user never had to sit through. Measured for real when we
+// fast-forward a slip-through, conservatively estimated when an ad break is
+// pruned out of the player response (a break that never plays has no
+// observable length).
+function addTime(sec) {
+  if (!(sec > 0) || PAUSED) return;
+  chrome.storage.local.get("timeSaved", (s) => {
+    chrome.storage.local.set({ timeSaved: Math.round((s.timeSaved || 0) + sec) });
+  });
+}
+
 async function badgeCount(tabId) {
   try {
     const t = await chrome.action.getBadgeText({ tabId });
@@ -83,11 +94,16 @@ chrome.runtime.onStartup.addListener(init);
 init();
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  // Cosmetic / YouTube removals count toward the totals too.
-  if (msg && msg.type === "NOADS_REMOVED" && msg.n > 0 && !PAUSED) {
-    const tabId = sender.tab && sender.tab.id;
-    if (tabId != null) tabCosmetic[tabId] = (tabCosmetic[tabId] || 0) + msg.n;
-    addTotal(msg.n);
+  // Cosmetic / YouTube removals count toward the totals too. A message may
+  // carry a count, a time saving, or both — a fast-forwarded slip-through
+  // reports only time, since yt-adfree.js owns the de-duplicated ad tally.
+  if (msg && msg.type === "NOADS_REMOVED" && !PAUSED) {
+    if (msg.n > 0) {
+      const tabId = sender.tab && sender.tab.id;
+      if (tabId != null) tabCosmetic[tabId] = (tabCosmetic[tabId] || 0) + msg.n;
+      addTotal(msg.n);
+    }
+    if (msg.sec > 0) addTime(msg.sec);
   }
   // Popup asks for the active tab's live count: native badge + cosmetic.
   if (msg && msg.type === "NOADS_TAB_COUNT") {

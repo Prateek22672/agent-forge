@@ -10,11 +10,23 @@ function hostFrom(url) {
   }
 }
 
+// Seconds → "45s" / "12m 05s" / "3h 20m".
+function fmtTime(s) {
+  s = Math.round(s || 0);
+  if (s < 60) return s + "s";
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + "m " + String(s % 60).padStart(2, "0") + "s";
+  const h = Math.floor(m / 60);
+  return h + "h " + String(m % 60).padStart(2, "0") + "m";
+}
+
 let activeTab = null;
 let currentHost = null;
 
 async function refresh() {
-  const s = await chrome.storage.local.get(["paused", "pausedHosts", "totalBlocked"]);
+  const s = await chrome.storage.local.get([
+    "paused", "pausedHosts", "totalBlocked", "timeSaved", "notice",
+  ]);
   const globalOn = s.paused !== true;
   const pausedHosts = Array.isArray(s.pausedHosts) ? s.pausedHosts : [];
 
@@ -26,6 +38,8 @@ async function refresh() {
 
   $("power").checked = globalOn;
   $("total").textContent = (s.totalBlocked || 0).toLocaleString();
+  $("saved").textContent = fmtTime(s.timeSaved || 0);
+  $("notice").checked = s.notice !== false;
 
   // Site row.
   $("host").textContent = currentHost || "This browser page";
@@ -82,6 +96,12 @@ $("power").onchange = () => {
     reloadActive();
     setTimeout(refresh, 60);
   });
+};
+
+// The on-video notice is picked up live by the content script's storage
+// listener, so this needs no tab reload.
+$("notice").onchange = () => {
+  chrome.storage.local.set({ notice: $("notice").checked });
 };
 
 $("pauseSite").onclick = async () => {
