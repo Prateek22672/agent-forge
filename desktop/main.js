@@ -19,6 +19,8 @@ const path = require("path");
 const { execFile } = require("child_process");
 const { startLocalBackend, stopLocalBackend } = require("./local-backend");
 const fileSearch = require("./file-search");
+const contentIndex = require("./content-index");
+const settings = require("./settings");
 
 // Custom protocol used to bring the Google sign-in back from the system browser
 // into this app (see handleDeepLink). Registering early is important on Windows.
@@ -374,17 +376,55 @@ ipcMain.handle("open-external", (_e, url) => shell.openExternal(url));
 const fromSpotlight = (e) => spotWindow && e.sender === spotWindow.webContents;
 
 ipcMain.handle("spot:search", (e, q, group) => {
-  if (!fromSpotlight(e)) return { items: [], counts: {} };
+  if (!fromSpotlight(e)) return { items: [], counts: {}, inside: [] };
   try {
     return {
       items: fileSearch.search(q, 40, group || "all"),
       counts: fileSearch.counts(q),
+      // Matches on what's WRITTEN in the files, not just their names. Empty
+      // unless the user has turned content reading on.
+      inside: (q || "").trim().length > 2 ? contentIndex.search(q, 4) : [],
+      contentMode: settings.get().contentMode,
     };
   } catch (err) {
     console.warn("Quick Find search failed:", err.message);
-    return { items: [], counts: {} };
+    return { items: [], counts: {}, inside: [] };
   }
 });
+
+// Storage choice. Turning content reading on triggers the first index build.
+ipcMain.handle("spot:settings", (e, patch) => {
+  if (!fromSpotlight(e)) return null;
+  if (patch && typeof patch.contentMode === "string") {
+    const before = settings.get().contentMode;
+    const s = settings.setContentMode(patch.contentMode);
+    if (s.contentMode !== before) {
+      contentIndex.setEnabled(s.contentMode !== "off");
+      if (s.contentMode !== "off") buildContentIndex();
+    }
+  }
+  return { ...settings.get(), index: contentIndex.stats() };
+});
+
+// Read the user's files and build the searchable index. Only ever called when
+// the setting says we may.
+let contentBuilding = false;
+async function buildContentIndex() {
+  if (contentBuilding) return;
+  const mode = settings.get().contentMode;
+  if (mode === "off") return;
+  contentBuilding = true;
+  try {
+    // Reuse what the filename index already walked — no second pass over disk.
+    const files = fileSearch.search("", 20000, "all");
+    await contentIndex.build(files);
+    console.log("Content index:", JSON.stringify(contentIndex.stats()));
+  } catch (err) {
+    console.warn("Content index build failed:", err.message);
+  } finally {
+    contentBuilding = false;
+  }
+}
 
 // Copy the path as text, or the FILE itself so it can be pasted into Explorer,
 // an email, or a chat. Electron's clipboard has no native file-list format, so
@@ -536,8 +576,28 @@ ipcMain.handle("spot:ask", async (e, q) => {
       if (!list.length) return { ok: false, error: "No agent set up yet." };
       cachedAgentId = list[0].id;
     }
-    const r = await apiRequest("POST", `/api/agents/${cachedAgentId}/chat`, { message: question });
-    return { ok: true, text: r.reply || "(no answer)" };
+
+    // Retrieval-augmented, with the retrieval done HERE. The whole index stays
+    // on the laptop; what leaves is only the few passages that actually match
+    // the question, and only because a question was asked. The model is told
+    // plainly that the passages are the user's own files, and to say so when
+    // they don't contain the answer rather than inventing one.
+    const hits = contentIndex.search(question, 4);
+    let message = question;
+    let sources = [];
+    if (hits.length) {
+      sources = hits.map((h) => ({ name: h.file.name, path: h.file.path }));
+      const context = hits
+        .map((h, i) => `[${i + 1}] ${h.file.name}\n${h.snippet}`)
+        .join("\n\n");
+      message =
+        "Answer using these excerpts from the user's own files on this laptop. " +
+        "Cite the file name you used. If they don't contain the answer, say so plainly.\n\n" +
+        `${context}\n\nQuestion: ${question}`;
+    }
+
+    const r = await apiRequest("POST", `/api/agents/${cachedAgentId}/chat`, { message });
+    return { ok: true, text: r.reply || "(no answer)", sources };
   } catch (err) {
     const msg = /timeout/i.test(err.message)
       ? "The server took too long to answer."
@@ -617,8 +677,20 @@ app.whenReady().then(() => {
   // Build the file index and the popup up front, in the background, so the very
   // first Ctrl+Space is as fast as every one after it.
   try {
+    const dir = app.getPath("userData");
+    settings.init(dir);
+    contentIndex.setStatePath(path.join(dir, "content-index.json"));
+    contentIndex.setEnabled(settings.get().contentMode !== "off");
+
     indexRoots();
     createSpotlight();
+
+    // Content reading is opt-in, so this only runs once the user has agreed.
+    // Reuse the saved index if there is one; otherwise build after the filename
+    // walk has settled, so the first hotkey press isn't competing with it.
+    if (settings.get().contentMode !== "off") {
+      if (!contentIndex.load()) setTimeout(buildContentIndex, 8000);
+    }
   } catch (e) {
     console.warn("Quick Find unavailable:", e.message);
   }

@@ -84,7 +84,27 @@
   .answer h4 { margin: 0 0 7px; font-size: 11px; text-transform: uppercase;
                letter-spacing: .12em; color: var(--accent); font-weight: 600; }
   .answer p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--fg); white-space: pre-wrap; }
-  .answer .src { margin-top: 9px; font-size: 11px; color: var(--dim); }
+  .answer .src { margin-top: 10px; font-size: 11px; color: var(--dim);
+                 display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .answer .src b { font-weight: 500; color: var(--muted); }
+  .srcpill { background: var(--chip); border-radius: 999px; padding: 3px 9px; color: var(--muted); }
+
+  /* ---- inside-file matches ---- */
+  .inside .ico { background: rgba(110,128,255,.16); }
+  .snip { font-size: 11.5px; color: var(--muted); line-height: 1.45; margin-top: 3px;
+          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .snip mark { background: rgba(139,155,255,.26); color: var(--fg); border-radius: 3px; padding: 0 2px; }
+
+  /* ---- consent ---- */
+  .consent { margin: 6px 8px 10px; padding: 15px 17px; border-radius: 11px;
+             background: rgba(110,128,255,.09); border: 1px solid rgba(110,128,255,.24); }
+  .consent h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+  .consent p { margin: 0 0 12px; font-size: 12px; line-height: 1.6; color: var(--muted); }
+  .consent .btns { display: flex; gap: 8px; }
+  .consent button { border: 0; border-radius: 8px; padding: 7px 14px; font-size: 12px;
+                    font-weight: 600; cursor: default; }
+  .cprimary { background: #fff; color: #111; }
+  .cghost { background: transparent; color: var(--muted); border: 1px solid var(--rule) !important; }
 
   /* ---- footer / actions ---- */
   .foot { flex: none; display: flex; align-items: center; gap: 13px; padding: 8px 14px;
@@ -143,6 +163,8 @@ let sel = 0;
 let group = "all";
 let seq = 0;
 let lastCounts = {};
+let contentMode = "off";
+let consentDismissed = false;
 
 const KIND_ICON = {
   image: "🖼", pdf: "📕", doc: "📄", sheet: "📊", slide: "📽",
@@ -192,8 +214,33 @@ function renderChips() {
   });
 }
 
-function render(items, query) {
-  rows = items.map((item) => ({ kind: "file", item }));
+// Bold the query words inside a snippet so the reason for the match is visible
+// at a glance, rather than making the reader hunt for it.
+function highlight(text, query) {
+  const terms = query.toLowerCase().split(/\s+/).filter((t) => t.length > 2);
+  let out = esc(text);
+  for (const t of terms) {
+    const re = new RegExp("(" + t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "gi");
+    out = out.replace(re, "<mark>$1</mark>");
+  }
+  return out;
+}
+
+function sectionLabel(text) {
+  const el = document.createElement("div");
+  el.className = "sect";
+  el.textContent = text;
+  return el;
+}
+
+function render(res, query) {
+  const items = res.items || [];
+  const inside = res.inside || [];
+  contentMode = res.contentMode || contentMode;
+
+  rows = [];
+  inside.forEach((hit) => rows.push({ kind: "inside", hit }));
+  items.forEach((item) => rows.push({ kind: "file", item }));
   const q = query.trim();
   if (q) rows.push({ kind: "ask", q });
 
@@ -202,26 +249,43 @@ function render(items, query) {
   $list.innerHTML = "";
   renderChips();
 
+  // Offer to read inside files exactly once, and only when it would have helped
+  // — after a real search, not as a greeting on first launch.
+  if (contentMode === "off" && q.length > 2 && !consentDismissed) {
+    $list.appendChild(consentCard());
+  }
+
   if (!rows.length) {
-    $list.innerHTML =
-      '<div class="empty"><b>Nothing here matches that.</b>' +
-      '<span class="hint">Try a different filter above, or press <kbd>↵</kbd> to ask instead.</span></div>';
+    const e = document.createElement("div");
+    e.className = "empty";
+    e.innerHTML =
+      "<b>Nothing here matches that.</b>" +
+      '<span class="hint">Try another filter, or press <kbd>↵</kbd> to ask instead.</span>';
+    $list.appendChild(e);
     return;
   }
 
-  const head = document.createElement("div");
-  head.className = "sect";
-  head.textContent = q ? "On this laptop" : "Recent files & downloads";
-  $list.appendChild(head);
-
+  let lastKind = null;
   rows.forEach((r, i) => {
+    if (r.kind !== lastKind) {
+      lastKind = r.kind;
+      if (r.kind === "inside") $list.appendChild(sectionLabel("Found inside your files"));
+      else if (r.kind === "file") $list.appendChild(sectionLabel(q ? "Files" : "Recent files & downloads"));
+    }
     const el = document.createElement("div");
-    el.className = "row" + (r.kind === "ask" ? " ask" : "");
+    el.className = "row" + (r.kind === "ask" ? " ask" : r.kind === "inside" ? " inside" : "");
     el.dataset.i = i;
+
     if (r.kind === "ask") {
       el.innerHTML =
         '<div class="ico">✦</div><div class="txt"><div class="nm">Ask about “' +
         esc(r.q) + '”</div><div class="pt">Answered here, without leaving this window</div></div>';
+    } else if (r.kind === "inside") {
+      const f = r.hit.file;
+      el.innerHTML =
+        '<div class="ico">' + (KIND_ICON[f.kind] || "📄") + "</div>" +
+        '<div class="txt"><div class="nm">' + esc(f.name) + "</div>" +
+        '<div class="snip">' + highlight(r.hit.snippet, query) + "</div></div>";
     } else {
       const it = r.item;
       el.innerHTML =
@@ -236,6 +300,33 @@ function render(items, query) {
     $list.appendChild(el);
   });
   paint();
+}
+
+function consentCard() {
+  const el = document.createElement("div");
+  el.className = "consent";
+  el.innerHTML =
+    "<h4>Search what's written inside your files?</h4>" +
+    "<p>Right now Quick Find only matches file names. It can also read the text " +
+    "inside your documents so you can search for what you actually wrote — and ask " +
+    "questions about it.<br><br>" +
+    "The index is built and kept <b>on this laptop</b>. Nothing is uploaded. When you " +
+    "ask a question, only the few matching passages are sent to answer it.</p>" +
+    '<div class="btns">' +
+    '<button class="cprimary" id="cyes">Keep it on this laptop</button>' +
+    '<button class="cghost" id="cno">Not now</button>' +
+    "</div>";
+  el.querySelector("#cyes").addEventListener("click", async () => {
+    await api.settings({ contentMode: "local" });
+    contentMode = "local";
+    consentDismissed = true;
+    run();
+  });
+  el.querySelector("#cno").addEventListener("click", () => {
+    consentDismissed = true;
+    run();
+  });
+  return el;
 }
 
 function paint() {
@@ -258,7 +349,7 @@ async function activate(i) {
   const r = rows[i ?? sel];
   if (!r) return;
   if (r.kind === "ask") return askInline(r.q);
-  api.open(r.item.path);
+  api.open(r.kind === "inside" ? r.hit.file.path : r.item.path);
 }
 
 // Answering happens HERE — the popup never punts the user to the big window.
@@ -269,7 +360,14 @@ async function askInline(q) {
   $list.prepend(box);
   const res = await api.ask(q);
   if (res && res.ok) {
-    box.innerHTML = "<h4>AgentFury</h4><p>" + esc(res.text) + "</p>";
+    // Naming the files the answer came from is what makes it checkable rather
+    // than something you have to take on trust.
+    const src = (res.sources || []).length
+      ? '<div class="src"><b>From</b>' +
+        res.sources.map((s) => '<span class="srcpill">' + esc(s.name) + "</span>").join("") +
+        "</div>"
+      : "";
+    box.innerHTML = "<h4>AgentFury</h4><p>" + esc(res.text) + "</p>" + src;
   } else {
     box.innerHTML =
       "<h4>AgentFury</h4><p>" +
@@ -290,7 +388,7 @@ async function run() {
   const res = await api.search(query, group);
   if (mine !== seq) return; // a newer keystroke already won
   lastCounts = (res && res.counts) || {};
-  render((res && res.items) || [], query);
+  render(res || {}, query);
 }
 
 function cycleFilter(dir) {

@@ -279,13 +279,16 @@ function search(query, limit = 25, group = "all") {
 function recent(limit = 25, group = "all") {
   ensureFresh();
   const keep = kindFilter(group);
-  const dl = readDownloads(30).filter(keep);
-  const seen = new Set(dl.map((d) => d.path));
+  // Only the entries actually prepended may be excluded from the rest. Building
+  // the seen-set from a wider read than we prepend silently DROPS the ones in
+  // between — they are neither shown at the top nor allowed through below.
+  const head = readDownloads(30).filter(keep).slice(0, 12);
+  const seen = new Set(head.map((d) => d.path));
   const rest = index
     .filter((i) => !seen.has(i.path) && i.mtime && keep(i) && (!i.isDir || group === "folder"))
     .sort((a, b) => b.mtime - a.mtime)
     .slice(0, limit);
-  return dl.slice(0, 12).concat(rest).slice(0, limit);
+  return head.concat(rest).slice(0, limit);
 }
 
 // Counts per filter chip, so the popup can grey out empty ones instead of
