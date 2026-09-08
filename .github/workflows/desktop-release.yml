@@ -40,6 +40,17 @@ jobs:
 
   mac:
     runs-on: macos-latest
+    # MUST NOT run alongside the Windows job. Both call electron-builder with
+    # --publish always, and when they start together neither sees a release for
+    # the tag yet, so each creates its OWN. GitHub then has two releases sharing
+    # one tag, and every tag URL — including /releases/latest/download/... —
+    # resolves to whichever was created first. That is exactly what broke the
+    # Windows download on v0.6.0 and v0.6.1: the .exe landed in the second,
+    # unreachable release and 404'd, while the .dmg in the first worked.
+    #
+    # Running second means the release already exists and the dmg is added to
+    # it, so one tag has one release holding both installers.
+    needs: windows
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
