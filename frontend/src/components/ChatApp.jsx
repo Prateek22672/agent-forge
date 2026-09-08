@@ -335,6 +335,7 @@ export default function ChatApp({ user, onLogout }) {
               starters={messages.length === 0 ? startersFor(activeAgent?.name) : []}
               onPickStarter={(s) => send(s)}
               onNavigate={(v) => setView(v)}
+              userName={(user?.name || "").split(" ")[0]}
             />
             {pendingEmails.length > 0 && (
               <div className="px-6 pb-2 space-y-2">

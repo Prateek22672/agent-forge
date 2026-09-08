@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Markdown from "./Markdown";
 import Strands from "./Strands";
+import AgentHome from "./AgentHome";
 
 // Scrollable message list. Assistant replies render as markdown (polished) and
 // expose the RAG/tool trace (what was searched/recalled) underneath.
@@ -11,39 +12,25 @@ export default function Messages({
   starters = [],
   onPickStarter,
   onNavigate,
+  userName,
 }) {
   const endRef = useRef(null);
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy]);
 
-  // ChatGPT-style centered empty state, with starter-prompt chips so it's
-  // immediately clear what this capability can do.
+  // An empty chat used to show a headline and a list of suggestions — the same
+  // screen whether the agent had noticed something urgent or nothing at all.
+  // AgentHome puts the agent's actual read of the moment there instead.
   if (messages.length === 0 && !busy) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-6">
-        <div className="h-28 w-60 mb-4 opacity-90">
-          <Strands colors={["#7C3AED", "#06B6D4", "#FFFFFF"]} count={4} glow={2.4} amplitude={1.1} />
-        </div>
-        <h2 className="text-2xl md:text-3xl font-semibold text-white/90">
-          Where should we begin?
-        </h2>
-        <p className="text-white/40 text-sm mt-2 mb-5">
-          {activeAgentName ? `Using "${activeAgentName}"` : "Pick a capability below"} ·
-          try one of these:
-        </p>
-        <div className="flex flex-col gap-2 w-full max-w-md">
-          {starters.map((s) => (
-            <button
-              key={s}
-              onClick={() => onPickStarter?.(s)}
-              className="text-left border border-white/20 px-4 py-2.5 text-sm hover:border-white hover:bg-white/5 rounded-xl"
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
+      <AgentHome
+        activeAgentName={activeAgentName}
+        starters={starters}
+        onPickStarter={onPickStarter}
+        onNavigate={onNavigate}
+        userName={userName}
+      />
     );
   }
 
