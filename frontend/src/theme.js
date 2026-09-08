@@ -72,3 +72,31 @@ export function initTheme() {
   apply();
   return watchSystem();
 }
+
+// React hook: the theme actually in effect ("light" | "dark"), re-rendering when
+// the user switches OR when the OS changes while the preference is "system".
+// Components that paint their own pixels — canvas, WebGL — need this, because
+// CSS variables can't reach inside them.
+import { useEffect, useState } from "react";
+
+export function useResolvedTheme() {
+  const [theme, setTheme] = useState(() => resolve());
+  useEffect(() => {
+    const update = () => setTheme(resolve());
+    window.addEventListener("agentforge:theme", update);
+    const m = media();
+    if (m) {
+      if (m.addEventListener) m.addEventListener("change", update);
+      else m.addListener(update);
+    }
+    update();
+    return () => {
+      window.removeEventListener("agentforge:theme", update);
+      if (m) {
+        if (m.removeEventListener) m.removeEventListener("change", update);
+        else m.removeListener(update);
+      }
+    };
+  }, []);
+  return theme;
+}

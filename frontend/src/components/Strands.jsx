@@ -1,5 +1,6 @@
 import { Renderer, Program, Mesh, Color, Triangle, RenderTarget } from 'ogl';
 import { useEffect, useRef } from 'react';
+import { useResolvedTheme } from '../theme';
 
 const MAX_STRANDS = 12;
 const MAX_COLORS = 8;
@@ -174,6 +175,34 @@ const buildPalette = colors => {
   return padded;
 };
 
+// These strands are drawn as ADDITIVE glow — light added onto a dark ground.
+// Add light to a white page and you get white: the near-white strands vanish
+// and the coloured ones bleach into pale smears. CSS variables can't reach
+// inside a WebGL canvas, so the fix has to happen at the uniforms.
+//
+// On a light ground we darken the palette instead of brightening it, pull the
+// glow right down (its whole job was blooming against black), and drop the
+// opacity so the artwork stays a background rather than fighting the text.
+const LIGHT_INK = ['#1b1f2e', '#4c3fb5', '#0e7490', '#3f4657'];
+
+const themeAdjust = (theme, p) => {
+  if (theme !== 'light') return p;
+  const src = p.colors && p.colors.length ? p.colors : ['#ffffff'];
+  return {
+    ...p,
+    colors: src.map((hex, i) => {
+      const c = new Color(hex);
+      // Anything pale carries no contrast on white — swap it for ink. Colours
+      // with real hue are kept but deepened by the shader's lower intensity.
+      const lum = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
+      return lum > 0.62 ? LIGHT_INK[i % LIGHT_INK.length] : hex;
+    }),
+    glow: Math.min(p.glow, 0.85),
+    intensity: Math.min(p.intensity, 0.34),
+    opacity: p.opacity * 0.42,
+  };
+};
+
 export default function Strands({
   colors = ['#FF4242', '#7C3AED', '#06B6D4', '#EAB308'],
   count = 3,
@@ -196,12 +225,15 @@ export default function Strands({
   className = '',
   style
 }) {
+  const theme = useResolvedTheme();
   const propsRef = useRef({});
-  propsRef.current = {
+  // The per-frame loop reads propsRef, so re-theming is picked up live — no
+  // remount, no flash, the strands just settle into the other palette.
+  propsRef.current = themeAdjust(theme, {
     colors, count, speed, amplitude, waviness, thickness, glow, taper, spread,
     hueShift, intensity, saturation, opacity, scale, glass, refraction,
     dispersion, glassSize
-  };
+  });
 
   const ctnDom = useRef(null);
 
