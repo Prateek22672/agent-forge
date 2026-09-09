@@ -62,8 +62,47 @@ export default function History({
   onDelete,
   onSearch,
   onCollapse,
+  collapsed = false,
 }) {
   const groups = group(conversations);
+
+  // Collapsed is a NARROW RAIL, not a disappearance. Hiding the sidebar
+  // outright leaves the window with no visible way back and no sense of where
+  // you are; a 56px strip keeps New chat, search and the expand control one
+  // click away while giving the conversation the width back.
+  if (collapsed) {
+    return (
+      <aside
+        className="w-14 h-full min-h-0 border-r border-white/10 flex flex-col items-center
+                   shrink-0 bg-white/[0.015] py-2.5 gap-1"
+      >
+        <button
+          onClick={onCollapse}
+          title="Show sidebar"
+          aria-label="Show sidebar"
+          className="p-2.5 rounded-xl text-white/45 hover:text-white hover:bg-white/[0.07] transition"
+        >
+          {Icon.panel}
+        </button>
+        <button
+          onClick={onNew}
+          title="New chat"
+          aria-label="New chat"
+          className="p-2.5 rounded-xl text-white/70 hover:text-white hover:bg-white/[0.07] transition"
+        >
+          {Icon.pencil}
+        </button>
+        <button
+          onClick={onSearch}
+          title="Search chats"
+          aria-label="Search chats"
+          className="p-2.5 rounded-xl text-white/45 hover:text-white hover:bg-white/[0.07] transition"
+        >
+          {Icon.search}
+        </button>
+      </aside>
+    );
+  }
 
   return (
     <aside className="w-[268px] h-full min-h-0 border-r border-white/10 flex flex-col shrink-0 bg-white/[0.015]">

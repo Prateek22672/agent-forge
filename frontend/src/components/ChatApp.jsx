@@ -293,9 +293,7 @@ export default function ChatApp({ user, onLogout }) {
         <div
           className={`${
             sidebarOpen ? "translate-x-0" : "-translate-x-full"
-          } md:translate-x-0 transition-transform duration-200 fixed md:relative inset-y-0 left-0 z-40 md:z-auto bg-black h-full ${
-            sidebarHidden ? "md:hidden" : ""
-          }`}
+          } md:translate-x-0 transition-transform duration-200 fixed md:relative inset-y-0 left-0 z-40 md:z-auto bg-black h-full`}
         >
           <History
             conversations={conversations}
@@ -312,6 +310,7 @@ export default function ChatApp({ user, onLogout }) {
             onDelete={deleteConversation}
             onSearch={() => setShowSearch(true)}
             onCollapse={toggleSidebarHidden}
+            collapsed={sidebarHidden}
           />
         </div>
         {sidebarOpen && (
