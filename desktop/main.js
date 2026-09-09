@@ -16,6 +16,7 @@ const {
   globalShortcut, screen, clipboard,
 } = require("electron");
 const path = require("path");
+const fs = require("fs");
 const { execFile } = require("child_process");
 const { startLocalBackend, stopLocalBackend } = require("./local-backend");
 const fileSearch = require("./file-search");
@@ -205,8 +206,10 @@ function toggleQuickOpen() {
 // an in-memory index (see file-search.js); no file contents are read and nothing
 // is sent anywhere.
 // ---------------------------------------------------------------------------
-const SPOT_W = 680;
-const SPOT_H = 460;
+// Wider than a plain list needs, because the preview pane lives on the right —
+// seeing the file is what stops "is this the one?" costing an app launch.
+const SPOT_W = 860;
+const SPOT_H = 520;
 
 function createSpotlight() {
   spotWindow = new BrowserWindow({
@@ -389,6 +392,46 @@ ipcMain.handle("spot:search", (e, q, group) => {
   } catch (err) {
     console.warn("Quick Find search failed:", err.message);
     return { items: [], counts: {}, inside: [] };
+  }
+});
+
+// A look at the file WITHOUT opening it — the difference between "is this the
+// right one?" costing a keystroke or costing an app launch. Images come back as
+// a data URI, text and documents as their first lines.
+const PREVIEW_IMG_MAX = 6 * 1024 * 1024;
+const IMG_MIME = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
+  webp: "image/webp", bmp: "image/bmp", svg: "image/svg+xml", avif: "image/avif",
+};
+
+ipcMain.handle("spot:preview", async (e, p) => {
+  if (!fromSpotlight(e) || typeof p !== "string") return null;
+  try {
+    const st = await fs.promises.stat(p);
+    if (st.isDirectory()) {
+      const entries = await fs.promises.readdir(p);
+      return {
+        type: "folder",
+        count: entries.length,
+        items: entries.filter((n) => !n.startsWith(".")).slice(0, 12),
+      };
+    }
+    const ext = path.extname(p).slice(1).toLowerCase();
+    if (IMG_MIME[ext] && st.size <= PREVIEW_IMG_MAX) {
+      const buf = await fs.promises.readFile(p);
+      return { type: "image", dataUri: `data:${IMG_MIME[ext]};base64,${buf.toString("base64")}` };
+    }
+    // Everything else goes through the same extractor the content index uses,
+    // so a PDF or Word file previews as its actual words rather than "no
+    // preview available".
+    const { extractText, isExtractable } = require("./extractors");
+    if (isExtractable(path.basename(p)) && st.size <= 12 * 1024 * 1024) {
+      const text = await extractText(p, path.basename(p));
+      if (text) return { type: "text", text: text.slice(0, 1400) };
+    }
+    return { type: "none", size: st.size };
+  } catch {
+    return null;
   }
 });
 
@@ -579,25 +622,42 @@ ipcMain.handle("spot:ask", async (e, q) => {
 
     // Retrieval-augmented, with the retrieval done HERE. The whole index stays
     // on the laptop; what leaves is only the few passages that actually match
-    // the question, and only because a question was asked. The model is told
-    // plainly that the passages are the user's own files, and to say so when
-    // they don't contain the answer rather than inventing one.
-    const hits = contentIndex.search(question, 4);
+    // the question, and only because a question was asked.
+    const hits = contentIndex.search(question, 5);
+    const sources = hits.map((h) => ({ name: h.file.name, path: h.file.path }));
+
+    // /api/quickfind/ask is one call to the fast model with no tool loop and no
+    // persistence — a launcher is judged on whether the answer beats the user's
+    // patience, and the full agent endpoint cannot do that.
+    try {
+      const r = await apiRequest("POST", "/api/quickfind/ask", {
+        question,
+        passages: hits.map((h) => ({ name: h.file.name, text: h.snippet })),
+      });
+      if (r && r.ok) {
+        return {
+          ok: true,
+          text: r.answer,
+          sources: r.grounded ? sources : [],
+          grounded: !!r.grounded,
+        };
+      }
+    } catch (fastErr) {
+      // An older backend won't have this route yet — fall through to the agent
+      // rather than failing the question outright.
+      if (!/404/.test(fastErr.message)) throw fastErr;
+    }
+
     let message = question;
-    let sources = [];
     if (hits.length) {
-      sources = hits.map((h) => ({ name: h.file.name, path: h.file.path }));
-      const context = hits
-        .map((h, i) => `[${i + 1}] ${h.file.name}\n${h.snippet}`)
-        .join("\n\n");
+      const context = hits.map((h, i) => `[${i + 1}] ${h.file.name}\n${h.snippet}`).join("\n\n");
       message =
         "Answer using these excerpts from the user's own files on this laptop. " +
         "Cite the file name you used. If they don't contain the answer, say so plainly.\n\n" +
         `${context}\n\nQuestion: ${question}`;
     }
-
     const r = await apiRequest("POST", `/api/agents/${cachedAgentId}/chat`, { message });
-    return { ok: true, text: r.reply || "(no answer)", sources };
+    return { ok: true, text: r.reply || "(no answer)", sources, grounded: hits.length > 0 };
   } catch (err) {
     const msg = /timeout/i.test(err.message)
       ? "The server took too long to answer."

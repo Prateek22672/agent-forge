@@ -4,122 +4,185 @@
 <meta charset="utf-8" />
 <title>AgentFury Quick Find</title>
 <style>
+  /* ------------------------------------------------------------------ *
+   * Quick Find — dark, deep-rounded, one accent.
+   * The palette is a near-black with a blue-violet bias rather than a
+   * neutral grey, so the accent reads as part of the surface instead of
+   * sitting on top of it. Exactly one hue does the highlighting; every
+   * other cue is weight or opacity, which is what keeps a dense list calm.
+   * ------------------------------------------------------------------ */
   :root {
-    --bg: rgba(18, 19, 24, .985);
-    --fg: #f4f5f9;
-    --muted: #8f95a6;
-    --dim: #5f6478;
-    --accent: #8b9bff;
-    --accent-soft: rgba(110, 128, 255, .18);
-    --rule: rgba(255, 255, 255, .07);
-    --chip: rgba(255, 255, 255, .05);
+    --bg-0: #0d0e14;
+    --bg-1: #14161f;
+    --bg-2: #191c27;
+    --fg: #f3f4f8;
+    --muted: #9297a8;
+    --dim: #62677a;
+    --accent: #8f9cff;
+    --accent-2: #b98cff;
+    --accent-soft: rgba(120, 134, 255, .17);
+    --accent-line: rgba(143, 156, 255, .40);
+    --rule: rgba(255, 255, 255, .065);
+    --chip: rgba(255, 255, 255, .045);
+    --radius: 18px;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; overflow: hidden; background: transparent; }
   body {
-    font-family: "Segoe UI", -apple-system, system-ui, sans-serif;
-    color: var(--fg);
-    -webkit-font-smoothing: antialiased;
+    font-family: "Segoe UI Variable Display", "Segoe UI", -apple-system, system-ui, sans-serif;
+    color: var(--fg); -webkit-font-smoothing: antialiased;
     display: flex; flex-direction: column;
-    background: var(--bg);
-    border: 1px solid rgba(255,255,255,.11);
-    border-radius: 14px;
+    background:
+      radial-gradient(120% 70% at 50% -10%, rgba(120,134,255,.13), transparent 62%),
+      var(--bg-0);
+    border: 1px solid rgba(255,255,255,.09);
+    border-radius: var(--radius);
     overflow: hidden;
+    animation: pop .16s cubic-bezier(.2,.9,.3,1);
   }
-  button { font-family: inherit; }
+  /* NOTHING here animates opacity.
+     This window is created hidden and shown on the hotkey, and an animation
+     started while a window is hidden does not advance — it holds its first
+     frame. A keyframe starting at opacity 0 therefore leaves the content
+     PERMANENTLY invisible, which is exactly what happened: the results list
+     rendered 19 elements with correct geometry and a computed opacity of 0.
+     Transform-only keyframes cannot fail that way — worst case they simply
+     don't animate. */
+  @keyframes pop { from { transform: scale(.985) translateY(-5px); } }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+  button { font-family: inherit; cursor: default; }
 
   /* ---- search bar ---- */
-  .bar { display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 56px; flex: none; }
-  .logo { width: 22px; height: 22px; border-radius: 6px; background: #fff; color: #000;
-          display: grid; place-items: center; font-size: 10px; font-weight: 800; letter-spacing: -.04em; flex: none; }
+  .bar { display: flex; align-items: center; gap: 13px; padding: 0 18px; height: 60px; flex: none; }
+  .logo {
+    width: 25px; height: 25px; border-radius: 8px; flex: none;
+    background: linear-gradient(140deg, var(--accent), var(--accent-2));
+    display: grid; place-items: center; font-size: 10px; font-weight: 800;
+    letter-spacing: -.04em; color: #10111a;
+  }
   #q { flex: 1; background: none; border: 0; outline: none; color: var(--fg);
-       font-size: 16.5px; font-family: inherit; padding: 0; min-width: 0; }
+       font-size: 17px; padding: 0; min-width: 0; font-family: inherit; }
   #q::placeholder { color: var(--dim); }
   .count { font-size: 11px; color: var(--dim); flex: none; font-variant-numeric: tabular-nums; }
 
-  /* ---- filter chips ---- */
-  .chips { display: flex; gap: 6px; padding: 0 14px 10px; flex: none; overflow-x: auto; scrollbar-width: none; }
+  /* ---- filters ---- */
+  .chips { display: flex; gap: 6px; padding: 0 15px 11px; flex: none; overflow-x: auto; scrollbar-width: none; }
   .chips::-webkit-scrollbar { display: none; }
   .chip {
-    border: 0; background: var(--chip); color: var(--muted);
-    font-size: 11.5px; padding: 4.5px 11px; border-radius: 999px; cursor: default;
-    white-space: nowrap; display: flex; align-items: center; gap: 6px;
+    border: 1px solid transparent; background: var(--chip); color: var(--muted);
+    font-size: 11.5px; padding: 5px 12px; border-radius: 999px; white-space: nowrap;
+    display: flex; align-items: center; gap: 6px; transition: all .14s ease;
   }
-  .chip .n { font-size: 10px; color: var(--dim); font-variant-numeric: tabular-nums; }
-  .chip.on { background: var(--accent-soft); color: var(--accent); }
-  .chip.on .n { color: var(--accent); opacity: .8; }
-  .chip.zero { opacity: .34; }
+  .chip:hover { color: var(--fg); background: rgba(255,255,255,.08); }
+  .chip .n { font-size: 10px; opacity: .65; font-variant-numeric: tabular-nums; }
+  .chip.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-line); }
+  .chip.zero { opacity: .3; }
 
-  /* ---- results ---- */
-  #list { flex: 1; overflow-y: auto; padding: 0 6px 6px; }
-  #list::-webkit-scrollbar { width: 9px; }
-  #list::-webkit-scrollbar-thumb { background: rgba(255,255,255,.13); border-radius: 5px;
+  /* ---- body: list + preview ---- */
+  .body { flex: 1; display: flex; min-height: 0; }
+  #list { flex: 1; overflow-y: auto; padding: 0 8px 8px; min-width: 0; }
+  #list::-webkit-scrollbar { width: 10px; }
+  #list::-webkit-scrollbar-thumb { background: rgba(255,255,255,.11); border-radius: 6px;
     border: 3px solid transparent; background-clip: content-box; }
 
-  .sect { font-size: 10px; text-transform: uppercase; letter-spacing: .12em;
-          color: var(--dim); padding: 8px 12px 5px; }
+  .sect { font-size: 9.5px; text-transform: uppercase; letter-spacing: .15em;
+          color: var(--dim); padding: 11px 12px 6px; font-weight: 600; }
 
-  .row { display: flex; align-items: center; gap: 12px; padding: 8px 12px;
-         border-radius: 9px; cursor: default; scroll-margin: 10px; }
-  .row.on { background: var(--accent-soft); }
-  .ico { width: 31px; height: 31px; border-radius: 8px; display: grid; place-items: center;
-         font-size: 14px; flex: none; background: rgba(255,255,255,.06); }
+  .row {
+    display: flex; align-items: center; gap: 12px; padding: 9px 12px;
+    border-radius: 12px; scroll-margin: 10px; position: relative;
+  }
+  /* The list fades in as ONE element rather than staggering forty rows. A
+     per-row delay needs animation-fill-mode: both, which parks every row at
+     opacity 0 until its turn — so anywhere animations don't run, the results
+     are simply invisible. One container animation cannot fail that way, and
+     forty simultaneous animations were never smoother than one. */
+  #list.enter { animation: slide .19s cubic-bezier(.2,.9,.3,1); }
+  @keyframes slide { from { transform: translateY(5px); } }
+  .row.on { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
+  .ico { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center;
+         font-size: 14px; flex: none; background: rgba(255,255,255,.055); }
+  .row.on .ico { background: rgba(143,156,255,.19); }
   .txt { min-width: 0; flex: 1; }
   .nm { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .pt { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden;
         text-overflow: ellipsis; direction: rtl; text-align: left; margin-top: 1px; }
-  .meta { font-size: 11px; color: var(--dim); flex: none; text-align: right; line-height: 1.5;
+  .meta { font-size: 10.5px; color: var(--dim); flex: none; text-align: right; line-height: 1.55;
           font-variant-numeric: tabular-nums; }
+  .snip { font-size: 11.5px; color: var(--muted); line-height: 1.5; margin-top: 3px;
+          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .snip mark { background: rgba(143,156,255,.28); color: var(--fg); border-radius: 3px; padding: 0 2px; }
+  .inside .ico { background: rgba(143,156,255,.15); }
+  .ask .ico { background: linear-gradient(140deg, rgba(143,156,255,.3), rgba(185,140,255,.3)); }
+  .ask .nm { color: var(--accent); }
 
-  .empty { padding: 30px 22px; text-align: center; color: var(--muted); font-size: 13.5px; line-height: 1.65; }
+  /* ---- preview pane ---- */
+  .prev {
+    width: 232px; flex: none; border-left: 1px solid var(--rule); padding: 14px;
+    display: flex; flex-direction: column; gap: 10px; overflow: hidden; background: var(--bg-1);
+  }
+  .prev.empty { display: none; }
+  .prev .shot { border-radius: 11px; overflow: hidden; background: var(--bg-2);
+                display: grid; place-items: center; max-height: 152px; }
+  .prev .shot img { max-width: 100%; max-height: 152px; display: block; object-fit: contain; }
+  .prev .body-text { font-size: 11px; line-height: 1.55; color: var(--muted);
+    background: var(--bg-2); border-radius: 11px; padding: 10px 11px; overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; }
+  .prev .pname { font-size: 12px; font-weight: 600; line-height: 1.4;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .prev .pmeta { font-size: 10.5px; color: var(--dim); }
+  .prev .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: auto; }
+  .prev .acts button {
+    border: 1px solid var(--rule); background: var(--chip); color: var(--muted);
+    font-size: 11px; padding: 7px 6px; border-radius: 9px; transition: all .14s ease;
+  }
+  .prev .acts button:hover { color: var(--fg); border-color: var(--accent-line); background: var(--accent-soft); }
+  .prev .acts .wide { grid-column: 1 / -1; background: linear-gradient(140deg, var(--accent), var(--accent-2));
+    color: #10111a; font-weight: 700; border-color: transparent; }
+
+  /* ---- answer ---- */
+  .answer { margin: 8px; padding: 15px 17px; border-radius: 14px;
+    background: linear-gradient(150deg, rgba(143,156,255,.10), rgba(185,140,255,.055));
+    border: 1px solid var(--accent-line); animation: slide .2s ease; }
+  .answer h4 { margin: 0 0 8px; font-size: 10px; text-transform: uppercase; letter-spacing: .16em;
+               color: var(--accent); font-weight: 700; display: flex; align-items: center; gap: 7px; }
+  .answer p { margin: 0; font-size: 13px; line-height: 1.65; white-space: pre-wrap; }
+  .answer .src { margin-top: 11px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+                 font-size: 10.5px; color: var(--dim); }
+  .srcpill { background: rgba(255,255,255,.06); border-radius: 999px; padding: 3px 10px; color: var(--muted); }
+  .dots span { display: inline-block; width: 4px; height: 4px; margin-right: 3px; border-radius: 50%;
+    background: var(--accent); animation: blink 1s infinite; }
+  .dots span:nth-child(2) { animation-delay: .15s } .dots span:nth-child(3) { animation-delay: .3s }
+  @keyframes blink { 50% { opacity: .25 } }
+
+  /* ---- consent ---- */
+  .consent { margin: 8px; padding: 16px 18px; border-radius: 14px;
+    background: linear-gradient(150deg, rgba(143,156,255,.11), rgba(185,140,255,.05));
+    border: 1px solid var(--accent-line); }
+  .consent h4 { margin: 0 0 7px; font-size: 13.5px; font-weight: 600; }
+  .consent p { margin: 0 0 13px; font-size: 12px; line-height: 1.65; color: var(--muted); }
+  .consent .btns { display: flex; gap: 8px; }
+  .consent button { border: 0; border-radius: 10px; padding: 8px 15px; font-size: 12px; font-weight: 600; }
+  .cprimary { background: linear-gradient(140deg, var(--accent), var(--accent-2)); color: #10111a; }
+  .cghost { background: var(--chip); color: var(--muted); border: 1px solid var(--rule) !important; }
+
+  .empty { padding: 34px 22px; text-align: center; color: var(--muted); font-size: 13.5px; line-height: 1.7; }
   .empty b { color: var(--fg); font-weight: 600; }
   .empty .hint { display: block; margin-top: 8px; font-size: 12px; color: var(--dim); }
 
-  .ask .ico { background: rgba(139,155,255,.17); }
-  .ask .nm { color: var(--accent); }
-
-  /* ---- answer panel ---- */
-  .answer { margin: 4px 8px 10px; padding: 14px 16px; border-radius: 11px;
-            background: rgba(255,255,255,.04); border: 1px solid var(--rule); }
-  .answer h4 { margin: 0 0 7px; font-size: 11px; text-transform: uppercase;
-               letter-spacing: .12em; color: var(--accent); font-weight: 600; }
-  .answer p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--fg); white-space: pre-wrap; }
-  .answer .src { margin-top: 10px; font-size: 11px; color: var(--dim);
-                 display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .answer .src b { font-weight: 500; color: var(--muted); }
-  .srcpill { background: var(--chip); border-radius: 999px; padding: 3px 9px; color: var(--muted); }
-
-  /* ---- inside-file matches ---- */
-  .inside .ico { background: rgba(110,128,255,.16); }
-  .snip { font-size: 11.5px; color: var(--muted); line-height: 1.45; margin-top: 3px;
-          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .snip mark { background: rgba(139,155,255,.26); color: var(--fg); border-radius: 3px; padding: 0 2px; }
-
-  /* ---- consent ---- */
-  .consent { margin: 6px 8px 10px; padding: 15px 17px; border-radius: 11px;
-             background: rgba(110,128,255,.09); border: 1px solid rgba(110,128,255,.24); }
-  .consent h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
-  .consent p { margin: 0 0 12px; font-size: 12px; line-height: 1.6; color: var(--muted); }
-  .consent .btns { display: flex; gap: 8px; }
-  .consent button { border: 0; border-radius: 8px; padding: 7px 14px; font-size: 12px;
-                    font-weight: 600; cursor: default; }
-  .cprimary { background: #fff; color: #111; }
-  .cghost { background: transparent; color: var(--muted); border: 1px solid var(--rule) !important; }
-
-  /* ---- footer / actions ---- */
-  .foot { flex: none; display: flex; align-items: center; gap: 13px; padding: 8px 14px;
-          border-top: 1px solid var(--rule); font-size: 11px; color: var(--dim); }
+  /* ---- footer ---- */
+  .foot { flex: none; display: flex; align-items: center; gap: 14px; padding: 9px 15px;
+          border-top: 1px solid var(--rule); font-size: 10.5px; color: var(--dim); }
   .foot .sp { margin-left: auto; }
   .act { display: flex; align-items: center; gap: 4px; }
-  kbd { font-family: inherit; font-size: 10px; background: rgba(255,255,255,.08);
-        border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px;
-        padding: 1.5px 5px; color: var(--muted); }
+  kbd { font-size: 9.5px; background: rgba(255,255,255,.07); border: 1px solid var(--rule);
+        border-bottom-width: 2px; border-radius: 5px; padding: 2px 5px; color: var(--muted);
+        font-family: inherit; }
 
-  /* ---- toast ---- */
-  #toast { position: fixed; left: 50%; bottom: 46px; transform: translateX(-50%) translateY(8px);
-           background: rgba(255,255,255,.95); color: #111; font-size: 12px; font-weight: 600;
-           padding: 7px 14px; border-radius: 999px; opacity: 0; transition: opacity .16s, transform .16s;
-           pointer-events: none; }
+  #toast { position: fixed; left: 50%; bottom: 50px; transform: translateX(-50%) translateY(8px);
+    background: linear-gradient(140deg, var(--accent), var(--accent-2)); color: #10111a;
+    font-size: 11.5px; font-weight: 700; padding: 8px 16px; border-radius: 999px;
+    opacity: 0; transition: opacity .16s, transform .16s; pointer-events: none; }
   #toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
 </style>
 </head>
@@ -132,9 +195,13 @@
   </div>
 
   <div class="chips" id="chips"></div>
-  <div id="list"></div>
 
-  <div class="foot" id="foot">
+  <div class="body">
+    <div id="list"></div>
+    <aside class="prev empty" id="prev"></aside>
+  </div>
+
+  <div class="foot">
     <span class="act"><kbd>↑</kbd><kbd>↓</kbd> move</span>
     <span class="act"><kbd>↵</kbd> open</span>
     <span class="act"><kbd>Ctrl</kbd><kbd>↵</kbd> folder</span>
@@ -151,6 +218,7 @@ const $q = document.getElementById("q");
 const $list = document.getElementById("list");
 const $count = document.getElementById("count");
 const $chips = document.getElementById("chips");
+const $prev = document.getElementById("prev");
 const $toast = document.getElementById("toast");
 
 const FILTERS = [
@@ -166,10 +234,15 @@ let lastCounts = {};
 let contentMode = "off";
 let consentDismissed = false;
 
+// Reopening the popup used to wipe the query and the answer, so glancing at
+// another window mid-search meant starting over. The session is kept instead:
+// what you searched, what came back, and what the agent said are all still
+// there when it comes back. Ctrl+Space is a place you return to, not a form.
+const session = { query: "", group: "all", answerHtml: "", results: null };
+
 const KIND_ICON = {
-  image: "🖼", pdf: "📕", doc: "📄", sheet: "📊", slide: "📽",
-  video: "🎬", audio: "🎵", code: "⌨", data: "🔧", archive: "🗜",
-  app: "⚙", folder: "📁", other: "📄",
+  image: "🖼", pdf: "📕", doc: "📄", sheet: "📊", slide: "📽", video: "🎬",
+  audio: "🎵", code: "⌨", data: "🔧", archive: "🗜", app: "⚙", folder: "📁", other: "📄",
 };
 
 const fmtSize = (b) => {
@@ -179,7 +252,6 @@ const fmtSize = (b) => {
   while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
   return (b < 10 && i > 0 ? b.toFixed(1) : Math.round(b)) + " " + u[i];
 };
-
 const fmtWhen = (ms) => {
   if (!ms) return "";
   const s = (Date.now() - ms) / 1000;
@@ -187,10 +259,8 @@ const fmtWhen = (ms) => {
   if (s < 3600) return Math.round(s / 60) + "m ago";
   if (s < 86400) return Math.round(s / 3600) + "h ago";
   const d = Math.round(s / 86400);
-  if (d < 30) return d + "d ago";
-  return new Date(ms).toLocaleDateString();
+  return d < 30 ? d + "d ago" : new Date(ms).toLocaleDateString();
 };
-
 const esc = (s) => String(s).replace(/[&<>"]/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -199,7 +269,17 @@ function toast(msg) {
   $toast.textContent = msg;
   $toast.classList.add("on");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => $toast.classList.remove("on"), 1600);
+  toastTimer = setTimeout(() => $toast.classList.remove("on"), 1500);
+}
+
+function highlight(text, query) {
+  const terms = query.toLowerCase().split(/\s+/).filter((t) => t.length > 2);
+  let out = esc(text);
+  for (const t of terms) {
+    const re = new RegExp("(" + t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "gi");
+    out = out.replace(re, "<mark>$1</mark>");
+  }
+  return out;
 }
 
 function renderChips() {
@@ -214,29 +294,20 @@ function renderChips() {
   });
 }
 
-// Bold the query words inside a snippet so the reason for the match is visible
-// at a glance, rather than making the reader hunt for it.
-function highlight(text, query) {
-  const terms = query.toLowerCase().split(/\s+/).filter((t) => t.length > 2);
-  let out = esc(text);
-  for (const t of terms) {
-    const re = new RegExp("(" + t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "gi");
-    out = out.replace(re, "<mark>$1</mark>");
-  }
-  return out;
-}
-
-function sectionLabel(text) {
+const sect = (t) => {
   const el = document.createElement("div");
   el.className = "sect";
-  el.textContent = text;
+  el.textContent = t;
   return el;
-}
+};
 
 function render(res, query) {
   const items = res.items || [];
   const inside = res.inside || [];
   contentMode = res.contentMode || contentMode;
+  session.results = res;
+  session.query = query;
+  session.group = group;
 
   rows = [];
   inside.forEach((hit) => rows.push({ kind: "inside", hit }));
@@ -245,12 +316,24 @@ function render(res, query) {
   if (q) rows.push({ kind: "ask", q });
 
   sel = 0;
-  $count.textContent = items.length ? items.length : "";
+  $count.textContent = items.length || "";
   $list.innerHTML = "";
+  // Retrigger the enter animation: removing and re-adding in the same frame
+  // would be coalesced away, so force a reflow between.
+  $list.classList.remove("enter");
+  void $list.offsetWidth;
+  $list.classList.add("enter");
   renderChips();
 
-  // Offer to read inside files exactly once, and only when it would have helped
-  // — after a real search, not as a greeting on first launch.
+  // A previous answer survives a re-render, so refining the search doesn't
+  // throw away what the agent already told you.
+  if (session.answerHtml) {
+    const a = document.createElement("div");
+    a.className = "answer";
+    a.innerHTML = session.answerHtml;
+    $list.appendChild(a);
+  }
+
   if (contentMode === "off" && q.length > 2 && !consentDismissed) {
     $list.appendChild(consentCard());
   }
@@ -258,42 +341,38 @@ function render(res, query) {
   if (!rows.length) {
     const e = document.createElement("div");
     e.className = "empty";
-    e.innerHTML =
-      "<b>Nothing here matches that.</b>" +
+    e.innerHTML = "<b>Nothing here matches that.</b>" +
       '<span class="hint">Try another filter, or press <kbd>↵</kbd> to ask instead.</span>';
     $list.appendChild(e);
+    updatePreview();
     return;
   }
 
-  let lastKind = null;
+  let last = null;
   rows.forEach((r, i) => {
-    if (r.kind !== lastKind) {
-      lastKind = r.kind;
-      if (r.kind === "inside") $list.appendChild(sectionLabel("Found inside your files"));
-      else if (r.kind === "file") $list.appendChild(sectionLabel(q ? "Files" : "Recent files & downloads"));
+    if (r.kind !== last) {
+      last = r.kind;
+      if (r.kind === "inside") $list.appendChild(sect("Found inside your files"));
+      else if (r.kind === "file") $list.appendChild(sect(q ? "Files" : "Recent files & downloads"));
     }
     const el = document.createElement("div");
     el.className = "row" + (r.kind === "ask" ? " ask" : r.kind === "inside" ? " inside" : "");
     el.dataset.i = i;
 
     if (r.kind === "ask") {
-      el.innerHTML =
-        '<div class="ico">✦</div><div class="txt"><div class="nm">Ask about “' +
-        esc(r.q) + '”</div><div class="pt">Answered here, without leaving this window</div></div>';
+      el.innerHTML = '<div class="ico">✦</div><div class="txt"><div class="nm">Ask about “' +
+        esc(r.q) + '”</div><div class="pt">Answered here from your own files</div></div>';
     } else if (r.kind === "inside") {
       const f = r.hit.file;
-      el.innerHTML =
-        '<div class="ico">' + (KIND_ICON[f.kind] || "📄") + "</div>" +
+      el.innerHTML = '<div class="ico">' + (KIND_ICON[f.kind] || "📄") + "</div>" +
         '<div class="txt"><div class="nm">' + esc(f.name) + "</div>" +
         '<div class="snip">' + highlight(r.hit.snippet, query) + "</div></div>";
     } else {
       const it = r.item;
-      el.innerHTML =
-        '<div class="ico">' + (KIND_ICON[it.kind] || "📄") + "</div>" +
+      el.innerHTML = '<div class="ico">' + (KIND_ICON[it.kind] || "📄") + "</div>" +
         '<div class="txt"><div class="nm">' + esc(it.name) + "</div>" +
         '<div class="pt">' + esc(it.dir) + "</div></div>" +
-        '<div class="meta">' + fmtWhen(it.mtime) +
-        (it.isDir ? "" : "<br>" + fmtSize(it.size)) + "</div>";
+        '<div class="meta">' + fmtWhen(it.mtime) + (it.isDir ? "" : "<br>" + fmtSize(it.size)) + "</div>";
     }
     el.addEventListener("mousemove", () => setSel(i));
     el.addEventListener("click", () => activate(i));
@@ -302,39 +381,13 @@ function render(res, query) {
   paint();
 }
 
-function consentCard() {
-  const el = document.createElement("div");
-  el.className = "consent";
-  el.innerHTML =
-    "<h4>Search what's written inside your files?</h4>" +
-    "<p>Right now Quick Find only matches file names. It can also read the text " +
-    "inside your documents so you can search for what you actually wrote — and ask " +
-    "questions about it.<br><br>" +
-    "The index is built and kept <b>on this laptop</b>. Nothing is uploaded. When you " +
-    "ask a question, only the few matching passages are sent to answer it.</p>" +
-    '<div class="btns">' +
-    '<button class="cprimary" id="cyes">Keep it on this laptop</button>' +
-    '<button class="cghost" id="cno">Not now</button>' +
-    "</div>";
-  el.querySelector("#cyes").addEventListener("click", async () => {
-    await api.settings({ contentMode: "local" });
-    contentMode = "local";
-    consentDismissed = true;
-    run();
-  });
-  el.querySelector("#cno").addEventListener("click", () => {
-    consentDismissed = true;
-    run();
-  });
-  return el;
-}
-
 function paint() {
   [...$list.querySelectorAll(".row")].forEach((el) => {
     const on = +el.dataset.i === sel;
     el.classList.toggle("on", on);
     if (on) el.scrollIntoView({ block: "nearest" });
   });
+  updatePreview();
 }
 
 function setSel(i) {
@@ -343,39 +396,123 @@ function setSel(i) {
   paint();
 }
 
+const fileOf = (r) => (!r ? null : r.kind === "file" ? r.item : r.kind === "inside" ? r.hit.file : null);
 const current = () => rows[sel];
+
+// The preview is requested per selection, and a slow read for a row you've
+// already moved off must never paint over the row you're on now.
+let prevSeq = 0;
+async function updatePreview() {
+  const f = fileOf(current());
+  if (!f) { $prev.classList.add("empty"); $prev.innerHTML = ""; return; }
+  const mine = ++prevSeq;
+  $prev.classList.remove("empty");
+  $prev.innerHTML =
+    '<div class="pname">' + esc(f.name) + "</div>" +
+    '<div class="pmeta">' + (f.isDir ? "Folder" : fmtSize(f.size)) + " · " + fmtWhen(f.mtime) + "</div>" +
+    '<div class="body-text">Loading preview…</div>' + actionsHtml();
+  bindActions(f);
+
+  const p = await api.preview(f.path);
+  if (mine !== prevSeq) return;
+
+  let bodyHtml = '<div class="body-text">No preview for this type.</div>';
+  if (p && p.type === "image") bodyHtml = '<div class="shot"><img src="' + p.dataUri + '" alt="" /></div>';
+  else if (p && p.type === "text") bodyHtml = '<div class="body-text">' + esc(p.text) + "</div>";
+  else if (p && p.type === "folder") {
+    bodyHtml = '<div class="body-text">' + p.count + " item" + (p.count === 1 ? "" : "s") +
+      (p.items.length ? "<br>" + p.items.map(esc).join("<br>") : "") + "</div>";
+  }
+
+  $prev.innerHTML =
+    '<div class="pname">' + esc(f.name) + "</div>" +
+    '<div class="pmeta">' + (f.isDir ? "Folder" : fmtSize(f.size)) + " · " + fmtWhen(f.mtime) + "</div>" +
+    bodyHtml + actionsHtml();
+  bindActions(f);
+}
+
+const actionsHtml = () =>
+  '<div class="acts">' +
+  '<button class="wide" data-a="open">Open</button>' +
+  '<button data-a="copy">Copy file</button>' +
+  '<button data-a="reveal">Folder</button>' +
+  '<button data-a="path">Copy path</button>' +
+  '<button data-a="share">Share</button>' +
+  "</div>";
+
+function bindActions(f) {
+  $prev.querySelectorAll(".acts button").forEach((b) => {
+    b.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const a = b.dataset.a;
+      if (a === "open") return api.open(f.path);
+      if (a === "reveal") return api.reveal(f.path);
+      if (a === "copy") { toast((await api.copy(f.path, "file")) === "file" ? "File copied" : "Path copied"); return; }
+      if (a === "path") { await api.copy(f.path, "path"); toast("Path copied"); return; }
+      if (a === "share") { const how = await api.share(f.path); toast(how === "sheet" ? "Sharing…" : "Path copied to share"); }
+    });
+  });
+}
 
 async function activate(i) {
   const r = rows[i ?? sel];
   if (!r) return;
   if (r.kind === "ask") return askInline(r.q);
-  api.open(r.kind === "inside" ? r.hit.file.path : r.item.path);
+  const f = fileOf(r);
+  if (f) api.open(f.path);
 }
 
-// Answering happens HERE — the popup never punts the user to the big window.
+// One question in flight at a time. Without this, hitting Enter twice fires two
+// requests and whichever returns last wins — which is how the same question
+// ends up answered twice with different text.
+let asking = false;
 async function askInline(q) {
-  const box = document.createElement("div");
-  box.className = "answer";
-  box.innerHTML = '<h4>AgentFury</h4><p>Thinking…</p>';
-  $list.prepend(box);
-  const res = await api.ask(q);
-  if (res && res.ok) {
-    // Naming the files the answer came from is what makes it checkable rather
-    // than something you have to take on trust.
-    const src = (res.sources || []).length
-      ? '<div class="src"><b>From</b>' +
-        res.sources.map((s) => '<span class="srcpill">' + esc(s.name) + "</span>").join("") +
-        "</div>"
-      : "";
-    box.innerHTML = "<h4>AgentFury</h4><p>" + esc(res.text) + "</p>" + src;
-  } else {
-    box.innerHTML =
-      "<h4>AgentFury</h4><p>" +
-      esc((res && res.error) || "Couldn't answer that right now.") +
-      "</p>";
+  if (asking) return;
+  asking = true;
+  session.answerHtml = '<h4>AgentFury</h4><p class="dots"><span></span><span></span><span></span></p>';
+  render(session.results || {}, session.query);
+  try {
+    const res = await api.ask(q);
+    if (res && res.ok) {
+      const src = (res.sources || []).length
+        ? '<div class="src"><span>From</span>' +
+          res.sources.map((s) => '<span class="srcpill">' + esc(s.name) + "</span>").join("") + "</div>"
+        : "";
+      session.answerHtml = "<h4>AgentFury</h4><p>" + esc(res.text) + "</p>" + src;
+    } else {
+      session.answerHtml = "<h4>AgentFury</h4><p>" +
+        esc((res && res.error) || "Couldn't answer that right now.") + "</p>";
+    }
+  } finally {
+    asking = false;
+    render(session.results || {}, session.query);
   }
 }
 
+function consentCard() {
+  const el = document.createElement("div");
+  el.className = "consent";
+  el.innerHTML =
+    "<h4>Search what's written inside your files?</h4>" +
+    "<p>Quick Find matches file names right now. It can also read the text inside " +
+    "your documents, so you can search for what you actually wrote — and ask about it.<br><br>" +
+    "The index is built and kept <b>on this laptop</b>. Nothing is uploaded. When you ask a " +
+    "question, only the few matching passages are sent to answer it.</p>" +
+    '<div class="btns"><button class="cprimary" id="cyes">Keep it on this laptop</button>' +
+    '<button class="cghost" id="cno">Not now</button></div>';
+  el.querySelector("#cyes").addEventListener("click", async () => {
+    await api.settings({ contentMode: "local" });
+    contentMode = "local";
+    consentDismissed = true;
+    run();
+  });
+  el.querySelector("#cno").addEventListener("click", () => { consentDismissed = true; run(); });
+  return el;
+}
+
+// One search in flight at a time, and the newest always wins. The debounce
+// collapses a keystroke burst; the sequence guard drops a slow reply that
+// arrives after a newer one has already painted.
 let timer = 0;
 $q.addEventListener("input", () => {
   clearTimeout(timer);
@@ -386,7 +523,7 @@ async function run() {
   const query = $q.value;
   const mine = ++seq;
   const res = await api.search(query, group);
-  if (mine !== seq) return; // a newer keystroke already won
+  if (mine !== seq) return;
   lastCounts = (res && res.counts) || {};
   render(res || {}, query);
 }
@@ -398,46 +535,44 @@ function cycleFilter(dir) {
 }
 
 document.addEventListener("keydown", async (e) => {
-  const r = current();
-  const file = r && r.kind === "file" ? r.item : null;
-
+  const f = fileOf(current());
   if (e.key === "Escape") { e.preventDefault(); api.hide(); return; }
   if (e.key === "Tab") { e.preventDefault(); cycleFilter(e.shiftKey ? -1 : 1); return; }
   if (e.key === "ArrowDown") { e.preventDefault(); setSel(Math.min(sel + 1, rows.length - 1)); return; }
   if (e.key === "ArrowUp") { e.preventDefault(); setSel(Math.max(sel - 1, 0)); return; }
-
   if (e.key === "Enter") {
     e.preventDefault();
-    if (file && (e.ctrlKey || e.metaKey)) api.reveal(file.path);
+    if (f && (e.ctrlKey || e.metaKey)) api.reveal(f.path);
     else activate();
     return;
   }
-  if (!file) return;
-
+  if (!f) return;
   const k = e.key.toLowerCase();
   if ((e.ctrlKey || e.metaKey) && k === "c") {
     e.preventDefault();
-    const how = await api.copy(file.path, e.shiftKey ? "path" : "file");
+    const how = await api.copy(f.path, e.shiftKey ? "path" : "file");
     toast(how === "file" ? "File copied" : "Path copied");
     return;
   }
   if ((e.ctrlKey || e.metaKey) && k === "s") {
     e.preventDefault();
-    const how = await api.share(file.path);
-    toast(how === "sheet" ? "Sharing…" : "File path copied to share");
+    const how = await api.share(f.path);
+    toast(how === "sheet" ? "Sharing…" : "Path copied to share");
     return;
   }
   if (e.key === "Delete") {
     e.preventDefault();
-    if (await api.trash(file.path)) { toast("Moved to recycle bin"); run(); }
+    if (await api.trash(f.path)) { toast("Moved to recycle bin"); run(); }
     else toast("Couldn't move that file");
-    return;
   }
 });
 
+// Reopening restores the session rather than clearing it. The text is selected
+// so typing still replaces it instantly — you can carry on or start over, and
+// neither costs a click.
 api.onShow(() => {
-  $q.value = "";
-  group = "all";
+  $q.value = session.query || "";
+  group = session.group || "all";
   $q.focus();
   $q.select();
   run();

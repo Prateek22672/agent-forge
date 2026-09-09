@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api import (
+    quickfind_api,
     admin,
     agents,
     auth_api,
@@ -140,6 +141,7 @@ app.include_router(write_api.router)
 app.include_router(ext_auth_api.router)
 app.include_router(telemetry_api.router)
 app.include_router(files_api.router)
+app.include_router(quickfind_api.router)
 
 
 @app.get("/api/health")
