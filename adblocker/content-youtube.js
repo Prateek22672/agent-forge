@@ -135,16 +135,43 @@
         try { t.removeAttribute("opened"); } catch {}
         try { t.style.display = "none"; } catch {}
       });
-      // The harder "Ad blockers violate YouTube's Terms" dialog, which also
-      // pauses the video — drop it and let playback continue.
-      document.querySelectorAll("ytd-enforcement-message-view-model").forEach((el) => {
-        const dlg = el.closest("tp-yt-paper-dialog") || el;
-        try { dlg.remove(); } catch {}
+      // The enforcement dialog — "Ad blockers violate YouTube's Terms", and the
+      // softer "Video player will be blocked after 3 videos" countdown. Both
+      // pause playback and lock scrolling.
+      //
+      // This is a FALLBACK. The real fix strips the payload in yt-adfree.js
+      // before the page renders anything, because by the time an element exists
+      // here the player has already stopped and the counter has advanced. This
+      // catches whatever a future variant slips past that.
+      const DIALOGS = [
+        "ytd-enforcement-message-view-model",
+        "ytd-popup-container tp-yt-paper-dialog",
+        "yt-playability-error-supported-renderers",
+      ];
+      let killed = false;
+      DIALOGS.forEach((sel) => {
+        let nodes;
+        try { nodes = document.querySelectorAll(sel); } catch { return; }
+        nodes.forEach((el) => {
+          // Only act on the ad-blocker dialog. Sign-in prompts, age gates and
+          // "are you still watching" use the same container, and removing those
+          // would break the page rather than unblock it.
+          let txt = "";
+          try { txt = (el.textContent || "").slice(0, 400); } catch {}
+          if (sel !== DIALOGS[0] && !NAG.test(txt)) return;
+          try { (el.closest("tp-yt-paper-dialog") || el).remove(); killed = true; } catch {}
+        });
+      });
+
+      if (killed) {
         try { document.querySelectorAll("tp-yt-iron-overlay-backdrop").forEach((b) => b.remove()); } catch {}
-        try { document.body.style.overflow = "auto"; } catch {}
+        try { document.body.style.overflow = "auto"; document.body.style.overflowY = "auto"; } catch {}
+        try { document.documentElement.style.overflow = "auto"; } catch {}
+        // The dialog pauses the video on the way in; nothing resumes it once the
+        // dialog is gone, so the page just sits there looking broken.
         const v = document.querySelector(".html5-video-player video");
         if (v && v.paused) { try { v.play(); } catch {} }
-      });
+      }
     } catch {}
   };
 
