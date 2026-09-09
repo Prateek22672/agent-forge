@@ -1,0 +1,317 @@
+<title>AgentFury Case Study</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* ------------------------------------------------------------------ *
+     Committed to one visual world on purpose: this document exists to be
+     printed to PDF and attached to an application, so it is designed for
+     paper — white ground, ink that stays readable at 11pt, one accent that
+     survives a greyscale printer. No dark variant, because a PDF has no
+     viewer theme to follow.
+   * ------------------------------------------------------------------ */
+  :root {
+    --paper:   #ffffff;
+    --ink:     #14161c;   /* soft near-black; pure #000 prints harshly */
+    --muted:   #565d6e;   /* grey biased toward the accent, not neutral */
+    --faint:   #878ea0;
+    --rule:    #e2e5ee;
+    --accent:  #2440c8;   /* engineering blue — reads as ink in greyscale */
+    --tint:    #eff2fd;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", -apple-system, "Segoe UI", system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .sheet { max-width: 780px; margin: 0 auto; padding: 56px 46px 72px; }
+
+  h1, h2, h3 { font-family: "Newsreader", Georgia, serif; margin: 0; text-wrap: balance; }
+  h1 { font-size: 40px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.08; }
+  h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  h3 { font-size: 15.5px; font-weight: 600; font-family: "IBM Plex Sans", sans-serif; }
+  p  { margin: 0; max-width: 68ch; }
+
+  .mono, code { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; }
+  code {
+    font-size: 0.86em; background: var(--tint); padding: 0.1em 0.36em;
+    border-radius: 3px; color: var(--accent);
+  }
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace; font-size: 10.5px; font-weight: 500;
+    letter-spacing: 0.16em; text-transform: uppercase; color: var(--faint);
+  }
+
+  /* ---------- header ---------- */
+  header { display: flex; flex-direction: column; gap: 14px; padding-bottom: 26px; }
+  .standfirst { font-size: 16px; color: var(--muted); max-width: 62ch; }
+  .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .links a {
+    font-family: "IBM Plex Mono", monospace; font-size: 11.5px;
+    color: var(--accent); text-decoration: none;
+    border: 1px solid var(--rule); border-radius: 5px; padding: 5px 10px;
+  }
+  .links a:hover { border-color: var(--accent); }
+
+  /* ---------- sections ---------- */
+  section { padding-top: 30px; margin-top: 30px; border-top: 1px solid var(--rule); }
+  .lede { color: var(--muted); margin-top: 8px; }
+  .body-stack { display: flex; flex-direction: column; gap: 14px; margin-top: 18px; }
+
+  /* Two implementations sit side by side because the comparison IS the point. */
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 20px; }
+  .impl { border: 1px solid var(--rule); border-radius: 8px; padding: 18px 20px; }
+  .impl .tag {
+    font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--accent); background: var(--tint);
+    padding: 3px 8px; border-radius: 99px; display: inline-block; margin-bottom: 10px;
+  }
+  .impl h3 { margin-bottom: 6px; }
+  .impl p { font-size: 13px; color: var(--muted); }
+  .impl ul { margin: 10px 0 0; padding-left: 17px; }
+  .impl li { font-size: 12.5px; color: var(--muted); margin: 4px 0; }
+
+  /* Measured figures. Flat, not tiles — these support the prose, they aren't
+     the headline of the page. */
+  .figures { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin-top: 22px;
+             border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+  .fig { padding: 14px 16px 14px 0; }
+  .fig .n { font-family: "Newsreader", serif; font-size: 25px; font-weight: 500;
+            letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  .fig .l { font-size: 11.5px; color: var(--faint); line-height: 1.45; margin-top: 2px; }
+
+  /* Decisions carry a why — that's the part worth reading. */
+  .decisions { display: flex; flex-direction: column; gap: 0; margin-top: 16px; }
+  .dec { display: grid; grid-template-columns: 190px 1fr; gap: 22px;
+         padding: 15px 0; border-bottom: 1px dotted var(--rule); }
+  .dec:last-child { border-bottom: 0; }
+  .dec .what { font-weight: 600; font-size: 13.5px; }
+  .dec .why { font-size: 13px; color: var(--muted); }
+
+  .stack { display: grid; grid-template-columns: 130px 1fr; gap: 10px 22px; margin-top: 16px; font-size: 13px; }
+  .stack dt { font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: 0.08em;
+              text-transform: uppercase; color: var(--faint); padding-top: 2px; }
+  .stack dd { margin: 0; color: var(--muted); }
+
+  .scope { margin-top: 22px; padding: 15px 18px; background: var(--tint); border-radius: 8px; }
+  .scope p { font-size: 12.5px; color: var(--muted); max-width: none; }
+  .scope b { color: var(--ink); font-weight: 600; }
+
+  footer { margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--rule);
+           font-size: 11.5px; color: var(--faint); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+  @media (max-width: 680px) {
+    .sheet { padding: 36px 22px 52px; }
+    .pair, .figures { grid-template-columns: 1fr; }
+    .dec { grid-template-columns: 1fr; gap: 4px; }
+    .stack { grid-template-columns: 1fr; gap: 2px 0; }
+    .stack dd { margin-bottom: 10px; }
+  }
+
+  /* Printing is the point — keep sections whole and drop the interactive chrome. */
+  @page { size: A4; margin: 16mm 14mm; }
+  @media print {
+    .sheet { max-width: none; padding: 0; }
+    section { break-inside: avoid; page-break-inside: avoid; }
+    .pair, .figures, .dec { break-inside: avoid; page-break-inside: avoid; }
+    .links a { border-color: #ccc; }
+    a { color: var(--accent); }
+  }
+</style>
+
+<div class="sheet">
+
+  <header>
+    <span class="eyebrow">Engineering case study</span>
+    <h1>AgentFury</h1>
+    <p class="standfirst">
+      A personal AI agent that reads your email, manages your calendar and searches your
+      own machine — built as a multi-agent runtime with two independent retrieval systems,
+      one of them written from scratch so private documents never leave the device.
+    </p>
+    <div class="links">
+      <a href="https://github.com/Prateek22672/agent-forge">github.com/Prateek22672/agent-forge</a>
+      <a href="https://agentfury.foliofyx.in">agentfury.foliofyx.in</a>
+      <a href="https://github.com/Prateek22672/agent-forge/releases/latest">Desktop app — Windows &amp; macOS</a>
+    </div>
+  </header>
+
+  <section>
+    <span class="eyebrow">The problem it solves</span>
+    <h2>An assistant that can act, not just answer</h2>
+    <div class="body-stack">
+      <p>
+        Most assistants can talk about your work but cannot touch it. AgentFury connects to
+        Gmail and Calendar, keeps durable memory of what matters, and — in the desktop app —
+        searches the contents of every document on your laptop and acts on them.
+      </p>
+      <p class="lede">
+        Three surfaces share one backend: a web app, a Chrome extension, and an Electron
+        desktop app whose launcher answers questions about your own files in about a second.
+      </p>
+    </div>
+
+    <div class="figures">
+      <div class="fig"><div class="n">2</div><div class="l">independent RAG implementations</div></div>
+      <div class="fig"><div class="n">0</div><div class="l">bytes of file content stored in the cloud</div></div>
+      <div class="fig"><div class="n">0.51<span style="font-size:15px">s</span></div><div class="l">answer latency, measured across models</div></div>
+      <div class="fig"><div class="n">670<span style="font-size:15px">ms</span></div><div class="l">to index 51 documents into 421 passages</div></div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Retrieval</span>
+    <h2>Two RAG systems, because they answer different questions</h2>
+    <p class="lede">
+      One remembers what you told the agent. The other reads what is already on your disk.
+      They have different privacy constraints, so they are built differently.
+    </p>
+
+    <div class="pair">
+      <div class="impl">
+        <span class="tag">Semantic · server</span>
+        <h3>Agent memory</h3>
+        <p>
+          Facts the agent should remember across conversations, retrieved by meaning rather
+          than wording.
+        </p>
+        <ul>
+          <li>ChromaDB with all-MiniLM embeddings, running locally on the server</li>
+          <li>A shared retrieval pipeline cleans input, packs and de-duplicates context, and strips model preamble from the reply</li>
+          <li>Every reply exposes its retrieval and tool trace in the UI</li>
+        </ul>
+      </div>
+
+      <div class="impl">
+        <span class="tag">Lexical · on-device</span>
+        <h3>Local file search</h3>
+        <p>
+          The text of the user's own documents, indexed and ranked entirely on their machine.
+        </p>
+        <ul>
+          <li>BM25 written from scratch — no vector database, no embedding API</li>
+          <li>Text extracted from PDF, DOCX, PPTX and XLSX using only Node's <code>zlib</code>: a PDF page is a Flate stream, an Office file is a zip of XML</li>
+          <li>Verified on real files: 16,225 characters from a PDF, 39,185 from a spreadsheet</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="scope">
+      <p>
+        <b>Why no embeddings on the device.</b> Embedding local files would mean uploading the
+        text of every document to an API before the user had asked anything. BM25 needs no
+        model, so retrieval runs offline and only the handful of passages that actually match
+        a question are ever sent — and only at the moment one is asked. The model is
+        instructed to answer solely from those passages, cite the file it used, and say what
+        is missing rather than guess.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Agent runtime</span>
+    <h2>Tool-calling agents with an execution contract</h2>
+    <div class="body-stack">
+      <p>
+        Each agent is a configuration — model, system prompt, and a subset of the tool
+        registry — compiled into a LangGraph ReAct loop. The model proposes a structured tool
+        call, the runtime executes it and feeds the result back. Tools cover email, calendar,
+        reminders, notes, web search and memory.
+      </p>
+      <p>
+        The desktop agent goes further: it turns a sentence into a file operation. "Create a
+        folder with all my resumes and put it on the desktop" is parsed locally, resolved
+        against the file index, and returned as a <em>plan</em> — the destination, the folder
+        name and every file it would touch — which the user confirms before anything is
+        written. Operations copy rather than move, and name collisions are suffixed, so a
+        wrong guess costs a folder rather than data.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Engineering decisions</span>
+    <h2>Choices that were measured, not assumed</h2>
+    <div class="decisions">
+      <div class="dec">
+        <div class="what">Model chosen by benchmark</div>
+        <div class="why">
+          Every model on the account was timed on identical prompts, twice each. qwen3.8-27b
+          answered correctly at 0.51s against 0.73s for the next best, so it backs every
+          instant path, with a documented fallback if it is retired.
+        </div>
+      </div>
+      <div class="dec">
+        <div class="what">A dedicated answer endpoint</div>
+        <div class="why">
+          The launcher is judged on beating the user's patience. Routing it through the agent
+          endpoint would resolve a conversation, run a tool loop and write to the database —
+          all correct for a chat, all dead weight here. It gets one call to the fast model
+          with no tools and no persistence.
+        </div>
+      </div>
+      <div class="dec">
+        <div class="what">Machine-written files excluded</div>
+        <div class="why">
+          <code>package-lock.json</code> outranked a genuine slide deck for "database schema
+          tables" purely on npm package names. Lockfiles, minified bundles and source maps are
+          kept out of the content index.
+        </div>
+      </div>
+      <div class="dec">
+        <div class="what">Reading files is opt-in</div>
+        <div class="why">
+          The index is off until the user agrees, and the offer appears after a real search
+          rather than as a launch greeting. Settings reports the exact bytes held on device
+          against the bytes held in the cloud, which is zero — shown rather than asserted.
+        </div>
+      </div>
+      <div class="dec">
+        <div class="what">Zero-dependency extraction</div>
+        <div class="why">
+          Every parser added would be third-party code running over private documents and
+          shipping in the installer. Node already has <code>zlib</code>, which is all PDF and
+          the Office formats actually need.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Stack</span>
+    <h2>What it is built from</h2>
+    <dl class="stack">
+      <dt>Backend</dt>
+      <dd>Python · FastAPI · SQLAlchemy · Pydantic · JWT sessions</dd>
+      <dt>Agents</dt>
+      <dd>LangChain · LangGraph ReAct runtime · custom tool registry</dd>
+      <dt>Retrieval</dt>
+      <dd>ChromaDB with all-MiniLM embeddings · hand-written BM25 index · custom PDF/OOXML extractors</dd>
+      <dt>Inference</dt>
+      <dd>Groq and Google Gemini, behind one provider router with key rotation and fallback</dd>
+      <dt>Frontend</dt>
+      <dd>React · Vite · Tailwind · PWA with push notifications</dd>
+      <dt>Desktop</dt>
+      <dd>Electron · global hotkey launcher · background file indexing · signed auto-update</dd>
+      <dt>Delivery</dt>
+      <dd>GitHub Actions building Windows and macOS installers · Vercel · Render</dd>
+    </dl>
+
+    <div class="scope">
+      <p>
+        <b>Scope note.</b> Inference runs on hosted models rather than models trained here;
+        the work is in the agent runtime, the retrieval systems and the product engineering
+        around them. The embedding model is the one bundled with ChromaDB, running locally.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    <span>Prateek Koratala · prateek.koratala@gmail.com</span>
+    <span class="mono">github.com/Prateek22672/agent-forge</span>
+  </footer>
+
+</div>
