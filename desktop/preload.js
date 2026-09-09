@@ -14,4 +14,18 @@ contextBridge.exposeInMainWorld("agentforge", {
   // questions on its own. It stays in the main process — the popup is never
   // given the token, only the answer.
   setToken: (token) => ipcRenderer.invoke("auth:token", token),
+
+  // In-app updates. The download happens in the background while the app is
+  // running; "install" just restarts into the version already on disk, so the
+  // user never downloads an installer or removes the old one by hand.
+  update: {
+    state: () => ipcRenderer.invoke("update:state"),
+    check: () => ipcRenderer.invoke("update:check"),
+    install: () => ipcRenderer.invoke("update:install"),
+    onChange: (fn) => {
+      const h = (_e, s) => fn(s);
+      ipcRenderer.on("update:state", h);
+      return () => ipcRenderer.removeListener("update:state", h);
+    },
+  },
 });

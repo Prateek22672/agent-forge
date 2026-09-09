@@ -1,12 +1,21 @@
-# Auto-build the desktop installer and publish it to a GitHub Release.
+# Build the desktop installers and publish them to a GitHub Release.
 #
 # Trigger: push a version tag, e.g.
 #   git tag v0.1.0 && git push origin v0.1.0
 #
-# GitHub builds the Windows installer on its own runners (no local build needed)
-# and uploads AgentFury-Setup-<version>.exe + latest.yml (for auto-update) to a
-# Release for that tag. Then point the site's Download button at:
-#   https://github.com/Prateek22672/agent-forge/releases/latest
+# WHY THE RELEASE IS CREATED IN ITS OWN JOB FIRST
+#   electron-builder's GitHub publisher creates the release itself if it cannot
+#   find one for the tag. Two builders doing that at once each made their own,
+#   leaving two releases sharing a tag — and since every tag URL resolves to
+#   whichever was created first, the Windows installer sat in an unreachable
+#   duplicate and 404'd. Running the jobs in sequence helped but did not fix it:
+#   v0.6.2 still ended up with a stray second release holding one blockmap, and
+#   v0.7.0 published its .exe and then failed before uploading latest.yml — the
+#   file electron-updater needs to detect an update at all.
+#
+#   Creating the release up front removes the race entirely. Neither builder has
+#   to decide whether to create one, so both simply upload, and the two platform
+#   jobs can run in parallel again.
 name: Desktop release
 
 on:
@@ -18,7 +27,25 @@ permissions:
   contents: write # needed so the GITHUB_TOKEN can create the release
 
 jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create the release (idempotent)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists — reusing it."
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --title "${GITHUB_REF_NAME#v}" \
+              --notes "AgentFury ${GITHUB_REF_NAME#v}" \
+              --verify-tag
+          fi
+
   windows:
+    needs: release
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,18 +66,8 @@ jobs:
         run: npm run publish
 
   mac:
+    needs: release
     runs-on: macos-latest
-    # MUST NOT run alongside the Windows job. Both call electron-builder with
-    # --publish always, and when they start together neither sees a release for
-    # the tag yet, so each creates its OWN. GitHub then has two releases sharing
-    # one tag, and every tag URL — including /releases/latest/download/... —
-    # resolves to whichever was created first. That is exactly what broke the
-    # Windows download on v0.6.0 and v0.6.1: the .exe landed in the second,
-    # unreachable release and 404'd, while the .dmg in the first worked.
-    #
-    # Running second means the release already exists and the dmg is added to
-    # it, so one tag has one release holding both installers.
-    needs: windows
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

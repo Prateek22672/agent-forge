@@ -153,23 +153,62 @@ function createTray() {
     image = nativeImage.createEmpty();
   }
   tray = new Tray(image);
-  tray.setToolTip("AgentFury");
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: "Quick Find…", accelerator: "CommandOrControl+Space", click: () => showSpotlight() },
-      { label: "Open AgentFury", click: () => showWindow() },
-      { label: "Rebuild file index", click: () => { try { indexRoots(); } catch {} } },
-      { type: "separator" },
-      {
-        label: "Quit",
-        click: () => {
-          quitting = true;
-          app.quit();
-        },
-      },
-    ])
-  );
   tray.on("click", showWindow);
+  refreshTray();
+}
+
+// The tray menu carries the update state, so there is always somewhere to see
+// what's happening without the app interrupting to tell you.
+function refreshTray() {
+  if (!tray) return;
+  const s = updateState;
+  let updateItem;
+  if (s.status === "ready") {
+    updateItem = {
+      label: `Restart to update${s.version ? " to " + s.version : ""}`,
+      click: () => {
+        quitting = true;
+        try { require("electron-updater").autoUpdater.quitAndInstall(false, true); } catch {}
+      },
+    };
+  } else if (s.status === "downloading") {
+    updateItem = {
+      label: `Downloading update${s.percent ? ` — ${s.percent}%` : "…"}`,
+      enabled: false,
+    };
+  } else if (s.status === "checking") {
+    updateItem = { label: "Checking for updates…", enabled: false };
+  } else {
+    updateItem = {
+      label: "Check for updates",
+      click: () => {
+        try {
+          if (app.isPackaged) require("electron-updater").autoUpdater.checkForUpdates();
+        } catch {}
+      },
+    };
+  }
+
+  try {
+    tray.setToolTip(s.status === "ready" ? "AgentFury — update ready" : "AgentFury");
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: "Quick Find…", accelerator: "CommandOrControl+Space", click: () => showSpotlight() },
+        { label: "Open AgentFury", click: () => showWindow() },
+        { label: "Rebuild file index", click: () => { try { indexRoots(); } catch {} } },
+        { type: "separator" },
+        updateItem,
+        { type: "separator" },
+        {
+          label: "Quit",
+          click: () => {
+            quitting = true;
+            app.quit();
+          },
+        },
+      ])
+    );
+  } catch {}
 }
 
 function showWindow() {
@@ -339,6 +378,94 @@ function registerHotkeys() {
     "Open AgentFury"
   );
   return { spot, main };
+}
+
+// ---------------------------------------------------------------------------
+// Updates
+//
+// Nobody should be downloading an installer and reinstalling over the top to get
+// a fix. electron-updater can do the whole thing in the background — the app
+// fetches the new version while it's running and swaps it in on the next launch.
+//
+// The one rule: never interrupt. A download runs silently, and when it's ready
+// the app says so once, in the tray and in a small notice, and waits. Restarting
+// is the user's call — an update that yanks the window away mid-task is worse
+// than an update that waits an hour.
+// ---------------------------------------------------------------------------
+let updateState = { status: "idle", version: "", notified: false };
+
+function setUpdateState(status, version) {
+  updateState.status = status;
+  if (version) updateState.version = version;
+  refreshTray();
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("update:state", { ...updateState });
+    }
+  } catch {}
+}
+
+function setupUpdates() {
+  let autoUpdater;
+  try {
+    ({ autoUpdater } = require("electron-updater"));
+  } catch (e) {
+    console.warn("Auto-update unavailable:", e.message);
+    return;
+  }
+  // Download without asking, install only when told. Downloading early is what
+  // makes "Restart" instant later.
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.logger = null;
+
+  autoUpdater.on("checking-for-update", () => setUpdateState("checking"));
+  autoUpdater.on("update-not-available", () => setUpdateState("idle"));
+  autoUpdater.on("update-available", (info) => setUpdateState("downloading", info?.version));
+  autoUpdater.on("download-progress", (p) => {
+    updateState.percent = Math.round(p.percent || 0);
+    refreshTray();
+  });
+  autoUpdater.on("update-downloaded", (info) => {
+    setUpdateState("ready", info?.version);
+    if (!updateState.notified) {
+      updateState.notified = true;
+      // One quiet nudge, and only if a window is open to receive it.
+      try {
+        if (tray && process.platform === "win32") {
+          tray.displayBalloon({
+            title: "AgentFury update ready",
+            content: `Version ${info?.version || ""} installs next time you restart.`,
+          });
+        }
+      } catch {}
+    }
+  });
+  autoUpdater.on("error", (err) => {
+    // A failed check must never surface as a crash or a dialog — it's a
+    // background nicety, and the app works fine without it.
+    console.warn("Update check failed:", err && err.message);
+    setUpdateState("idle");
+  });
+
+  const check = () => {
+    if (!app.isPackaged) return; // dev checkouts have nothing to update to
+    try { autoUpdater.checkForUpdates(); } catch {}
+  };
+  check();
+  // The app is expected to stay in the tray for days, so a single check at
+  // launch would leave it stale. Every 6 hours is enough to be current without
+  // being noise.
+  setInterval(check, 6 * 60 * 60 * 1000);
+
+  ipcMain.handle("update:check", () => { check(); return { ...updateState }; });
+  ipcMain.handle("update:state", () => ({ ...updateState }));
+  ipcMain.handle("update:install", () => {
+    if (updateState.status !== "ready") return false;
+    quitting = true;
+    try { autoUpdater.quitAndInstall(false, true); } catch { return false; }
+    return true;
+  });
 }
 
 // Handle agentforge://auth?token=...&google=connected — the OAuth callback
@@ -757,13 +884,7 @@ app.whenReady().then(() => {
 
   registerHotkeys();
 
-  // Silent auto-update from GitHub Releases (no-op in dev / if unpublished).
-  try {
-    const { autoUpdater } = require("electron-updater");
-    autoUpdater.checkForUpdatesAndNotify();
-  } catch (e) {
-    console.warn("Auto-update unavailable:", e.message);
-  }
+  setupUpdates();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

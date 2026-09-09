@@ -9,6 +9,7 @@ import AgentForm from "./AgentForm";
 import PrivacyNote, { privacySeen } from "./PrivacyNote";
 import Trackers from "./Trackers";
 import WorkspaceBar from "./WorkspaceBar";
+import UpdateBanner from "./UpdateBanner";
 import EmailConfirm from "./EmailConfirm";
 import { startersFor } from "../suggestions";
 import { startAlarm, stopAlarm } from "../alarm";
@@ -255,6 +256,7 @@ export default function ChatApp({ user, onLogout }) {
 
   return (
     <div className="h-full flex flex-col">
+      <UpdateBanner />
       <TopBar
         user={user}
         settings={settings}
