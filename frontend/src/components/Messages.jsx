@@ -13,6 +13,7 @@ export default function Messages({
   onPickStarter,
   onNavigate,
   userName,
+  connections,
 }) {
   const endRef = useRef(null);
   useEffect(() => {
@@ -30,6 +31,7 @@ export default function Messages({
         onPickStarter={onPickStarter}
         onNavigate={onNavigate}
         userName={userName}
+        connections={connections}
       />
     );
   }

@@ -889,7 +889,13 @@ ipcMain.handle("spot:ask", async (e, q) => {
     try {
       const r = await apiRequest("POST", "/api/quickfind/ask", {
         question,
-        passages: hits.map((h) => ({ name: h.file.name, text: h.snippet })),
+        // The folder goes in the name, because "where is my internship deck?" is
+        // a location question and the model cannot answer it from file contents
+        // alone — it needs to be told where the match actually lives.
+        passages: hits.map((h) => ({
+          name: `${h.file.name} — in ${h.file.dir}`,
+          text: h.snippet,
+        })),
       });
       if (r && r.ok) {
         return {

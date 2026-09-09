@@ -338,6 +338,7 @@ export default function ChatApp({ user, onLogout }) {
               onPickStarter={(s) => send(s)}
               onNavigate={(v) => setView(v)}
               userName={(user?.name || "").split(" ")[0]}
+              connections={connections}
             />
             {pendingEmails.length > 0 && (
               <div className="px-6 pb-2 space-y-2">

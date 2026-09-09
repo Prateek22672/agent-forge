@@ -52,7 +52,12 @@ SYSTEM = (
     "3. If the excerpts do not contain the answer, say exactly what is missing "
     "instead of guessing. Never invent a detail that is not in the text.\n"
     "4. If the excerpts only partly cover it, answer that part and say what is "
-    "not covered."
+    "not covered.\n"
+    "5. 'Where is X' is a question about location: answer with the file name and "
+    "the folder it sits in, not a summary of what it contains.\n"
+    "6. Prefer concrete detail from the excerpts — names, dates, numbers — over "
+    "general description. The user can already see the file names; what they "
+    "cannot see is what is inside."
 )
 
 

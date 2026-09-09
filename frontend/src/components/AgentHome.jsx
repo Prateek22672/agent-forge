@@ -1,5 +1,6 @@
 import React from "react";
 import { api } from "../api";
+import AgentMap from "./AgentMap";
 
 // The home surface.
 //
@@ -112,8 +113,19 @@ const Eyebrow = ({ children }) => (
   </div>
 );
 
-export default function AgentHome({ activeAgentName, starters = [], onPickStarter, onNavigate, userName }) {
+export default function AgentHome({
+  activeAgentName, starters = [], onPickStarter, onNavigate, userName, connections,
+}) {
   const live = useLive();
+  const [showMap, setShowMap] = React.useState(() => {
+    try { return localStorage.getItem("af_home_map") !== "0"; } catch { return true; }
+  });
+  const toggleMap = () => {
+    setShowMap((v) => {
+      try { localStorage.setItem("af_home_map", v ? "0" : "1"); } catch {}
+      return !v;
+    });
+  };
 
   const greeting = React.useMemo(() => {
     const h = new Date().getHours();
@@ -137,6 +149,14 @@ export default function AgentHome({ activeAgentName, starters = [], onPickStarte
           ? "One thing coming up."
           : `${soon.length} things coming up.`
         : "Nothing needs you right now.";
+
+  // /connections reports per-service status under `services`, because signing in
+  // and granting Gmail are separate grants — being connected does not mean Gmail
+  // was allowed. The map has to show what was actually granted, not that an
+  // account exists, or it would claim a capability the agent doesn't have.
+  const svc = connections?.google?.services || {};
+  const gmailOn = !!(svc.gmail_read || svc.gmail_send);
+  const calOn = !!svc.calendar;
 
   const hasCards = urgent > 0 || soon.length > 0 || live.activity.length > 0;
 
@@ -162,6 +182,61 @@ export default function AgentHome({ activeAgentName, starters = [], onPickStarte
           </h1>
           <p className="mt-2.5 text-[15px] text-white/45">{briefing}</p>
         </header>
+
+        {/* The map: what the agent draws on, what it's doing, where it comes
+            out. Collapsible, because once you know the shape you mostly want
+            the prompts — but it's the first thing a new user should see. */}
+        <section className="mb-7">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">
+              How this is wired
+            </div>
+            <button
+              onClick={toggleMap}
+              className="text-[11px] text-white/35 hover:text-white/70 transition"
+            >
+              {showMap ? "Hide" : "Show"}
+            </button>
+          </div>
+          {showMap && (
+            <AgentMap
+              onNavigate={onNavigate}
+              sources={[
+                { title: "Gmail", meta: gmailOn ? "connected" : "not connected", ok: gmailOn },
+                { title: "Calendar", meta: calOn ? "connected" : "not connected", ok: calOn },
+                { title: "Your notes & memory", meta: "always on", ok: true },
+                { title: "Web search", meta: "on demand", ok: true },
+              ]}
+              core={{
+                eyebrow: activeAgentName ? activeAgentName : "Agent",
+                title: live.loading ? "Reading" : urgent || soon.length ? "Working" : "Watching",
+                meta: live.loading
+                  ? "catching up"
+                  : `${urgent + soon.length} open · ${live.activity.length} done today`,
+              }}
+              outputs={[
+                {
+                  title: "Replies drafted",
+                  meta: urgent ? `${urgent} waiting on you` : "nothing waiting",
+                  ok: urgent > 0,
+                  view: "priority",
+                },
+                {
+                  title: "Reminders & events",
+                  meta: soon.length ? `${soon.length} coming up` : "nothing scheduled",
+                  ok: soon.length > 0,
+                  view: "planner",
+                },
+                {
+                  title: "Autopilot log",
+                  meta: live.activity.length ? `${live.activity.length} actions` : "idle",
+                  ok: live.activity.length > 0,
+                  view: "autopilot",
+                },
+              ]}
+            />
+          )}
+        </section>
 
         {/* Prompts, as the references do them: gradient-edged, sparkle-marked,
             arriving in sequence. These are the agent offering to act, so they
