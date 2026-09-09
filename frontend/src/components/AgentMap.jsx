@@ -146,9 +146,8 @@ export default function AgentMap({ sources, outputs, core, onNavigate }) {
         className="af-enter relative z-10 w-[168px] md:w-[196px] rounded-[22px] p-4 text-center af-sheen"
         style={{
           animationDelay: "120ms",
-          background:
-            "linear-gradient(155deg, rgb(var(--c-glow-a) / 0.30), rgb(var(--c-glow-b) / 0.18))",
-          border: "1px solid rgb(var(--c-accent) / 0.42)",
+          background: "rgb(var(--c-accent) / 0.14)",
+          border: "1px solid rgb(var(--c-accent) / 0.45)",
         }}
       >
         <div

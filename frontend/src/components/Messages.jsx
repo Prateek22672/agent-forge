@@ -93,12 +93,28 @@ function Bubble({ message, onNavigate }) {
   if (isUser) {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[75%] bg-white text-black px-4 py-2 whitespace-pre-wrap rounded-2xl rounded-br-sm">
+        <div className="af-enter max-w-[75%] bg-white text-black px-4 py-2.5 whitespace-pre-wrap
+                        rounded-2xl rounded-br-md text-[13.5px] leading-relaxed">
           {message.content}
         </div>
       </div>
     );
   }
+
+  // Plain names for what the agent actually used, so the header says what it
+  // did rather than exposing function names.
+  const TOOL_LABEL = {
+    fetch_recent_emails: "read email",
+    send_email: "sent email",
+    create_reminder: "set a reminder",
+    create_note: "saved a note",
+    add_calendar_event: "added an event",
+    list_upcoming_events: "checked calendar",
+    web_search: "searched the web",
+    remember: "remembered",
+    recall: "recalled",
+  };
+  const toolChips = [...new Set(traces.map((t) => TOOL_LABEL[t.tool]).filter(Boolean))].slice(0, 3);
 
   // Derive nav chips from what the agent actually DID this turn (deduped).
   const navActions = [];
@@ -111,40 +127,84 @@ function Bubble({ message, onNavigate }) {
     }
   }
 
+  // A reply is a CARD, not a paragraph. It carries a header saying who is
+  // speaking and what it did, the answer, then the actions that follow from it —
+  // so a reply that used a tool looks visibly different from one that just
+  // answered, and you can see the work without reading it.
   return (
-    <div className="flex justify-start">
-      <div className="max-w-full md:max-w-[85%] w-full md:w-auto border border-white/20 px-4 py-3 overflow-hidden rounded-2xl rounded-bl-sm">
-        <Markdown text={message.content} />
+    <div className="af-enter flex justify-start">
+      <div
+        className="max-w-full md:max-w-[86%] w-full md:w-auto rounded-2xl rounded-bl-md overflow-hidden
+                   border border-white/12 bg-white/[0.028]"
+      >
+        <div className="flex items-center gap-2 px-4 pt-3 pb-2">
+          <span
+            className="grid place-items-center w-5 h-5 rounded-md shrink-0"
+            style={{ background: "rgb(var(--c-accent) / 0.16)", color: "rgb(var(--c-accent))" }}
+          >
+            <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor" aria-hidden>
+              <path d="M12 2.6l1.7 5.1a4 4 0 0 0 2.6 2.6l5.1 1.7-5.1 1.7a4 4 0 0 0-2.6 2.6L12 21.4l-1.7-5.1a4 4 0 0 0-2.6-2.6L2.6 12l5.1-1.7a4 4 0 0 0 2.6-2.6L12 2.6z" />
+            </svg>
+          </span>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/40">
+            AgentFury
+          </span>
+          {toolChips.length > 0 && (
+            <div className="flex items-center gap-1.5 ml-1 flex-wrap">
+              {toolChips.map((t) => (
+                <span
+                  key={t}
+                  className="text-[10px] px-2 py-[3px] rounded-full text-white/55 bg-white/[0.06]
+                             border border-white/10"
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="px-4 pb-3.5">
+          <Markdown text={message.content} />
+        </div>
+
         {navActions.length > 0 && onNavigate && (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 px-4 pb-3.5">
             {navActions.map(([label, view]) => (
               <button
                 key={label}
                 onClick={() => onNavigate(view)}
-                className="border border-white/40 px-3 py-1.5 text-xs font-medium hover:bg-white hover:text-black rounded-full"
+                className="px-3.5 py-1.5 text-[12px] font-medium rounded-full transition
+                           border border-white/18 text-white/80
+                           hover:text-white hover:border-white/45 hover:bg-white/[0.07]"
               >
                 {label}
               </button>
             ))}
           </div>
         )}
+
         {traces.length > 0 && (
-          <div className="mt-3 pt-2 border-t border-white/15">
+          <div className="border-t border-white/[0.08] bg-white/[0.015]">
             <button
               onClick={() => setShowTrace((s) => !s)}
-              className="text-[11px] text-white/60 hover:text-white"
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-[11px] text-white/45
+                         hover:text-white/80 transition"
             >
-              {showTrace ? "▾" : "▸"} {traces.length} retrieval/tool step
-              {traces.length === 1 ? "" : "s"} (RAG trace)
+              <span aria-hidden className={"transition-transform " + (showTrace ? "rotate-90" : "")}>›</span>
+              {traces.length} step{traces.length === 1 ? "" : "s"} — how it got this
             </button>
             {showTrace && (
-              <div className="mt-2 space-y-2">
+              <div className="px-4 pb-3.5 space-y-2">
                 {traces.map((t, i) => (
-                  <div key={i} className="text-[11px] bg-white/5 border border-white/15 p-2 rounded-lg">
-                    <div className="font-mono text-white/80">
-                      {t.tool}({JSON.stringify(t.args)})
+                  <div key={i} className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5">
+                    <div className="text-[11px] font-mono text-white/75">{t.tool}</div>
+                    <div className="text-[10.5px] font-mono text-white/30 mt-0.5 break-all">
+                      {JSON.stringify(t.args)}
                     </div>
-                    <div className="text-white/50 mt-1 line-clamp-4">{t.output}</div>
+                    <div className="text-[11px] text-white/50 mt-1.5 line-clamp-4 leading-relaxed">
+                      {t.output}
+                    </div>
                   </div>
                 ))}
               </div>

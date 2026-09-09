@@ -17,6 +17,79 @@ export default function Landing({ onGetStarted, onSignIn }) {
   );
 }
 
+const WIN_URL = "https://github.com/Prateek22672/agent-forge/releases/latest/download/AgentFury-Setup.exe";
+const MAC_URL = "https://github.com/Prateek22672/agent-forge/releases/latest/download/AgentFury.dmg";
+
+// Download, in the header, defaulting to the platform you're actually on — but
+// with the other one one click away, because people download for a different
+// machine all the time.
+function DownloadMenu() {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+  const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || "");
+
+  React.useEffect(() => {
+    if (!open) return;
+    const away = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const esc = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+
+  const Item = ({ href, children, note }) => (
+    <a
+      href={href}
+      onClick={() => setOpen(false)}
+      className="flex items-start gap-3 px-3.5 py-2.5 rounded-xl hover:bg-white/10 transition"
+    >
+      <span className="mt-0.5 text-white/45">↓</span>
+      <span>
+        <span className="block text-[13px] text-white">{children}</span>
+        <span className="block text-[11px] text-white/40">{note}</span>
+      </span>
+    </a>
+  );
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="true"
+        aria-expanded={open}
+        className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/20
+                   text-white/80 hover:text-white hover:border-white/45 transition"
+      >
+        Download
+        <span aria-hidden className={"text-[9px] transition-transform " + (open ? "rotate-180" : "")}>▼</span>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-2 z-50 w-64 p-1.5 rounded-2xl border border-white/15
+                        bg-black shadow-2xl">
+          {isMac ? (
+            <>
+              <Item href={MAC_URL} note="Apple silicon & Intel">Download for Mac</Item>
+              <Item href={WIN_URL} note="Windows 10 and 11">Download for Windows</Item>
+            </>
+          ) : (
+            <>
+              <Item href={WIN_URL} note="Windows 10 and 11">Download for Windows</Item>
+              <Item href={MAC_URL} note="Apple silicon & Intel">Download for Mac</Item>
+            </>
+          )}
+          <p className="px-3.5 pt-2 pb-1.5 text-[10.5px] leading-relaxed text-white/30 border-t border-white/10 mt-1.5">
+            The desktop app adds Quick Find — search everything on your own
+            computer, offline.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Nav({ onGetStarted, onSignIn }) {
   return (
     <header className="sticky top-0 z-20 backdrop-blur bg-black/70 border-b border-white/10">
@@ -28,6 +101,10 @@ function Nav({ onGetStarted, onSignIn }) {
           </span>
         </div>
         <nav className="flex items-center gap-2 text-sm">
+          {/* Download belongs in the header. The desktop app is the thing that
+              can search your own machine — burying its link at the bottom of the
+              page means most people never learn it exists. */}
+          <DownloadMenu />
           <ThemeToggle compact />
           <button onClick={onSignIn} className="px-3 py-1.5 text-white/70 hover:text-white">
             Sign in

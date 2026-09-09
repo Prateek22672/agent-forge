@@ -155,10 +155,13 @@ body {
    border via two backgrounds so it works on any theme ground without needing a
    solid colour behind it. */
 .af-edge {
-  border: 1px solid transparent;
-  background:
-    linear-gradient(rgb(var(--c-bg)), rgb(var(--c-bg))) padding-box,
-    linear-gradient(135deg, rgb(var(--c-glow-a) / .55), rgb(var(--c-glow-b) / .30)) border-box;
+  border: 1px solid rgb(var(--c-accent) / .30);
+  background: rgb(var(--c-accent) / .045);
+  transition: border-color .16s ease, background-color .16s ease;
+}
+.af-edge:hover {
+  border-color: rgb(var(--c-accent) / .60);
+  background: rgb(var(--c-accent) / .10);
 }
 
 @media (prefers-reduced-motion: reduce) {

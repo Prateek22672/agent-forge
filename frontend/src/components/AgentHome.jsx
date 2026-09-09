@@ -258,8 +258,7 @@ export default function AgentHome({
                   <span
                     className="shrink-0 grid place-items-center w-6 h-6 rounded-lg"
                     style={{
-                      background:
-                        "linear-gradient(135deg, rgb(var(--c-glow-a) / .30), rgb(var(--c-glow-b) / .22))",
+                      background: "rgb(var(--c-accent) / .16)",
                       color: "rgb(var(--c-accent))",
                     }}
                   >

@@ -289,6 +289,8 @@ export default function ChatApp({ user, onLogout }) {
               setSidebarOpen(false);
             }}
             onDelete={deleteConversation}
+            onSearch={() => setShowSearch(true)}
+            onCollapse={() => setSidebarOpen(false)}
           />
         </div>
         {sidebarOpen && (
