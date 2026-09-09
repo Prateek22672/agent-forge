@@ -30,3 +30,6 @@ frontend/.vite/
 .DS_Store
 Thumbs.db
 dist-extension/
+
+# Local editor/tooling state — never part of the project.
+.claude/

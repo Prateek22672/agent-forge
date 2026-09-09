@@ -246,7 +246,7 @@ button:active {
 .md code {
   word-break: break-word;
 }
-/* Readable, scrollable tables on mobile (Claude-style). */
+/* Readable, scrollable tables on mobile. */
 .md table {
   display: block;
   width: 100%;

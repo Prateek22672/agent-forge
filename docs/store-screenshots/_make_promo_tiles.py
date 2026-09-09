@@ -12,7 +12,8 @@ import subprocess
 ROOT = pathlib.Path("c:/My Projects/agent")
 OUT = ROOT / "docs/store-screenshots"
 WORK = pathlib.Path(
-    "C:/Users/Lenovo/AppData/Local/Temp/claude/c--My-Projects-agent/1cca1e58-1424-4cc0-a73a-6fcba56b7934/scratchpad/shots"
+    # Point this at wherever the raw captures are.
+    "./raw-shots"
 )
 WORK.mkdir(parents=True, exist_ok=True)
 CHROME = r"C:\Program Files\Google\Chrome\Application\chrome.exe"

@@ -45,4 +45,4 @@ network requests of its own.
 
 ## Contact
 
-Questions: tbcclaude55@gmail.com
+Questions: prateek.koratala@gmail.com
