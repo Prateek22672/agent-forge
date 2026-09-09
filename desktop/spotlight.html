@@ -155,6 +155,21 @@
   .dots span:nth-child(2) { animation-delay: .15s } .dots span:nth-child(3) { animation-delay: .3s }
   @keyframes blink { 50% { opacity: .25 } }
 
+  /* ---- action card ---- */
+  .plan { margin: 8px; padding: 15px 17px; border-radius: 14px;
+    background: rgba(143,156,255,.07); border: 1px solid var(--accent-line); }
+  .plan h4 { margin: 0 0 3px; font-size: 10px; text-transform: uppercase; letter-spacing: .16em;
+             color: var(--accent); font-weight: 700; }
+  .plan .title { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+  .plan .where { font-size: 11.5px; color: var(--muted); }
+  .plan .files { margin: 11px 0 0; padding: 9px 11px; border-radius: 10px; background: rgba(0,0,0,.28);
+                 font-size: 11px; color: var(--muted); line-height: 1.65; max-height: 92px; overflow: hidden; }
+  .plan .btns { display: flex; gap: 8px; margin-top: 13px; align-items: center; }
+  .plan button { border: 0; border-radius: 9px; padding: 8px 15px; font-size: 12px; font-weight: 600; }
+  .plan .go { background: var(--accent); color: #10111a; }
+  .plan .no { background: var(--chip); color: var(--muted); border: 1px solid var(--rule) !important; }
+  .plan .safe { margin-left: auto; font-size: 10.5px; color: var(--dim); }
+
   /* ---- consent ---- */
   .consent { margin: 8px; padding: 16px 18px; border-radius: 14px;
     background: linear-gradient(150deg, rgba(143,156,255,.11), rgba(185,140,255,.05));
@@ -203,7 +218,7 @@
 
   <div class="foot">
     <span class="act"><kbd>↑</kbd><kbd>↓</kbd> move</span>
-    <span class="act"><kbd>↵</kbd> open</span>
+    <span class="act"><kbd>↵</kbd> <span id="hintEnter">open</span></span>
     <span class="act"><kbd>Ctrl</kbd><kbd>↵</kbd> folder</span>
     <span class="act"><kbd>Ctrl</kbd><kbd>C</kbd> copy</span>
     <span class="act sp"><kbd>Tab</kbd> filter</span>
@@ -233,6 +248,7 @@ let seq = 0;
 let lastCounts = {};
 let contentMode = "off";
 let consentDismissed = false;
+let pendingPlan = null;
 
 // Reopening the popup used to wipe the query and the answer, so glancing at
 // another window mid-search meant starting over. The session is kept instead:
@@ -301,6 +317,31 @@ const sect = (t) => {
   return el;
 };
 
+// Is this a question, or a filename?
+//
+// It decides what Enter does, which is the difference between "answer me" and
+// "open something". Typing "where is my internship ppt" and pressing Enter used
+// to open whichever file happened to be selected — the Ask row was last in the
+// list and a file was selected by default, so the one thing the sentence asked
+// for was the one thing Enter would not do.
+//
+// A question mark, a question word, or simply enough words to be a sentence:
+// nobody names a file "where is my internship ppt", and nobody types four words
+// of prose when they want a filename match.
+const ACTION_HINT =
+  /\b(?:create|make)\b[\s\S]*\bfolder\b|\b(?:copy|collect|gather|group|organi[sz]e)\b/i;
+
+const ASK_WORDS =
+  /^(where|what|who|whose|which|when|why|how|is|are|was|were|can|could|should|would|do|does|did|find|show|list|tell|give|summari[sz]e|explain|compare|draft|write|remind|open the|search)\b/i;
+
+function looksLikeQuestion(q) {
+  const t = (q || "").trim();
+  if (t.length < 3) return false;
+  if (t.endsWith("?")) return true;
+  if (ASK_WORDS.test(t)) return true;
+  return t.split(/\s+/).length >= 4;
+}
+
 function render(res, query) {
   const items = res.items || [];
   const inside = res.inside || [];
@@ -309,11 +350,17 @@ function render(res, query) {
   session.query = query;
   session.group = group;
 
+  const q = query.trim();
+  const asking = looksLikeQuestion(q);
+
   rows = [];
+  // A question puts Ask first and selects it, so Enter answers. A keyword puts
+  // the files first, so Enter opens. Either way the highlighted row is what
+  // Enter will do — the user never has to guess.
+  if (q && asking) rows.push({ kind: "ask", q });
   inside.forEach((hit) => rows.push({ kind: "inside", hit }));
   items.forEach((item) => rows.push({ kind: "file", item }));
-  const q = query.trim();
-  if (q) rows.push({ kind: "ask", q });
+  if (q && !asking) rows.push({ kind: "ask", q });
 
   sel = 0;
   $count.textContent = items.length || "";
@@ -324,6 +371,9 @@ function render(res, query) {
   void $list.offsetWidth;
   $list.classList.add("enter");
   renderChips();
+
+  // A pending action sits above everything — it's waiting on a decision.
+  if (pendingPlan) $list.appendChild(planCard(pendingPlan));
 
   // A previous answer survives a re-render, so refining the search doesn't
   // throw away what the agent already told you.
@@ -360,8 +410,20 @@ function render(res, query) {
     el.dataset.i = i;
 
     if (r.kind === "ask") {
-      el.innerHTML = '<div class="ico">✦</div><div class="txt"><div class="nm">Ask about “' +
-        esc(r.q) + '”</div><div class="pt">Answered here from your own files</div></div>';
+      // An instruction and a question are different jobs, and the row has to
+      // say which one Enter will do — "Answer:" on "copy my resumes somewhere"
+      // promises the wrong thing entirely.
+      const primary = i === 0;
+      const isDo = ACTION_HINT.test(r.q);
+      const label = isDo ? "Do this: “" : primary ? "Answer: “" : "Ask about “";
+      const sub = isDo
+        ? "Press Enter — you'll see exactly what it will do first"
+        : primary
+          ? "Press Enter — answered here from your own files"
+          : "Answered here, without leaving this window";
+      el.innerHTML =
+        '<div class="ico">' + (isDo ? "⚡" : "✦") + '</div><div class="txt"><div class="nm">' +
+        label + esc(r.q) + '”</div><div class="pt">' + sub + "</div></div>";
     } else if (r.kind === "inside") {
       const f = r.hit.file;
       el.innerHTML = '<div class="ico">' + (KIND_ICON[f.kind] || "📄") + "</div>" +
@@ -387,6 +449,12 @@ function paint() {
     el.classList.toggle("on", on);
     if (on) el.scrollIntoView({ block: "nearest" });
   });
+  // The hint tracks the selection, so Enter's effect is never a guess.
+  const hint = document.getElementById("hintEnter");
+  if (hint) {
+    const r = rows[sel];
+    hint.textContent = r && r.kind === "ask" ? "ask" : "open";
+  }
   updatePreview();
 }
 
@@ -457,7 +525,16 @@ function bindActions(f) {
 async function activate(i) {
   const r = rows[i ?? sel];
   if (!r) return;
-  if (r.kind === "ask") return askInline(r.q);
+  if (r.kind === "ask") {
+    // An instruction ("copy my resumes to the desktop") is planned, not asked.
+    const p = await api.plan(r.q);
+    if (p && p.ok) { pendingPlan = p; return run(); }
+    if (p && p.reason) {
+      session.answerHtml = "<h4>AgentFury</h4><p>" + esc(p.reason) + "</p>";
+      return run();
+    }
+    return askInline(r.q);
+  }
   const f = fileOf(r);
   if (f) api.open(f.path);
 }
@@ -487,6 +564,41 @@ async function askInline(q) {
     asking = false;
     render(session.results || {}, session.query);
   }
+}
+
+// The confirmation card. It exists so a parsed sentence never becomes a disk
+// write on its own — you see the folder, the destination and the exact file
+// count before anything happens.
+function planCard(p) {
+  const el = document.createElement("div");
+  el.className = "plan";
+  const shown = p.files.slice(0, 4).map((f) => esc(f.name)).join("<br>");
+  const more = p.files.length > 4 ? `<br>+ ${p.files.length - 4} more` : "";
+  el.innerHTML =
+    "<h4>Ready to run</h4>" +
+    '<div class="title">Copy ' + p.files.length + " file" + (p.files.length === 1 ? "" : "s") +
+    " into “" + esc(p.folderName) + "”</div>" +
+    '<div class="where">' + esc(p.destPath) + "</div>" +
+    '<div class="files">' + shown + more + "</div>" +
+    '<div class="btns"><button class="go" id="pgo">Create folder &amp; copy</button>' +
+    '<button class="no" id="pno">Cancel</button>' +
+    '<span class="safe">Copies — originals stay put</span></div>';
+
+  el.querySelector("#pno").addEventListener("click", () => { pendingPlan = null; run(); });
+  el.querySelector("#pgo").addEventListener("click", async () => {
+    const go = el.querySelector("#pgo");
+    go.textContent = "Copying…";
+    go.disabled = true;
+    const res = await api.execute(p);
+    pendingPlan = null;
+    session.answerHtml = res.ok
+      ? "<h4>Done</h4><p>Copied " + res.copied + " file" + (res.copied === 1 ? "" : "s") +
+        " into " + esc(res.folder) +
+        (res.failedCount ? "<br>" + res.failedCount + " couldn't be copied." : "") + "</p>"
+      : "<h4>AgentFury</h4><p>" + esc(res.error || "That didn't work.") + "</p>";
+    run();
+  });
+  return el;
 }
 
 function consentCard() {

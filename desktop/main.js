@@ -22,6 +22,7 @@ const { startLocalBackend, stopLocalBackend } = require("./local-backend");
 const fileSearch = require("./file-search");
 const contentIndex = require("./content-index");
 const settings = require("./settings");
+const actions = require("./actions");
 
 // Custom protocol used to bring the Google sign-in back from the system browser
 // into this app (see handleDeepLink). Registering early is important on Windows.
@@ -725,6 +726,34 @@ ipcMain.handle("spot:preview", async (e, p) => {
   } catch {
     return null;
   }
+});
+
+// Actions. plan() only DESCRIBES what would happen; execute() is a separate
+// call the user has to trigger from the confirmation card. Splitting them is the
+// safety model — nothing touches the disk on the strength of a parsed sentence.
+const homePaths = () => {
+  const pick = (n) => { try { return app.getPath(n); } catch { return null; } };
+  return { desktop: pick("desktop"), documents: pick("documents"), downloads: pick("downloads") };
+};
+
+ipcMain.handle("spot:plan", (e, q) => {
+  if (!fromSpotlight(e)) return null;
+  try {
+    return actions.plan(q, {
+      search: (query, n, kind) => fileSearch.search(query, n, kind),
+      homePaths: homePaths(),
+    });
+  } catch (err) {
+    console.warn("Action planning failed:", err.message);
+    return null;
+  }
+});
+
+ipcMain.handle("spot:execute", async (e, p) => {
+  if (!fromSpotlight(e)) return { ok: false, error: "Not allowed." };
+  const res = await actions.execute(p);
+  if (res.ok) fileSearch.reindex(); // the new folder should be findable at once
+  return res;
 });
 
 // Storage choice. Turning content reading on triggers the first index build.

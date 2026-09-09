@@ -12,6 +12,9 @@ contextBridge.exposeInMainWorld("spotlight", {
   trash: (p) => ipcRenderer.invoke("spot:trash", p),
   ask: (q) => ipcRenderer.invoke("spot:ask", q),
   preview: (p) => ipcRenderer.invoke("spot:preview", p),
+  // plan() only describes; execute() is a separate, explicit call.
+  plan: (q) => ipcRenderer.invoke("spot:plan", q),
+  execute: (p) => ipcRenderer.invoke("spot:execute", p),
   settings: (patch) => ipcRenderer.invoke("spot:settings", patch),
   hide: () => ipcRenderer.invoke("spot:hide"),
   onShow: (fn) => ipcRenderer.on("spot:shown", () => fn()),
