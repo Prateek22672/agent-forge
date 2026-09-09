@@ -7,7 +7,10 @@
 // it there.
 const KEY = "agentforge_theme";
 
-export const THEMES = ["system", "light", "dark"];
+export const THEMES = ["system", "light", "dark", "purple", "pink", "blue", "yellow"];
+
+// Which of them are real palettes rather than "follow the OS".
+export const PALETTES = THEMES.filter((t) => t !== "system");
 
 const media = () =>
   typeof window !== "undefined" && window.matchMedia
@@ -24,7 +27,7 @@ export function getPreference() {
 }
 
 export function resolve(pref = getPreference()) {
-  if (pref === "light" || pref === "dark") return pref;
+  if (pref !== "system" && THEMES.includes(pref)) return pref;
   const m = media();
   return m && m.matches ? "light" : "dark";
 }

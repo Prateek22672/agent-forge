@@ -15,6 +15,11 @@
    an inversion: a slightly warm off-white ground so large surfaces don't glare,
    and a near-black ink that stays soft rather than pure #000.
    --------------------------------------------------------------------------- */
+/* Six themes. Each is a full palette, not a hue swapped onto one layout: the
+   ground carries a trace of the accent so the two belong to the same family,
+   and the ink is tinted to match rather than being neutral grey dropped on top.
+   Colour themes are LIGHT-grounded, because a saturated dark ground makes long
+   reading tiring and turns every surface into a colour decision. */
 :root,
 :root[data-theme="dark"] {
   --c-fg: 255 255 255;
@@ -22,6 +27,8 @@
   --c-panel: 17 21 31;
   --c-edge: 30 37 51;
   --c-accent: 129 140 248;
+  --c-glow-a: 96 110 255;
+  --c-glow-b: 168 116 255;
   color-scheme: dark;
 }
 
@@ -31,6 +38,54 @@
   --c-panel: 255 255 255;
   --c-edge: 220 223 231;
   --c-accent: 79 70 229;
+  --c-glow-a: 120 130 255;
+  --c-glow-b: 175 140 255;
+  color-scheme: light;
+}
+
+:root[data-theme="purple"] {
+  --c-fg: 28 20 48;
+  --c-bg: 249 246 254;
+  --c-panel: 255 255 255;
+  --c-edge: 226 216 246;
+  --c-accent: 124 58 237;
+  --c-glow-a: 150 100 250;
+  --c-glow-b: 196 132 252;
+  color-scheme: light;
+}
+
+:root[data-theme="pink"] {
+  --c-fg: 45 17 34;
+  --c-bg: 253 245 249;
+  --c-panel: 255 255 255;
+  --c-edge: 246 214 229;
+  --c-accent: 214 51 108;
+  --c-glow-a: 244 114 182;
+  --c-glow-b: 251 146 190;
+  color-scheme: light;
+}
+
+:root[data-theme="blue"] {
+  --c-fg: 13 26 43;
+  --c-bg: 243 248 253;
+  --c-panel: 255 255 255;
+  --c-edge: 209 226 244;
+  --c-accent: 29 78 216;
+  --c-glow-a: 96 165 250;
+  --c-glow-b: 129 200 250;
+  color-scheme: light;
+}
+
+:root[data-theme="yellow"] {
+  /* Yellow can't carry text or fine strokes at readable contrast, so it warms
+     the ground and the glow while amber does the actual accenting. */
+  --c-fg: 39 31 12;
+  --c-bg: 254 251 242;
+  --c-panel: 255 255 255;
+  --c-edge: 240 228 200;
+  --c-accent: 180 83 9;
+  --c-glow-a: 251 191 36;
+  --c-glow-b: 253 224 121;
   color-scheme: light;
 }
 
@@ -52,6 +107,63 @@ body {
    fight the text on a light one, so they step back in light mode. */
 :root[data-theme="light"] .theme-dark-only {
   opacity: 0.06;
+}
+
+/* ---------------------------------------------------------------------------
+   AGENTIC MOTION
+   The feeling of something thinking, not a page decorating itself. Three cheap
+   primitives, all transform/filter only so they stay on the compositor:
+
+     .af-enter    entrance — content arrives rather than blinking in
+ *                  (NOT af-rise: the admin dashboard already owns that name,
+ *                   and its keyframes are defined later in this file, so they
+ *                   silently overrode ours and put opacity:0 back)
+     .af-sheen    a slow highlight crossing a surface, used on the AI accents
+     .af-pulse    a soft breathing glow for anything that is live
+
+   Delays are set inline where a group should arrive in sequence. Every one of
+   these is disabled wholesale under prefers-reduced-motion at the bottom.
+   --------------------------------------------------------------------------- */
+/* Transform only — never opacity. These entrances carry a stagger delay, which
+   needs animation-fill-mode: both, which parks the element at the keyframe's
+   start until its turn comes. If the animation then doesn't run — a background
+   window, a throttled tab, a compositor that skipped it — a keyframe beginning
+   at opacity 0 leaves the content PERMANENTLY invisible. That is not
+   hypothetical: it hid the whole results list in the desktop popup, and it hid
+   every prompt and card on this page. A rise with no fade still reads as
+   arriving, and cannot fail that way. */
+@keyframes af-enter { from { transform: translateY(10px); } }
+@keyframes af-sheen { 0% { transform: translateX(-120%); } 60%, 100% { transform: translateX(220%); } }
+@keyframes af-pulse { 0%, 100% { opacity: .55; transform: scale(1); } 50% { opacity: 1; transform: scale(1.06); } }
+@keyframes af-spin { to { transform: rotate(360deg); } }
+
+.af-enter { animation: af-enter .5s cubic-bezier(.22,.85,.3,1) both; }
+.af-pulse { animation: af-pulse 2.6s ease-in-out infinite; }
+
+/* A sheen needs a clipping parent; the child is the moving band. */
+.af-sheen { position: relative; overflow: hidden; }
+.af-sheen::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(100deg, transparent 20%, rgb(var(--c-fg) / .085) 46%, transparent 72%);
+  transform: translateX(-120%);
+  pointer-events: none;
+}
+.af-sheen:hover::after { animation: af-sheen 1.1s ease-out; }
+
+/* The gradient hairline that marks anything the agent produced. Drawn as a
+   border via two backgrounds so it works on any theme ground without needing a
+   solid colour behind it. */
+.af-edge {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(rgb(var(--c-bg)), rgb(var(--c-bg))) padding-box,
+    linear-gradient(135deg, rgb(var(--c-glow-a) / .55), rgb(var(--c-glow-b) / .30)) border-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .af-enter, .af-pulse { animation: none !important; }
+  .af-sheen::after { display: none; }
 }
 
 /* Base radius for every interactive control — the single biggest lever for a

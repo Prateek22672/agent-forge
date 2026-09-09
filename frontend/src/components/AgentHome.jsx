@@ -1,96 +1,118 @@
 import React from "react";
 import { api } from "../api";
-import Strands from "./Strands";
 
-// The home surface, replacing "Where should we begin?" and a row of static
-// suggestion chips.
+// The home surface.
 //
-// THE RULE THIS IS BUILT ON: every tile reports something true right now, and
-// every tile does something when clicked. That's the difference between an agent
-// surface and a dashboard — a dashboard tells you a number, an agent tells you
-// what it noticed and offers to act on it. Nothing here is a vanity metric, and
-// nothing is a label that could have been printed before the app loaded.
+// Layout follows the shape assistant apps have converged on — ambient ground,
+// one large line of type, a short row of cards — because it works: the eye
+// lands on the greeting, reads a sentence, and finds the cards already in
+// peripheral vision. What is NOT borrowed is the content. Those apps fill their
+// cards with entry points ("Write a first draft", "Create an image"). These
+// carry state: what is waiting, what is due, what got handled while you were
+// away.
 //
-// Anything with nothing to report doesn't render. An empty grid of zeroes is
-// what made the old five-tab layout feel dead.
+// Two rules decide whether anything renders at all:
+//   1. Every card states something true right now AND does something when
+//      clicked. A card that could have been printed before the app loaded is a
+//      poster, not an interface.
+//   2. Anything with nothing to report does not render. A grid of zeroes is
+//      exactly what made the old five-tab layout feel dead.
+
+const Sparkle = ({ className = "" }) => (
+  <svg viewBox="0 0 24 24" className={className} width="13" height="13" aria-hidden fill="currentColor">
+    <path d="M12 2.6l1.7 5.1a4 4 0 0 0 2.6 2.6l5.1 1.7-5.1 1.7a4 4 0 0 0-2.6 2.6L12 21.4l-1.7-5.1a4 4 0 0 0-2.6-2.6L2.6 12l5.1-1.7a4 4 0 0 0 2.6-2.6L12 2.6z" />
+  </svg>
+);
 
 const useLive = () => {
-  const [state, setState] = React.useState({
-    loading: true,
-    priority: [],
-    reminders: [],
-    notes: 0,
-    activity: [],
-  });
-
+  const [s, setS] = React.useState({ loading: true, priority: [], reminders: [], activity: [] });
   const load = React.useCallback(async () => {
-    const [pri, rem, notes, act] = await Promise.allSettled([
+    const [pri, rem, act] = await Promise.allSettled([
       api.listPriority(),
       api.listReminders(),
-      api.listNotes(),
       api.autopilotActivity(),
     ]);
-    const val = (r, d) => (r.status === "fulfilled" && r.value ? r.value : d);
-    setState({
+    const val = (r) => (r.status === "fulfilled" && Array.isArray(r.value) ? r.value : []);
+    setS({
       loading: false,
-      priority: (val(pri, []) || []).filter((p) => !p.done && !p.handled),
-      reminders: (val(rem, []) || []).filter((r) => !r.done),
-      notes: (val(notes, []) || []).length,
-      activity: (val(act, []) || []).slice(0, 4),
+      priority: val(pri).filter((p) => !p.done && !p.handled),
+      reminders: val(rem).filter((r) => !r.done && r.status !== "done"),
+      activity: val(act).slice(0, 3),
     });
   }, []);
-
   React.useEffect(() => {
     load();
-    const onRefresh = () => load();
-    window.addEventListener("agentforge:refresh", onRefresh);
-    return () => window.removeEventListener("agentforge:refresh", onRefresh);
+    const on = () => load();
+    window.addEventListener("agentforge:refresh", on);
+    return () => window.removeEventListener("agentforge:refresh", on);
   }, [load]);
-
-  return state;
+  return s;
 };
 
-const fmtDue = (iso) => {
-  const t = new Date(iso).getTime();
-  if (!t) return "";
-  const diff = t - Date.now();
-  const mins = Math.round(diff / 60000);
-  if (diff < 0) return "overdue";
-  if (mins < 60) return `in ${mins}m`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `in ${hrs}h`;
-  return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+const dueMs = (r) => {
+  const raw = r.due_at || r.dueAt;
+  if (!raw) return 0;
+  return new Date(String(raw).endsWith("Z") ? raw : raw + "Z").getTime();
+};
+const fmtDue = (ms) => {
+  if (!ms) return "";
+  const d = ms - Date.now();
+  if (d < 0) return "overdue";
+  const m = Math.round(d / 60000);
+  if (m < 60) return `in ${m}m`;
+  const h = Math.round(m / 60);
+  return h < 24 ? `in ${h}h` : new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 };
 
-function Tile({ children, onClick, tone = "normal", className = "" }) {
+function Card({ children, onClick, emphasis = false, className = "", delay = 0 }) {
   return (
     <button
       onClick={onClick}
+      style={{ animationDelay: `${delay}ms` }}
       className={
-        "group relative text-left w-full rounded-2xl border p-4 transition-all duration-200 " +
-        "hover:-translate-y-0.5 " +
-        (tone === "urgent"
-          ? "border-white/25 bg-white/[0.06] hover:border-white/50"
-          : "border-white/10 bg-white/[0.025] hover:border-white/25 hover:bg-white/[0.05]") +
+        "af-enter af-sheen group relative text-left w-full rounded-[20px] border p-4 " +
+        "transition-[transform,border-color,background-color,box-shadow] duration-200 ease-out " +
+        "hover:-translate-y-[3px] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 " +
+        (emphasis
+          ? "border-white/22 bg-white/[0.06] hover:border-white/40 hover:shadow-[0_10px_36px_-14px_rgb(var(--c-glow-a)/0.5)]"
+          : "border-white/10 bg-white/[0.022] hover:border-white/24 hover:bg-white/[0.045]") +
         " " + className
       }
     >
       {children}
+      <span
+        aria-hidden
+        className="absolute right-5 top-5 text-white/20 group-hover:text-white/60
+                   transition-transform duration-200 group-hover:translate-x-0.5"
+      >
+        →
+      </span>
     </button>
   );
 }
 
-const Label = ({ children }) => (
-  <div className="text-[10px] uppercase tracking-[0.16em] text-white/35 mb-2">{children}</div>
+/* Small round glyph holder, the way every card in the references opens. */
+const Badge = ({ children, live = false }) => (
+  <span className="relative inline-flex items-center justify-center w-8 h-8 rounded-full mb-3.5
+                   bg-white/[0.07] text-white/70">
+    {live && (
+      <span
+        aria-hidden
+        className="af-pulse absolute inset-0 rounded-full"
+        style={{ background: "rgb(var(--c-glow-a) / 0.30)" }}
+      />
+    )}
+    <span className="relative">{children}</span>
+  </span>
 );
 
-export default function AgentHome({
-  activeAgentName,
-  starters = [],
-  onPickStarter,
-  onNavigate,
-  userName,
-}) {
+const Eyebrow = ({ children }) => (
+  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35 mb-1.5">
+    {children}
+  </div>
+);
+
+export default function AgentHome({ activeAgentName, starters = [], onPickStarter, onNavigate, userName }) {
   const live = useLive();
 
   const greeting = React.useMemo(() => {
@@ -99,102 +121,141 @@ export default function AgentHome({
   }, []);
 
   const urgent = live.priority.length;
-  const dueSoon = live.reminders.filter((r) => {
-    const t = new Date(r.due_at || r.dueAt || 0).getTime();
-    return t && t - Date.now() < 24 * 60 * 60 * 1000;
-  });
+  const soon = live.reminders
+    .map((r) => ({ r, t: dueMs(r) }))
+    .filter((x) => x.t && x.t - Date.now() < 36 * 60 * 60 * 1000)
+    .sort((a, b) => a.t - b.t);
 
-  // What the agent would say if you asked "anything I should know?" — one line,
-  // derived from real state, so it reads as a briefing rather than a slogan.
   const briefing = live.loading
     ? "Catching up…"
     : urgent
-      ? `${urgent} message${urgent === 1 ? "" : "s"} looks like it needs a reply.`
-      : dueSoon.length
-        ? `${dueSoon.length} thing${dueSoon.length === 1 ? "" : "s"} due in the next day.`
+      ? urgent === 1
+        ? "One message looks like it needs a reply."
+        : `${urgent} messages look like they need a reply.`
+      : soon.length
+        ? soon.length === 1
+          ? "One thing coming up."
+          : `${soon.length} things coming up.`
         : "Nothing needs you right now.";
 
+  const hasCards = urgent > 0 || soon.length > 0 || live.activity.length > 0;
+
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="max-w-3xl mx-auto px-6 pt-10 pb-8">
-        {/* Hero — the agent's own read of the moment */}
-        <div className="relative mb-8">
-          <div className="pointer-events-none absolute -top-14 left-1/2 -translate-x-1/2 h-32 w-72 opacity-70">
-            <Strands colors={["#7C3AED", "#06B6D4", "#FFFFFF"]} count={4} glow={2.4} amplitude={1.1} />
-          </div>
-          <div className="relative pt-6">
-            <h1 className="text-[27px] md:text-[32px] font-semibold tracking-tight leading-tight">
-              {greeting}
-              {userName ? `, ${userName}` : ""}.
-            </h1>
-            <p className="mt-1.5 text-white/45 text-[15px]">{briefing}</p>
-          </div>
-        </div>
+    <div className="relative flex-1 overflow-y-auto">
+      {/* Ambient ground, painted from the theme's own glow tokens so it shifts
+          with the palette instead of being one purple wash bolted on. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-[520px]"
+        style={{
+          background:
+            "radial-gradient(68% 52% at 50% -10%, rgb(var(--c-glow-a) / 0.22), transparent 70%)," +
+            "radial-gradient(46% 38% at 84% 2%, rgb(var(--c-glow-b) / 0.14), transparent 72%)",
+        }}
+      />
 
-        {/* Live tiles — only what has something to say */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-7">
-          {urgent > 0 && (
-            <Tile tone="urgent" onClick={() => onNavigate?.("priority")}>
-              <Label>Needs a reply</Label>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-semibold tabular-nums leading-none">{urgent}</span>
-                <span className="text-white/45 text-sm">waiting</span>
-              </div>
-              <div className="mt-2.5 text-[12.5px] text-white/55 truncate">
-                {live.priority[0]?.subject || live.priority[0]?.title || "Open to review"}
-              </div>
-              <span className="absolute right-4 top-4 text-white/25 group-hover:text-white/60 transition">→</span>
-            </Tile>
-          )}
+      <div className="relative max-w-3xl mx-auto px-6 pt-10 pb-8">
+        <header className="af-enter mb-7 text-center">
+          <h1 className="text-[30px] md:text-[38px] font-semibold tracking-[-0.032em] leading-[1.05] text-balance">
+            {greeting}
+            {userName ? <>, {userName}</> : ""}.
+          </h1>
+          <p className="mt-2.5 text-[15px] text-white/45">{briefing}</p>
+        </header>
 
-          {dueSoon.length > 0 && (
-            <Tile onClick={() => onNavigate?.("planner")}>
-              <Label>Coming up</Label>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-semibold tabular-nums leading-none">{dueSoon.length}</span>
-                <span className="text-white/45 text-sm">due soon</span>
-              </div>
-              <div className="mt-2.5 text-[12.5px] text-white/55 truncate">
-                {dueSoon[0]?.text || dueSoon[0]?.title}
-                <span className="text-white/30"> · {fmtDue(dueSoon[0]?.due_at || dueSoon[0]?.dueAt)}</span>
-              </div>
-              <span className="absolute right-4 top-4 text-white/25 group-hover:text-white/60 transition">→</span>
-            </Tile>
-          )}
+        {/* Prompts, as the references do them: gradient-edged, sparkle-marked,
+            arriving in sequence. These are the agent offering to act, so they
+            should read as the agent speaking — not as a list of links. */}
+        {starters.length > 0 && (
+          <section className="mb-7">
+            <div className="grid gap-2.5">
+              {starters.map((s, i) => (
+                <button
+                  key={s}
+                  onClick={() => onPickStarter?.(s)}
+                  style={{ animationDelay: `${90 + i * 70}ms` }}
+                  className="af-enter af-sheen af-edge group flex items-center gap-3 text-left rounded-2xl
+                             px-4 py-3 text-[13.5px] text-white/80
+                             transition-[transform,color] duration-200 ease-out
+                             hover:-translate-y-[2px] hover:text-white
+                             focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                >
+                  <span
+                    className="shrink-0 grid place-items-center w-6 h-6 rounded-lg"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, rgb(var(--c-glow-a) / .30), rgb(var(--c-glow-b) / .22))",
+                      color: "rgb(var(--c-accent))",
+                    }}
+                  >
+                    <Sparkle />
+                  </span>
+                  <span className="flex-1">{s}</span>
+                  <span
+                    aria-hidden
+                    className="text-white/15 group-hover:text-white/45 transition shrink-0 text-xs"
+                  >
+                    ↵
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
-          {live.activity.length > 0 && (
-            <Tile onClick={() => onNavigate?.("autopilot")} className="sm:col-span-2">
-              <Label>What I did while you were away</Label>
-              <ul className="space-y-1.5">
-                {live.activity.map((a, i) => (
-                  <li key={i} className="flex items-start gap-2 text-[12.5px] text-white/60">
-                    <span className="mt-1.5 w-1 h-1 rounded-full bg-white/40 shrink-0" />
-                    <span className="truncate">{a.summary || a.action || a.text}</span>
-                  </li>
-                ))}
-              </ul>
-            </Tile>
-          )}
-        </div>
+        {hasCards && (
+          <section className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            {urgent > 0 && (
+              <Card emphasis delay={260} onClick={() => onNavigate?.("priority")}>
+                <Badge live>✉</Badge>
+                <Eyebrow>Needs a reply</Eyebrow>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[32px] font-semibold tabular-nums leading-none tracking-tight">
+                    {urgent}
+                  </span>
+                  <span className="text-white/40 text-sm">waiting</span>
+                </div>
+                <p className="mt-3 text-[12.5px] text-white/55 truncate pr-6">
+                  {live.priority[0]?.subject || live.priority[0]?.title || "Open to review"}
+                </p>
+              </Card>
+            )}
 
-        {/* Ask — the primary action, always last so state comes first */}
-        <div>
-          <Label>{activeAgentName ? `Ask "${activeAgentName}"` : "Ask"}</Label>
-          <div className="grid gap-2">
-            {starters.map((s) => (
-              <button
-                key={s}
-                onClick={() => onPickStarter?.(s)}
-                className="group flex items-center justify-between gap-3 text-left rounded-xl border border-white/10
-                           bg-white/[0.02] px-4 py-3 text-[13.5px] text-white/75
-                           hover:border-white/30 hover:bg-white/[0.05] hover:text-white transition"
-              >
-                <span>{s}</span>
-                <span className="text-white/20 group-hover:text-white/50 transition shrink-0">↵</span>
-              </button>
-            ))}
-          </div>
-        </div>
+            {soon.length > 0 && (
+              <Card delay={330} onClick={() => onNavigate?.("planner")}>
+                <Badge>◷</Badge>
+                <Eyebrow>Coming up</Eyebrow>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[32px] font-semibold tabular-nums leading-none tracking-tight">
+                    {soon.length}
+                  </span>
+                  <span className="text-white/40 text-sm">scheduled</span>
+                </div>
+                <p className="mt-3 text-[12.5px] text-white/55 truncate pr-6">
+                  {soon[0].r.title || soon[0].r.text}
+                  <span className="text-white/30"> · {fmtDue(soon[0].t)}</span>
+                </p>
+              </Card>
+            )}
+
+            {live.activity.length > 0 && (
+              <Card delay={400} onClick={() => onNavigate?.("autopilot")} className="sm:col-span-2">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span style={{ color: "rgb(var(--c-accent))" }}><Sparkle /></span>
+                  <Eyebrow>Handled while you were away</Eyebrow>
+                </div>
+                <ul className="space-y-2 pr-6">
+                  {live.activity.map((a, i) => (
+                    <li key={i} className="flex items-start gap-2.5 text-[12.5px] text-white/60">
+                      <span className="mt-[7px] w-1 h-1 rounded-full bg-white/35 shrink-0" />
+                      <span className="truncate">{a.summary || a.action || a.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
+          </section>
+        )}
       </div>
     </div>
   );

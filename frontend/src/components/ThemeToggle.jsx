@@ -1,34 +1,53 @@
 import React from "react";
 import { getPreference, setPreference, resolve, THEMES } from "../theme";
 
-const ICONS = {
-  system: (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <rect x="2.5" y="4" width="19" height="13" rx="2" />
-      <path d="M8 20h8M12 17v3" strokeLinecap="round" />
-    </svg>
-  ),
-  light: (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"
-        strokeLinecap="round" />
-    </svg>
-  ),
-  dark: (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M20 13.5A8 8 0 1 1 10.5 4a6.5 6.5 0 0 0 9.5 9.5Z" strokeLinejoin="round" />
-    </svg>
-  ),
+// A swatch per theme, showing the theme's own colours rather than its name.
+// Colour is the thing being chosen, so the swatch IS the label — a row of words
+// makes you read six options to find the one you can already see.
+const SWATCH = {
+  system: ["#7b8194", "#c9cede"],
+  light: ["#fafafc", "#0e1118"],
+  dark: ["#0b0d13", "#818cf8"],
+  purple: ["#f9f6fe", "#7c3aed"],
+  pink: ["#fdf5f9", "#d6336c"],
+  blue: ["#f3f8fd", "#1d4ed8"],
+  yellow: ["#fefbf2", "#f59e0b"],
+};
+const LABEL = {
+  system: "Match my system", light: "Light", dark: "Dark",
+  purple: "Purple", pink: "Pink", blue: "Blue", yellow: "Yellow",
 };
 
-const LABEL = { system: "System", light: "Light", dark: "Dark" };
+function Swatch({ name, active, onClick }) {
+  const [bg, fg] = SWATCH[name] || SWATCH.light;
+  return (
+    <button
+      role="radio"
+      aria-checked={active}
+      aria-label={LABEL[name]}
+      title={LABEL[name]}
+      onClick={onClick}
+      className={
+        "relative w-7 h-7 rounded-full overflow-hidden transition-transform duration-150 " +
+        "hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 " +
+        (active ? "ring-2 ring-white/70 ring-offset-2 ring-offset-black scale-105" : "ring-1 ring-white/20")
+      }
+      style={{ background: bg }}
+    >
+      {/* A diagonal half in the accent, so a swatch shows both the ground it
+          produces and the colour that will do the highlighting. */}
+      <span
+        className="absolute inset-0"
+        style={{ background: fg, clipPath: "polygon(100% 0, 100% 100%, 0 100%)" }}
+      />
+    </button>
+  );
+}
 
-// A three-way segmented control rather than a two-way switch, because "follow my
-// system" is a real preference — a plain toggle silently drops it the first time
-// it's used, and the app then stops tracking the OS forever.
 export default function ThemeToggle({ compact = false }) {
   const [pref, setPref] = React.useState(getPreference);
+  const [open, setOpen] = React.useState(false);
+  const wrap = React.useRef(null);
 
   React.useEffect(() => {
     const onChange = (e) => setPref(e.detail || getPreference());
@@ -36,49 +55,68 @@ export default function ThemeToggle({ compact = false }) {
     return () => window.removeEventListener("agentforge:theme", onChange);
   }, []);
 
-  const choose = (p) => {
-    setPreference(p);
-    setPref(p);
-  };
+  // Click-away and Escape both close it — a picker that traps you is worse than
+  // no picker.
+  React.useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (wrap.current && !wrap.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
-  if (compact) {
-    // One button that advances through the three states — for tight toolbars.
-    const next = THEMES[(THEMES.indexOf(pref) + 1) % THEMES.length];
+  const choose = (p) => { setPreference(p); setPref(p); setOpen(false); };
+
+  if (!compact) {
     return (
-      <button
-        onClick={() => choose(next)}
-        title={`Theme: ${LABEL[pref]}${pref === "system" ? ` (${resolve(pref)})` : ""} — click for ${LABEL[next]}`}
-        aria-label={`Theme: ${LABEL[pref]}. Switch to ${LABEL[next]}.`}
-        className="p-2 text-white/50 hover:text-white border border-white/15 hover:border-white/30 transition"
-      >
-        {ICONS[pref]}
-      </button>
+      <div role="radiogroup" aria-label="Colour theme" className="flex items-center gap-2 flex-wrap">
+        {THEMES.map((t) => (
+          <Swatch key={t} name={t} active={pref === t} onClick={() => choose(t)} />
+        ))}
+      </div>
     );
   }
 
   return (
-    <div
-      role="radiogroup"
-      aria-label="Colour theme"
-      className="inline-flex gap-0.5 p-0.5 border border-white/15 rounded-full"
-    >
-      {THEMES.map((t) => (
-        <button
-          key={t}
-          role="radio"
-          aria-checked={pref === t}
-          onClick={() => choose(t)}
-          className={
-            "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full transition " +
-            (pref === t
-              ? "bg-white text-black"
-              : "text-white/50 hover:text-white/80")
-          }
+    <div className="relative" ref={wrap}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="true"
+        aria-expanded={open}
+        title={`Theme: ${LABEL[pref]}`}
+        aria-label={`Theme: ${LABEL[pref]}. Change theme.`}
+        className="p-1.5 border border-white/15 hover:border-white/35 rounded-full transition flex items-center"
+      >
+        <span
+          className="w-4 h-4 rounded-full relative overflow-hidden ring-1 ring-white/20"
+          style={{ background: (SWATCH[pref] || SWATCH.light)[0] }}
         >
-          {ICONS[t]}
-          {LABEL[t]}
-        </button>
-      ))}
+          <span
+            className="absolute inset-0"
+            style={{
+              background: (SWATCH[pref] || SWATCH.light)[1],
+              clipPath: "polygon(100% 0, 100% 100%, 0 100%)",
+            }}
+          />
+        </span>
+      </button>
+
+      {open && (
+        <div
+          role="radiogroup"
+          aria-label="Colour theme"
+          className="absolute right-0 top-full mt-2 z-50 p-3 rounded-2xl border border-white/15
+                     bg-black shadow-2xl flex items-center gap-2"
+        >
+          {THEMES.map((t) => (
+            <Swatch key={t} name={t} active={pref === t} onClick={() => choose(t)} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
