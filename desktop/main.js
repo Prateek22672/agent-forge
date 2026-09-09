@@ -83,7 +83,7 @@ function createWindow() {
     );
   mainWindow.loadURL(SPLASH);
   mainWindow.webContents.once("did-finish-load", () => {
-    mainWindow.loadURL(APP_URL);
+    loadApp();
   });
 
   // If the app can't load (offline / backend asleep), show a retry screen.
@@ -196,6 +196,7 @@ function refreshTray() {
         { label: "Quick Find…", accelerator: "CommandOrControl+Space", click: () => showSpotlight() },
         { label: "Open AgentFury", click: () => showWindow() },
         { label: "Settings…", click: () => showSettings() },
+        { label: "Reload app", click: () => { showWindow(); loadApp(); } },
         { label: "Rebuild file index", click: () => { try { indexRoots(); } catch {} } },
         { type: "separator" },
         updateItem,
@@ -212,12 +213,44 @@ function refreshTray() {
   } catch {}
 }
 
+// The web app is deployed continuously, but this shell loaded its URL once at
+// launch and never again — and closing the window only hides it to the tray. So
+// an app left running for a day showed yesterday's build, and reopening it
+// changed nothing. Every UI fix shipped to the website was invisible here.
+//
+// The main document is loaded with no-cache so it always revalidates (the asset
+// filenames are content-hashed, so they still cache normally), and the app
+// reloads when it is brought back after sitting hidden for a while.
+let lastLoadedAt = 0;
+const STALE_AFTER = 20 * 60 * 1000;
+
+function loadApp(query = "") {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  lastLoadedAt = Date.now();
+  mainWindow.loadURL(APP_URL + (query ? `/?${query}` : ""), {
+    extraHeaders: "pragma: no-cache\ncache-control: no-cache\n",
+  });
+}
+
 function showWindow() {
-  if (!mainWindow) createWindow();
-  else {
-    mainWindow.show();
-    mainWindow.focus();
+  if (!mainWindow) {
+    createWindow();
+    return;
   }
+  // Only refresh a window that has been sitting idle, and never one the user is
+  // mid-conversation in — losing a half-typed message to a silent reload would
+  // be a worse bug than the stale UI this fixes.
+  const stale = Date.now() - lastLoadedAt > STALE_AFTER;
+  if (stale && !mainWindow.isVisible()) {
+    mainWindow.webContents
+      .executeJavaScript("!!document.querySelector('[data-chat-dirty]')")
+      .catch(() => false)
+      .then((dirty) => {
+        if (!dirty) loadApp();
+      });
+  }
+  mainWindow.show();
+  mainWindow.focus();
 }
 
 // Quick-open toggle, like ChatGPT desktop's Ctrl+Space: a global hotkey that
@@ -458,6 +491,8 @@ function indexBytes() {
   }
 }
 
+ipcMain.handle("cfg:open", () => { showSettings(); return true; });
+
 ipcMain.handle("cfg:get", () => ({
   ...settings.get(),
   version: app.getVersion(),
@@ -605,7 +640,7 @@ function handleDeepLink(url) {
   if (!url || !url.startsWith(PROTOCOL + "://")) return;
   const query = url.split("?")[1] || "";
   showWindow();
-  if (mainWindow) mainWindow.loadURL(`${APP_URL}/?${query}`);
+  loadApp(query);
 }
 
 // Single instance — focus the existing window instead of opening a second one.

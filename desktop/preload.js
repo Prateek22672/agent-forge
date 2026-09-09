@@ -15,6 +15,10 @@ contextBridge.exposeInMainWorld("agentforge", {
   // given the token, only the answer.
   setToken: (token) => ipcRenderer.invoke("auth:token", token),
 
+  // Opens the desktop Settings window. Its presence is also how the web app
+  // knows a native settings surface exists at all.
+  openSettings: () => ipcRenderer.invoke("cfg:open"),
+
   // In-app updates. The download happens in the background while the app is
   // running; "install" just restarts into the version already on disk, so the
   // user never downloads an installer or removes the old one by hand.

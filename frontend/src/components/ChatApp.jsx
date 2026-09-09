@@ -261,7 +261,13 @@ export default function ChatApp({ user, onLogout }) {
         user={user}
         settings={settings}
         connections={connections}
-        onOpenSettings={() => setShowSettings(true)}
+        onOpenSettings={() => {
+          // In the desktop app, Settings is a real window — it can show where
+          // your data actually lives and record shortcuts, neither of which a
+          // web modal can do. The browser keeps the modal.
+          if (window.agentforge?.openSettings) window.agentforge.openSettings();
+          else setShowSettings(true);
+        }}
         onOpenAdmin={() => (window.location.href = "/admin")}
         onReconnectGoogle={reconnectGoogle}
         onToggleSidebar={() => setSidebarOpen((o) => !o)}
