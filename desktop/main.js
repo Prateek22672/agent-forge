@@ -195,6 +195,7 @@ function refreshTray() {
       Menu.buildFromTemplate([
         { label: "Quick Find…", accelerator: "CommandOrControl+Space", click: () => showSpotlight() },
         { label: "Open AgentFury", click: () => showWindow() },
+        { label: "Settings…", click: () => showSettings() },
         { label: "Rebuild file index", click: () => { try { indexRoots(); } catch {} } },
         { type: "separator" },
         updateItem,
@@ -272,6 +273,20 @@ function createSpotlight() {
       nodeIntegration: false,
     },
   });
+  // A launcher that only appears over ordinary windows isn't a launcher — the
+  // moment you're in a full-screen video, a game, a presentation or a maximised
+  // IDE, the hotkey looks broken. alwaysOnTop alone sits in the NORMAL band and
+  // loses to all of those, so the level is raised to the one the OS reserves for
+  // screensavers, which is above full-screen content on both platforms.
+  try {
+    spotWindow.setAlwaysOnTop(true, "screen-saver", 1);
+    // macOS: appear on whichever Space is active, including over a full-screen
+    // app, instead of yanking the user back to the Space the app launched on.
+    spotWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  } catch (e) {
+    console.warn("Could not raise Quick Find above full-screen windows:", e.message);
+  }
+
   spotWindow.loadFile(path.join(__dirname, "spotlight.html"));
 
   // Clicking away dismisses it, the way every launcher behaves.
@@ -303,8 +318,25 @@ function showSpotlight() {
   } catch {
     spotWindow.center();
   }
+  // Re-assert on every show. Another app going full-screen can demote a window
+  // that was raised at creation, so a launcher that only sets this once
+  // eventually stops appearing — which is exactly the failure being fixed.
+  try {
+    spotWindow.setAlwaysOnTop(true, "screen-saver", 1);
+    spotWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  } catch {}
+
   spotWindow.show();
+  // showInactive + focus is more reliable than show() alone when the foreground
+  // window belongs to another process: Windows can refuse a focus steal, which
+  // leaves the popup visible but not accepting keystrokes.
   spotWindow.focus();
+  try {
+    if (process.platform === "win32") {
+      spotWindow.setSkipTaskbar(true);
+      spotWindow.moveTop();
+    }
+  } catch {}
   spotWindow.webContents.send("spot:shown");
 }
 
@@ -346,24 +378,27 @@ function registerHotkeys() {
     return null;
   };
 
-  // Quick Find owns the summon keys. Reaching for a hotkey means "let me find
-  // something fast" — that's the popup, not a full window that covers the screen
-  // and takes a beat to load. macOS keeps Cmd+Space for Spotlight, so it starts
-  // one step along. The full window is a click away in the tray, and the popup
-  // hands off to it whenever a request needs the whole assistant.
-  const spotKeys =
-    process.platform === "darwin"
-      ? ["CommandOrControl+Shift+Space", "CommandOrControl+Shift+A", "CommandOrControl+Alt+A"]
-      : ["CommandOrControl+Space", "CommandOrControl+Shift+A", "CommandOrControl+Alt+A"];
+  // The user's chosen shortcut comes first; the rest are fallbacks for when it
+  // is already owned by something else (IME switchers and other launchers take
+  // Ctrl+Space on plenty of machines). Settings can change these, so everything
+  // is re-registered from scratch each time.
+  globalShortcut.unregisterAll();
+
+  const cfg = settings.get().hotkeys || {};
+  const spotKeys = [
+    cfg.quickFind,
+    process.platform === "darwin" ? "CommandOrControl+Shift+Space" : "CommandOrControl+Space",
+    "CommandOrControl+Shift+A",
+    "CommandOrControl+Alt+A",
+  ].filter(Boolean);
 
   let spot = null;
-  // Register every accelerator that's free, not just the first — muscle memory
-  // differs, and a second binding costs nothing.
   for (const accel of spotKeys) {
     try {
       if (globalShortcut.register(accel, toggleSpotlight)) {
         if (!spot) spot = accel;
         console.log("Quick Find hotkey:", accel);
+        break; // the user picked one — don't silently claim three more
       }
     } catch (e) {
       /* try the next candidate */
@@ -373,12 +408,107 @@ function registerHotkeys() {
 
   // The full window keeps a summon of its own, out of Quick Find's way.
   const main = tryAll(
-    ["CommandOrControl+Shift+Enter", "CommandOrControl+Alt+Space"],
+    [cfg.openApp, "CommandOrControl+Shift+Enter", "CommandOrControl+Alt+Space"].filter(Boolean),
     toggleQuickOpen,
     "Open AgentFury"
   );
-  return { spot, main };
+  // Reported so a rejected shortcut can be rolled back instead of leaving the
+  // user with nothing bound.
+  return !!spot;
 }
+
+// ---------------------------------------------------------------------------
+// Settings window — a real window rather than a popover, because the storage
+// section has to show numbers and the shortcut recorder needs room to explain
+// itself. Wide and rectangular so nothing wraps into a column of fragments.
+// ---------------------------------------------------------------------------
+let cfgWindow = null;
+
+function showSettings() {
+  if (cfgWindow && !cfgWindow.isDestroyed()) {
+    cfgWindow.show();
+    cfgWindow.focus();
+    return;
+  }
+  cfgWindow = new BrowserWindow({
+    width: 940,
+    height: 720,
+    minWidth: 760,
+    minHeight: 560,
+    title: "AgentFury Settings",
+    backgroundColor: "#0d0e14",
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, "settings-preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  cfgWindow.loadFile(path.join(__dirname, "settings.html"));
+  cfgWindow.on("closed", () => (cfgWindow = null));
+}
+
+// How much disk the local index actually occupies. Reported rather than
+// estimated, because "where is my data" deserves a real number.
+function indexBytes() {
+  try {
+    return fs.statSync(path.join(app.getPath("userData"), "content-index.json")).size;
+  } catch {
+    return 0;
+  }
+}
+
+ipcMain.handle("cfg:get", () => ({
+  ...settings.get(),
+  version: app.getVersion(),
+  index: contentIndex.stats(),
+  indexBytes: indexBytes(),
+  // Zero, and it is meant to stay zero: file contents are never uploaded. It is
+  // shown so the claim is visible rather than buried in a privacy page.
+  cloudBytes: 0,
+}));
+
+ipcMain.handle("cfg:set", (_e, next) => {
+  const before = settings.get();
+  const after = settings.patch(next);
+
+  if (next && next.contentMode && next.contentMode !== before.contentMode) {
+    contentIndex.setEnabled(after.contentMode !== "off");
+    if (after.contentMode !== "off") buildContentIndex();
+  }
+  if (next && next.hotkeys) {
+    const ok = registerHotkeys();
+    if (!ok) {
+      // Put the old binding back rather than leaving the user with no shortcut.
+      settings.patch({ hotkeys: before.hotkeys });
+      registerHotkeys();
+      return { ...settings.get(), version: app.getVersion(), index: contentIndex.stats(),
+               indexBytes: indexBytes(), cloudBytes: 0, hotkeyError: true };
+    }
+  }
+  if (next && typeof next.launchAtLogin === "boolean" && app.isPackaged) {
+    try {
+      app.setLoginItemSettings({
+        openAtLogin: next.launchAtLogin,
+        openAsHidden: true,
+        args: ["--hidden"],
+      });
+    } catch {}
+  }
+  return { ...settings.get(), version: app.getVersion(), index: contentIndex.stats(),
+           indexBytes: indexBytes(), cloudBytes: 0 };
+});
+
+ipcMain.handle("cfg:rebuild", async () => {
+  indexRoots();
+  await buildContentIndex();
+  return contentIndex.stats();
+});
+
+ipcMain.handle("cfg:wipe", () => {
+  contentIndex.clear();
+  return contentIndex.stats();
+});
 
 // ---------------------------------------------------------------------------
 // Updates

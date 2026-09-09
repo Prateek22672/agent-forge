@@ -1,6 +1,6 @@
 {
   "name": "agentforge-desktop",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "AgentFury desktop app",
   "main": "main.js",
   "author": "AgentFury",
@@ -28,6 +28,8 @@
       "content-index.js",
       "extractors.js",
       "settings.js",
+      "settings.html",
+      "settings-preload.js",
       "spotlight.html",
       "spotlight-preload.js",
       "build/**/*"

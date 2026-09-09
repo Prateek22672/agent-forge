@@ -18,6 +18,14 @@ const DEFAULTS = {
   contentMode: "off",
   contentConsentAt: 0,   // when the user actually agreed; 0 means never asked
   indexRoots: null,      // null = the standard folders
+  // Shortcuts are a personal thing and Ctrl+Space is already taken on plenty of
+  // machines (IME switchers, other launchers), so it has to be changeable.
+  hotkeys: {
+    quickFind: "CommandOrControl+Space",
+    openApp: "CommandOrControl+Shift+Enter",
+  },
+  launchAtLogin: true,
+  showPreview: true,
 };
 
 let file = null;
@@ -29,12 +37,25 @@ function init(userDataDir) {
     if (fs.existsSync(file)) {
       const raw = JSON.parse(fs.readFileSync(file, "utf8"));
       data = { ...DEFAULTS, ...raw };
+      // Merge nested defaults too — a settings file written by an older build
+      // has no `hotkeys` key, and a spread would leave it undefined.
+      data.hotkeys = { ...DEFAULTS.hotkeys, ...(raw.hotkeys || {}) };
       if (!MODES.includes(data.contentMode)) data.contentMode = "off";
     }
   } catch {
     data = { ...DEFAULTS };
   }
   return data;
+}
+
+function patch(next) {
+  if (!next || typeof next !== "object") return get();
+  if (typeof next.contentMode === "string") return setContentMode(next.contentMode);
+  if (next.hotkeys) data.hotkeys = { ...data.hotkeys, ...next.hotkeys };
+  if (typeof next.launchAtLogin === "boolean") data.launchAtLogin = next.launchAtLogin;
+  if (typeof next.showPreview === "boolean") data.showPreview = next.showPreview;
+  save();
+  return get();
 }
 
 function save() {
@@ -56,4 +77,4 @@ function setContentMode(mode) {
   return get();
 }
 
-module.exports = { init, get, setContentMode, save, MODES };
+module.exports = { init, get, patch, setContentMode, save, MODES, DEFAULTS };
