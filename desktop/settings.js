@@ -26,6 +26,8 @@ const DEFAULTS = {
   },
   launchAtLogin: true,
   showPreview: true,
+  // Which model Quick Find answers with: "fast" or "thorough".
+  answerModel: "fast",
 };
 
 let file = null;
@@ -54,6 +56,7 @@ function patch(next) {
   if (next.hotkeys) data.hotkeys = { ...data.hotkeys, ...next.hotkeys };
   if (typeof next.launchAtLogin === "boolean") data.launchAtLogin = next.launchAtLogin;
   if (typeof next.showPreview === "boolean") data.showPreview = next.showPreview;
+  if (next.answerModel === "fast" || next.answerModel === "thorough") data.answerModel = next.answerModel;
   save();
   return get();
 }

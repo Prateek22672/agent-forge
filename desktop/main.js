@@ -494,9 +494,13 @@ function indexBytes() {
 
 ipcMain.handle("cfg:open", () => { showSettings(); return true; });
 
+ipcMain.handle("cfg:releases", () =>
+  shell.openExternal("https://github.com/Prateek22672/agent-forge/releases"));
+
 ipcMain.handle("cfg:get", () => ({
   ...settings.get(),
   version: app.getVersion(),
+  update: { ...updateState },
   index: contentIndex.stats(),
   indexBytes: indexBytes(),
   // Zero, and it is meant to stay zero: file contents are never uploaded. It is
@@ -567,6 +571,9 @@ function setUpdateState(status, version) {
   try {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("update:state", { ...updateState });
+    }
+    if (cfgWindow && !cfgWindow.isDestroyed()) {
+      cfgWindow.webContents.send("update:state", { ...updateState });
     }
   } catch {}
 }

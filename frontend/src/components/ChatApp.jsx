@@ -36,6 +36,16 @@ export default function ChatApp({ user, onLogout }) {
   const [showPrivacy, setShowPrivacy] = useState(!privacySeen("app"));
   const [view, setView] = useState("chat"); // chat | priority | planner | brain
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
+  // Desktop collapse is a different thing from the mobile drawer, and has to be
+  // remembered — someone who hides the rail wants it to stay hidden.
+  const [sidebarHidden, setSidebarHidden] = useState(() => {
+    try { return localStorage.getItem("af_sidebar_hidden") === "1"; } catch { return false; }
+  });
+  const toggleSidebarHidden = () =>
+    setSidebarHidden((v) => {
+      try { localStorage.setItem("af_sidebar_hidden", v ? "0" : "1"); } catch {}
+      return !v;
+    });
   const [pendingEmails, setPendingEmails] = useState([]);
   const [alarmReminder, setAlarmReminder] = useState(null); // ringing alarm
   const [showConsent, setShowConsent] = useState(false); // Google connect explainer
@@ -270,7 +280,10 @@ export default function ChatApp({ user, onLogout }) {
         }}
         onOpenAdmin={() => (window.location.href = "/admin")}
         onReconnectGoogle={reconnectGoogle}
-        onToggleSidebar={() => setSidebarOpen((o) => !o)}
+        onToggleSidebar={() => {
+          if (window.matchMedia("(min-width: 768px)").matches) toggleSidebarHidden();
+          else setSidebarOpen((o) => !o);
+        }}
         onOpenSearch={() => setShowSearch(true)}
         onLogout={onLogout}
       />
@@ -280,7 +293,9 @@ export default function ChatApp({ user, onLogout }) {
         <div
           className={`${
             sidebarOpen ? "translate-x-0" : "-translate-x-full"
-          } md:translate-x-0 transition-transform duration-200 fixed md:relative inset-y-0 left-0 z-40 md:z-auto bg-black h-full`}
+          } md:translate-x-0 transition-transform duration-200 fixed md:relative inset-y-0 left-0 z-40 md:z-auto bg-black h-full ${
+            sidebarHidden ? "md:hidden" : ""
+          }`}
         >
           <History
             conversations={conversations}
@@ -296,7 +311,7 @@ export default function ChatApp({ user, onLogout }) {
             }}
             onDelete={deleteConversation}
             onSearch={() => setShowSearch(true)}
-            onCollapse={() => setSidebarOpen(false)}
+            onCollapse={toggleSidebarHidden}
           />
         </div>
         {sidebarOpen && (

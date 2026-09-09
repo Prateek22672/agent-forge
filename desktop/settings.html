@@ -5,153 +5,211 @@
 <title>AgentFury Settings</title>
 <style>
   :root {
-    --bg-0: #0d0e14; --bg-1: #14161f; --bg-2: #1a1d28;
-    --fg: #f3f4f8; --muted: #9297a8; --dim: #62677a;
-    --accent: #8f9cff; --accent-2: #b98cff;
-    --accent-soft: rgba(120,134,255,.16); --accent-line: rgba(143,156,255,.38);
-    --rule: rgba(255,255,255,.07); --ok: #4ade80; --warn: #fbbf24;
+    --bg-0: #0b0c11; --bg-1: #14161f; --bg-2: #1a1d28; --bg-3: #212533;
+    --fg: #f3f4f8; --muted: #9297a8; --dim: #626878;
+    --accent: #8f9cff;
+    --accent-soft: rgba(120,134,255,.15); --accent-line: rgba(143,156,255,.42);
+    --rule: rgba(255,255,255,.07);
+    --ok: #4ade80; --warn: #fbbf24;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
   body {
-    background: radial-gradient(110% 60% at 50% -10%, rgba(120,134,255,.10), transparent 60%), var(--bg-0);
-    color: var(--fg);
+    background: var(--bg-0); color: var(--fg);
     font-family: "Segoe UI Variable Display", "Segoe UI", -apple-system, system-ui, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    display: flex; flex-direction: column; overflow: hidden;
+    -webkit-font-smoothing: antialiased; display: flex; overflow: hidden;
   }
-  button { font-family: inherit; cursor: default; }
+  button, input { font-family: inherit; }
+  button { cursor: default; }
 
-  header {
-    flex: none; display: flex; align-items: center; gap: 13px;
-    padding: 20px 30px; border-bottom: 1px solid var(--rule);
-    -webkit-app-region: drag;
+  /* ---- left nav ---- */
+  nav {
+    width: 232px; flex: none; background: var(--bg-1); border-right: 1px solid var(--rule);
+    display: flex; flex-direction: column; padding: 16px 12px;
   }
-  header .logo {
-    width: 27px; height: 27px; border-radius: 9px;
-    background: linear-gradient(140deg, var(--accent), var(--accent-2));
-    display: grid; place-items: center; font-size: 10.5px; font-weight: 800; color: #10111a;
+  nav .search { position: relative; margin-bottom: 14px; }
+  nav .search input {
+    width: 100%; background: var(--bg-2); border: 1px solid var(--rule); border-radius: 10px;
+    color: var(--fg); font-size: 12.5px; padding: 9px 11px 9px 32px; outline: none;
   }
-  header h1 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.01em; }
-  header .ver { margin-left: auto; font-size: 11.5px; color: var(--dim); -webkit-app-region: no-drag; }
+  nav .search input:focus { border-color: var(--accent-line); }
+  nav .search svg { position: absolute; left: 10px; top: 9px; color: var(--dim); }
+  nav .items { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+  nav button.tab {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    background: none; border: 0; color: var(--muted); font-size: 13px;
+    padding: 9px 11px; border-radius: 9px; transition: background .13s, color .13s;
+  }
+  nav button.tab:hover { background: rgba(255,255,255,.05); color: var(--fg); }
+  nav button.tab.on { background: var(--bg-3); color: var(--fg); }
+  nav button.tab .badge {
+    margin-left: auto; font-size: 9.5px; font-weight: 700; letter-spacing: .04em;
+    background: var(--accent); color: #10111a; border-radius: 99px; padding: 2px 7px;
+  }
 
-  .wrap { flex: 1; overflow-y: auto; padding: 26px 30px 34px; }
-  .wrap::-webkit-scrollbar { width: 10px; }
-  .wrap::-webkit-scrollbar-thumb { background: rgba(255,255,255,.11); border-radius: 6px;
+  /* ---- right pane ---- */
+  main { flex: 1; overflow-y: auto; padding: 26px 34px 40px; min-width: 0; }
+  main::-webkit-scrollbar { width: 10px; }
+  main::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 6px;
     border: 3px solid transparent; background-clip: content-box; }
-  .inner { max-width: 780px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 20px; letter-spacing: -.01em; }
+  .pane { display: none; max-width: 660px; }
+  .pane.on { display: block; }
 
-  section { background: var(--bg-1); border: 1px solid var(--rule); border-radius: 16px; padding: 22px 24px; }
-  section > h2 { font-size: 13.5px; font-weight: 600; margin: 0 0 4px; }
-  section > .sub { font-size: 12.5px; color: var(--muted); line-height: 1.6; margin: 0 0 18px; }
+  /* a labelled row, the way a settings list reads */
+  .row {
+    display: flex; align-items: center; gap: 16px;
+    padding: 15px 0; border-bottom: 1px solid var(--rule);
+  }
+  .row:last-child { border-bottom: 0; }
+  .row .t { font-size: 13.5px; }
+  .row .d { font-size: 12px; color: var(--dim); margin-top: 3px; line-height: 1.55; max-width: 46ch; }
+  .row .right { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: none; }
 
-  /* storage */
-  .bar { height: 9px; border-radius: 99px; background: rgba(255,255,255,.06); overflow: hidden; display: flex; }
-  .bar i { display: block; height: 100%; }
-  .bar .docs { background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
-  .legend { display: flex; gap: 18px; margin-top: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+  select, .keycap, .btn {
+    background: var(--bg-2); border: 1px solid var(--rule); color: var(--fg);
+    font-size: 12.5px; padding: 8px 12px; border-radius: 9px; outline: none;
+    transition: border-color .13s, background .13s, color .13s;
+  }
+  select:hover, .btn:hover { border-color: var(--accent-line); }
+  .keycap { border-bottom-width: 2px; min-width: 148px; text-align: center; }
+  .keycap.rec { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); color: #10111a; border-color: transparent; font-weight: 600; }
+  .btn.primary:disabled { opacity: .55; }
+  .btn.danger:hover { color: #fca5a5; border-color: rgba(248,113,113,.42); }
+
+  .sw { position: relative; width: 40px; height: 23px; flex: none; }
+  .sw input { opacity: 0; width: 0; height: 0; }
+  .sw .track { position: absolute; inset: 0; border-radius: 99px; background: rgba(255,255,255,.13); transition: .18s; }
+  .sw .track::before { content: ""; position: absolute; width: 17px; height: 17px; left: 3px; top: 3px;
+    background: #fff; border-radius: 50%; transition: .18s; }
+  .sw input:checked + .track { background: var(--accent); }
+  .sw input:checked + .track::before { transform: translateX(17px); }
+
+  /* ---- update card ---- */
+  .card { background: var(--bg-1); border: 1px solid var(--rule); border-radius: 14px; padding: 18px 20px; margin-bottom: 20px; }
+  .card.live { border-color: var(--accent-line); background: var(--accent-soft); }
+  .card .hdr { display: flex; align-items: center; gap: 12px; }
+  .card .ver { font-size: 21px; font-weight: 600; letter-spacing: -.02em; }
+  .card .state { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+  .card .right { margin-left: auto; }
+  .pill { font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+          border-radius: 99px; padding: 3px 9px; }
+  .pill.ok { background: rgba(74,222,128,.14); color: var(--ok); }
+  .pill.new { background: var(--accent); color: #10111a; }
+  .pill.busy { background: rgba(251,191,36,.14); color: var(--warn); }
+
+  /* ---- storage ---- */
+  .bar { height: 10px; border-radius: 99px; background: rgba(255,255,255,.06); overflow: hidden; display: flex; margin: 4px 0 12px; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .legend { display: flex; gap: 20px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
   .legend b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
   .legend .k { display: flex; align-items: center; gap: 7px; }
   .legend .dot { width: 8px; height: 8px; border-radius: 50%; }
-
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 6px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
   .stat { background: var(--bg-2); border: 1px solid var(--rule); border-radius: 12px; padding: 14px 16px; }
-  .stat .n { font-size: 22px; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .stat .n { font-size: 21px; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
   .stat .l { font-size: 11.5px; color: var(--dim); margin-top: 3px; }
 
-  /* choice cards */
-  .choices { display: grid; gap: 10px; }
   .choice {
     display: flex; gap: 13px; align-items: flex-start; text-align: left; width: 100%;
-    background: var(--bg-2); border: 1px solid var(--rule); border-radius: 13px;
-    padding: 15px 16px; transition: border-color .14s, background .14s;
+    background: var(--bg-2); border: 1px solid var(--rule); border-radius: 12px;
+    padding: 14px 16px; margin-bottom: 9px; transition: border-color .13s, background .13s;
   }
-  .choice:hover { border-color: rgba(255,255,255,.18); }
+  .choice:hover { border-color: rgba(255,255,255,.17); }
   .choice.on { border-color: var(--accent-line); background: var(--accent-soft); }
-  .choice .radio {
-    width: 16px; height: 16px; border-radius: 50%; flex: none; margin-top: 2px;
-    border: 1.5px solid var(--dim); display: grid; place-items: center;
-  }
+  .choice .radio { width: 16px; height: 16px; border-radius: 50%; flex: none; margin-top: 2px;
+    border: 1.5px solid var(--dim); display: grid; place-items: center; }
   .choice.on .radio { border-color: var(--accent); }
   .choice.on .radio::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
   .choice .t { font-size: 13px; font-weight: 600; }
   .choice .d { font-size: 12px; color: var(--muted); line-height: 1.6; margin-top: 3px; }
-  .choice .tag { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--ok);
-                 border: 1px solid rgba(74,222,128,.35); border-radius: 99px; padding: 2px 8px; margin-left: 8px; }
-  .choice .tag.warn { color: var(--warn); border-color: rgba(251,191,36,.35); }
+  .tag { font-size: 9.5px; text-transform: uppercase; letter-spacing: .09em; color: var(--ok);
+         border: 1px solid rgba(74,222,128,.35); border-radius: 99px; padding: 2px 7px; margin-left: 8px; }
 
-  /* rows */
-  .row { display: flex; align-items: center; gap: 14px; padding: 13px 0; border-top: 1px solid var(--rule); }
-  .row:first-of-type { border-top: 0; }
-  .row .t { font-size: 13px; }
-  .row .d { font-size: 11.5px; color: var(--dim); margin-top: 2px; }
-  .row .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-
-  .keycap {
-    font-family: inherit; font-size: 12px; background: var(--bg-2); border: 1px solid var(--rule);
-    border-bottom-width: 2px; border-radius: 8px; padding: 7px 13px; color: var(--fg); min-width: 130px;
-    text-align: center;
-  }
-  .keycap.rec { border-color: var(--accent); color: var(--accent); }
-
-  .btn { border: 1px solid var(--rule); background: var(--bg-2); color: var(--muted);
-         font-size: 12px; padding: 7px 14px; border-radius: 9px; transition: all .14s; }
-  .btn:hover { color: var(--fg); border-color: var(--accent-line); background: var(--accent-soft); }
-  .btn.danger:hover { color: #fca5a5; border-color: rgba(248,113,113,.4); background: rgba(248,113,113,.1); }
-
-  .sw { position: relative; width: 40px; height: 23px; flex: none; }
-  .sw input { opacity: 0; width: 0; height: 0; }
-  .sw .track { position: absolute; inset: 0; border-radius: 99px; background: rgba(255,255,255,.12); transition: .18s; }
-  .sw .track::before { content: ""; position: absolute; width: 17px; height: 17px; left: 3px; top: 3px;
-    background: #fff; border-radius: 50%; transition: .18s; }
-  .sw input:checked + .track { background: linear-gradient(140deg, var(--accent), var(--accent-2)); }
-  .sw input:checked + .track::before { transform: translateX(17px); }
-
-  .note { font-size: 11.5px; color: var(--dim); line-height: 1.65; margin-top: 14px;
-          padding-top: 14px; border-top: 1px solid var(--rule); }
+  .note { font-size: 12px; color: var(--dim); line-height: 1.65; margin-top: 16px;
+          padding-top: 15px; border-top: 1px solid var(--rule); }
   .note b { color: var(--muted); font-weight: 600; }
+  .empty { color: var(--dim); font-size: 13px; padding: 20px 0; }
 </style>
 </head>
 <body>
-  <header>
-    <div class="logo">AF</div>
-    <h1>Settings</h1>
-    <span class="ver" id="ver"></span>
-  </header>
+  <nav>
+    <div class="search">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
+      <input id="navSearch" placeholder="Search settings" autocomplete="off" />
+    </div>
+    <div class="items" id="tabs"></div>
+  </nav>
 
-  <div class="wrap"><div class="inner">
+  <main>
+    <h1 id="paneTitle">General</h1>
 
-    <section>
-      <h2>Where your data lives</h2>
-      <p class="sub">
-        Quick Find builds its index on this computer. This is what it is holding right now.
-      </p>
-      <div class="bar" id="bar"><i class="docs" id="barDocs" style="width:0%"></i></div>
-      <div class="legend">
-        <span class="k"><span class="dot" style="background:linear-gradient(90deg,#8f9cff,#b98cff)"></span>
-          On this device <b id="localSize">—</b></span>
-        <span class="k"><span class="dot" style="background:rgba(255,255,255,.14)"></span>
-          In our cloud <b id="cloudSize">0 B</b></span>
+    <section class="pane on" data-pane="general">
+      <div class="card" id="updCard">
+        <div class="hdr">
+          <div>
+            <div class="ver">AgentFury <span id="ver">—</span></div>
+            <div class="state" id="updState">Checking…</div>
+          </div>
+          <div class="right" id="updRight"></div>
+        </div>
       </div>
-      <div class="grid2">
-        <div class="stat"><div class="n" id="docCount">—</div><div class="l">documents indexed</div></div>
-        <div class="stat"><div class="n" id="chunkCount">—</div><div class="l">passages searchable</div></div>
+      <div class="row">
+        <div><div class="t">Start with my computer</div>
+          <div class="d">Runs in the tray so the shortcut works right after a restart.</div></div>
+        <div class="right"><label class="sw"><input type="checkbox" id="launch" /><span class="track"></span></label></div>
       </div>
-      <div class="note" id="cloudNote"></div>
+      <div class="row">
+        <div><div class="t">Show file previews</div>
+          <div class="d">A look at the file beside the results, without opening it.</div></div>
+        <div class="right"><label class="sw"><input type="checkbox" id="preview" /><span class="track"></span></label></div>
+      </div>
     </section>
 
-    <section>
-      <h2>Reading inside your files</h2>
-      <p class="sub">
-        Without this, Quick Find matches file names only. With it, it can search what you
-        actually wrote — and answer questions about it.
-      </p>
-      <div class="choices" id="modes"></div>
-      <div class="row" style="border-top:1px solid var(--rule); margin-top:16px">
-        <div>
-          <div class="t">Rebuild the index now</div>
-          <div class="d">Re-reads your folders. Takes a few seconds.</div>
+    <section class="pane" data-pane="shortcuts">
+      <div class="row">
+        <div><div class="t">Open Quick Find</div>
+          <div class="d">Summons the search popup from anywhere, over full-screen apps too.</div></div>
+        <div class="right">
+          <button class="keycap" data-key="quickFind">—</button>
+          <button class="btn" data-reset="quickFind">Reset</button>
         </div>
+      </div>
+      <div class="row">
+        <div><div class="t">Open the full app</div>
+          <div class="d">Brings the main AgentFury window forward.</div></div>
+        <div class="right">
+          <button class="keycap" data-key="openApp">—</button>
+          <button class="btn" data-reset="openApp">Reset</button>
+        </div>
+      </div>
+      <div class="note">
+        Click a shortcut, then press the keys. A shortcut needs at least one of
+        <b>Ctrl</b>, <b>Alt</b> or <b>Shift</b> — without one it would swallow that key
+        everywhere on your system. If the combination is already taken by another app,
+        the previous shortcut is kept.
+      </div>
+    </section>
+
+    <section class="pane" data-pane="storage">
+      <div class="card">
+        <div class="t" style="font-size:13.5px;font-weight:600;margin-bottom:10px">Where your data lives</div>
+        <div class="bar"><i id="barDocs" style="width:0%"></i></div>
+        <div class="legend">
+          <span class="k"><span class="dot" style="background:#8f9cff"></span>On this device <b id="localSize">—</b></span>
+          <span class="k"><span class="dot" style="background:rgba(255,255,255,.14)"></span>In our cloud <b id="cloudSize">0 B</b></span>
+        </div>
+        <div class="grid2">
+          <div class="stat"><div class="n" id="docCount">—</div><div class="l">documents indexed</div></div>
+          <div class="stat"><div class="n" id="chunkCount">—</div><div class="l">passages searchable</div></div>
+        </div>
+        <div class="note" id="cloudNote"></div>
+      </div>
+      <div id="modes"></div>
+      <div class="row">
+        <div><div class="t">Rebuild the index</div>
+          <div class="d">Re-reads your folders. Takes a few seconds.</div></div>
         <div class="right">
           <button class="btn" id="rebuild">Rebuild</button>
           <button class="btn danger" id="wipe">Delete index</button>
@@ -159,59 +217,68 @@
       </div>
     </section>
 
-    <section>
-      <h2>Shortcuts</h2>
-      <p class="sub">Click a shortcut, then press the keys you want.</p>
+    <section class="pane" data-pane="models">
       <div class="row">
-        <div>
-          <div class="t">Open Quick Find</div>
-          <div class="d">Summons the search popup from anywhere.</div>
-        </div>
+        <div><div class="t">Answering model</div>
+          <div class="d">Used by Quick Find. The fast model answers in about a second; the
+            thorough one reasons further on hard questions and takes longer.</div></div>
         <div class="right">
-          <button class="keycap" data-key="quickFind">—</button>
-          <button class="btn" data-reset="quickFind">Reset</button>
+          <select id="answerModel">
+            <option value="fast">Fast — best for lookups</option>
+            <option value="thorough">Thorough — best for hard questions</option>
+          </select>
         </div>
       </div>
       <div class="row">
-        <div>
-          <div class="t">Open the full app</div>
-          <div class="d">Brings the main AgentFury window forward.</div>
-        </div>
-        <div class="right">
-          <button class="keycap" data-key="openApp">—</button>
-          <button class="btn" data-reset="openApp">Reset</button>
-        </div>
+        <div><div class="t">Read inside files before answering</div>
+          <div class="d">Retrieval runs on this device; only the passages that match your
+            question are sent. Turning this off leaves answers to file names alone.</div></div>
+        <div class="right"><label class="sw"><input type="checkbox" id="ragOn" /><span class="track"></span></label></div>
       </div>
-    </section>
-
-    <section>
-      <h2>Behaviour</h2>
-      <div class="row">
-        <div>
-          <div class="t">Start with my computer</div>
-          <div class="d">Runs in the tray so the shortcut works right after a restart.</div>
-        </div>
-        <div class="right">
-          <label class="sw"><input type="checkbox" id="launch" /><span class="track"></span></label>
-        </div>
-      </div>
-      <div class="row">
-        <div>
-          <div class="t">Show file previews</div>
-          <div class="d">A look at the file next to the results, without opening it.</div>
-        </div>
-        <div class="right">
-          <label class="sw"><input type="checkbox" id="preview" /><span class="track"></span></label>
-        </div>
+      <div class="note">
+        The model never sees your index — only the few passages a question matched, and
+        they are not kept afterwards.
       </div>
     </section>
 
-  </div></div>
+    <section class="pane" data-pane="about">
+      <div class="card">
+        <div class="ver">AgentFury <span id="ver2">—</span></div>
+        <div class="state" style="margin-top:6px">
+          Quick Find searches this computer. Your file index stays on this device.
+        </div>
+      </div>
+      <div class="row">
+        <div><div class="t">Release notes</div><div class="d">What changed in each version.</div></div>
+        <div class="right"><button class="btn" id="notes">Open on GitHub</button></div>
+      </div>
+    </section>
+  </main>
 
 <script>
 const api = window.afSettings;
 const $ = (id) => document.getElementById(id);
 let state = null;
+
+const TABS = [
+  ["general", "General"],
+  ["shortcuts", "Shortcuts"],
+  ["storage", "Data & storage"],
+  ["models", "Models"],
+  ["about", "About"],
+];
+// Words that should find a tab even though they aren't its title — people search
+// for the thing they want, not the heading we filed it under.
+const TAB_TERMS = {
+  general: "update version launch startup preview appearance",
+  shortcuts: "hotkey keyboard ctrl shortcut keys bind quick find",
+  storage: "data cloud device index disk privacy delete rebuild space usage",
+  models: "model ai answer rag retrieval fast thorough",
+  about: "version release notes github licence",
+};
+
+const esc = (s) => String(s).replace(/[&<>"]/g,
+  (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 const fmtBytes = (b) => {
   if (!b) return "0 B";
@@ -220,30 +287,96 @@ const fmtBytes = (b) => {
   while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
   return (b < 10 && i > 0 ? b.toFixed(1) : Math.round(b)) + " " + u[i];
 };
-const esc = (s) => String(s).replace(/[&<>"]/g,
-  (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+let active = "general";
+function renderTabs(filter = "") {
+  const f = filter.trim().toLowerCase();
+  $("tabs").innerHTML = "";
+  TABS.forEach(([key, label]) => {
+    if (f && !(label.toLowerCase().includes(f) || (TAB_TERMS[key] || "").includes(f))) return;
+    const b = document.createElement("button");
+    b.className = "tab" + (active === key ? " on" : "");
+    b.innerHTML = esc(label) +
+      (key === "general" && state && state.update && state.update.status === "ready"
+        ? '<span class="badge">1</span>' : "");
+    b.addEventListener("click", () => select(key));
+    $("tabs").appendChild(b);
+  });
+}
+
+function select(key) {
+  active = key;
+  document.querySelectorAll(".pane").forEach((p) => p.classList.toggle("on", p.dataset.pane === key));
+  $("paneTitle").textContent = (TABS.find(([k]) => k === key) || [, ""])[1];
+  renderTabs($("navSearch").value);
+}
+
+$("navSearch").addEventListener("input", () => renderTabs($("navSearch").value));
+
+// ---- update card -----------------------------------------------------------
+function renderUpdate() {
+  const u = (state && state.update) || { status: "idle" };
+  $("ver").textContent = state?.version ? "v" + state.version : "";
+  $("ver2").textContent = state?.version ? "v" + state.version : "";
+  const card = $("updCard");
+  const right = $("updRight");
+  right.innerHTML = "";
+  card.classList.toggle("live", u.status === "ready");
+
+  if (u.status === "ready") {
+    $("updState").innerHTML =
+      "Version <b>" + esc(u.version || "") + "</b> is downloaded and ready.";
+    const b = document.createElement("button");
+    b.className = "btn primary";
+    b.textContent = "Restart & update";
+    b.addEventListener("click", async () => { b.textContent = "Restarting…"; await api.installUpdate(); });
+    right.appendChild(pill("new", "Update ready"));
+    right.appendChild(b);
+  } else if (u.status === "downloading") {
+    $("updState").textContent = "Downloading" + (u.percent ? ` — ${u.percent}%` : "…");
+    right.appendChild(pill("busy", "Downloading"));
+  } else if (u.status === "checking") {
+    $("updState").textContent = "Checking for updates…";
+    right.appendChild(pill("busy", "Checking"));
+  } else {
+    $("updState").textContent = "You're on the latest version.";
+    const b = document.createElement("button");
+    b.className = "btn";
+    b.textContent = "Check for updates";
+    b.addEventListener("click", async () => { b.textContent = "Checking…"; await api.checkUpdate(); setTimeout(refresh, 900); });
+    right.appendChild(pill("ok", "Up to date"));
+    right.appendChild(b);
+  }
+}
+function pill(kind, text) {
+  const s = document.createElement("span");
+  s.className = "pill " + kind;
+  s.textContent = text;
+  return s;
+}
+
+// ---- storage ---------------------------------------------------------------
 const MODES = [
   ["off", "File names only", "Nothing inside any file is read. Quick Find still finds files by name.", "Most private"],
-  ["local", "Read on this device", "The index of your file text is built and kept on this computer. Nothing is uploaded. When you ask a question, only the few matching passages are sent to answer it.", "Recommended"],
+  ["local", "Read on this device", "The index of your file text is built and kept on this computer. Nothing is uploaded.", "Recommended"],
 ];
-
 function renderModes() {
   $("modes").innerHTML = "";
   for (const [key, title, desc, tag] of MODES) {
     const b = document.createElement("button");
     b.className = "choice" + (state.contentMode === key ? " on" : "");
-    b.innerHTML =
-      '<span class="radio"></span><span><span class="t">' + esc(title) +
-      (tag ? '<span class="tag' + (key === "off" ? "" : "") + '">' + esc(tag) + "</span>" : "") +
-      '</span><div class="d">' + esc(desc) + "</div></span>";
-    b.addEventListener("click", async () => {
-      state = await api.set({ contentMode: key });
-      await refresh();
-    });
+    b.innerHTML = '<span class="radio"></span><span><span class="t">' + esc(title) +
+      '<span class="tag">' + esc(tag) + "</span></span>" +
+      '<div class="d">' + esc(desc) + "</div></span>";
+    b.addEventListener("click", async () => { state = await api.set({ contentMode: key }); await refresh(); });
     $("modes").appendChild(b);
   }
 }
+
+// ---- shortcuts -------------------------------------------------------------
+const pretty = (a) =>
+  String(a).replace("CommandOrControl", navigator.platform.includes("Mac") ? "Cmd" : "Ctrl")
+    .replace("Control", "Ctrl").split("+").join(" + ");
 
 function renderKeys() {
   document.querySelectorAll(".keycap").forEach((b) => {
@@ -251,41 +384,6 @@ function renderKeys() {
   });
 }
 
-// Electron accelerators aren't what a keyboard looks like — show the keys.
-const pretty = (a) =>
-  String(a)
-    .replace("CommandOrControl", navigator.platform.includes("Mac") ? "Cmd" : "Ctrl")
-    .replace("Control", "Ctrl")
-    .split("+")
-    .join(" + ");
-
-async function refresh() {
-  state = await api.get();
-  $("ver").textContent = "v" + (state.version || "");
-  renderModes();
-  renderKeys();
-  $("launch").checked = state.launchAtLogin !== false;
-  $("preview").checked = state.showPreview !== false;
-
-  const idx = state.index || {};
-  $("docCount").textContent = (idx.documents || 0).toLocaleString();
-  $("chunkCount").textContent = (idx.chunks || 0).toLocaleString();
-  $("localSize").textContent = fmtBytes(state.indexBytes || 0);
-  $("cloudSize").textContent = fmtBytes(state.cloudBytes || 0);
-
-  // The bar is device-vs-cloud. It stays fully device-coloured because the
-  // cloud figure is zero by design — saying so out loud is the point.
-  const total = (state.indexBytes || 0) + (state.cloudBytes || 0);
-  $("barDocs").style.width = total ? Math.max(4, ((state.indexBytes || 0) / total) * 100) + "%" : "0%";
-
-  $("cloudNote").innerHTML = state.cloudBytes
-    ? "<b>" + fmtBytes(state.cloudBytes) + "</b> of your file content is stored in our cloud."
-    : "<b>Nothing from your files is stored in our cloud.</b> The index never leaves this " +
-      "computer. Asking a question sends only the passages that matched it, and they are " +
-      "not kept afterwards.";
-}
-
-// Recording a shortcut: capture the next chord, ignoring bare modifiers.
 let recording = null;
 document.querySelectorAll(".keycap").forEach((b) => {
   b.addEventListener("click", () => {
@@ -300,52 +398,39 @@ document.querySelectorAll("[data-reset]").forEach((b) => {
     const k = b.dataset.reset;
     const def = k === "quickFind" ? "CommandOrControl+Space" : "CommandOrControl+Shift+Enter";
     state = await api.set({ hotkeys: { [k]: def } });
-    await refresh();
+    renderKeys();
   });
 });
-
 document.addEventListener("keydown", async (e) => {
   if (!recording) return;
   e.preventDefault();
   const k = e.key;
-  if (["Control", "Shift", "Alt", "Meta", "OS"].includes(k)) return; // wait for a real key
-  if (k === "Escape") {
-    recording.el.classList.remove("rec");
-    recording = null;
-    renderKeys();
-    return;
-  }
+  if (["Control", "Shift", "Alt", "Meta", "OS"].includes(k)) return;
+  if (k === "Escape") { recording.el.classList.remove("rec"); recording = null; renderKeys(); return; }
   const parts = [];
   if (e.ctrlKey || e.metaKey) parts.push("CommandOrControl");
   if (e.shiftKey) parts.push("Shift");
   if (e.altKey) parts.push("Alt");
-  // A shortcut with no modifier would swallow that key everywhere on the system.
-  if (!parts.length) {
-    recording.el.textContent = "Add Ctrl, Alt or Shift";
-    return;
-  }
+  if (!parts.length) { recording.el.textContent = "Add Ctrl, Alt or Shift"; return; }
   const named = { " ": "Space", ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right" };
   parts.push(named[k] || (k.length === 1 ? k.toUpperCase() : k));
-  const accel = parts.join("+");
-
-  const res = await api.set({ hotkeys: { [recording.key]: accel } });
+  const res = await api.set({ hotkeys: { [recording.key]: parts.join("+") } });
   const el = recording.el;
   recording = null;
   el.classList.remove("rec");
-  if (res && res.hotkeyError) {
-    el.textContent = "Already taken";
-    setTimeout(renderKeys, 1400);
-  } else {
-    state = res;
-    renderKeys();
-  }
+  if (res && res.hotkeyError) { el.textContent = "Already taken"; setTimeout(renderKeys, 1400); }
+  else { state = res; renderKeys(); }
 });
 
-$("launch").addEventListener("change", async () => {
-  state = await api.set({ launchAtLogin: $("launch").checked });
+// ---- wiring ----------------------------------------------------------------
+$("launch").addEventListener("change", async () => { state = await api.set({ launchAtLogin: $("launch").checked }); });
+$("preview").addEventListener("change", async () => { state = await api.set({ showPreview: $("preview").checked }); });
+$("ragOn").addEventListener("change", async () => {
+  state = await api.set({ contentMode: $("ragOn").checked ? "local" : "off" });
+  renderModes();
 });
-$("preview").addEventListener("change", async () => {
-  state = await api.set({ showPreview: $("preview").checked });
+$("answerModel").addEventListener("change", async () => {
+  state = await api.set({ answerModel: $("answerModel").value });
 });
 $("rebuild").addEventListener("click", async () => {
   $("rebuild").textContent = "Rebuilding…";
@@ -353,10 +438,36 @@ $("rebuild").addEventListener("click", async () => {
   $("rebuild").textContent = "Rebuild";
   await refresh();
 });
-$("wipe").addEventListener("click", async () => {
-  await api.wipeIndex();
-  await refresh();
-});
+$("wipe").addEventListener("click", async () => { await api.wipeIndex(); await refresh(); });
+$("notes").addEventListener("click", () => api.openReleases());
+
+async function refresh() {
+  state = await api.get();
+  renderUpdate();
+  renderModes();
+  renderKeys();
+  renderTabs($("navSearch").value);
+
+  $("launch").checked = state.launchAtLogin !== false;
+  $("preview").checked = state.showPreview !== false;
+  $("ragOn").checked = state.contentMode !== "off";
+  $("answerModel").value = state.answerModel || "fast";
+
+  const idx = state.index || {};
+  $("docCount").textContent = (idx.documents || 0).toLocaleString();
+  $("chunkCount").textContent = (idx.chunks || 0).toLocaleString();
+  $("localSize").textContent = fmtBytes(state.indexBytes || 0);
+  $("cloudSize").textContent = fmtBytes(state.cloudBytes || 0);
+  const total = (state.indexBytes || 0) + (state.cloudBytes || 0);
+  $("barDocs").style.width = total ? Math.max(4, ((state.indexBytes || 0) / total) * 100) + "%" : "0%";
+  $("cloudNote").innerHTML = state.cloudBytes
+    ? "<b>" + fmtBytes(state.cloudBytes) + "</b> of your file content is stored in our cloud."
+    : "<b>Nothing from your files is stored in our cloud.</b> The index never leaves this " +
+      "computer. Asking a question sends only the passages that matched it, and they are not kept.";
+}
+
+// The main process pushes update progress, so the card is live without polling.
+if (api.onUpdate) api.onUpdate(() => refresh());
 
 refresh();
 </script>
